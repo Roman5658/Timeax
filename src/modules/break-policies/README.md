@@ -1,0 +1,3 @@
+# Break policies
+
+Keep three records conceptually separate: organization rules, worker preferences, and actual break reports on each shift. A rule is editable only by its listed organization roles. Resolve agency and factory rules by keeping a break mandatory if either says it is required, intersecting their allowed treatments, and removing `none` when a break is mandatory. If no treatment remains, surface a configuration conflict for an administrator. Use the factory default only when neither rule's mandatory constraint is weakened. Apply worker preferences only when the resolved policy permits them. A report that a required break did not happen remains factual and enters review; it is never silently replaced by a planned break.
