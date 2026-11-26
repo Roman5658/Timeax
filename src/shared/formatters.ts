@@ -10,8 +10,8 @@ export function formatDate(date: Date, options: Intl.DateTimeFormatOptions = { d
   return new Intl.DateTimeFormat(localeTag(), options).format(date);
 }
 
-export function formatTime(date: Date, hourCycle: "h12" | "h23" = "h23"): string {
-  return new Intl.DateTimeFormat(localeTag(), { hour: "2-digit", minute: "2-digit", hourCycle }).format(date);
+export function formatTime(date: Date, hourCycle: "h12" | "h23" = "h23", timeZone = "Europe/Warsaw"): string {
+  return new Intl.DateTimeFormat(localeTag(), { hour: "2-digit", minute: "2-digit", hourCycle, timeZone }).format(date);
 }
 
 export function formatNumber(value: number, options?: Intl.NumberFormatOptions): string {

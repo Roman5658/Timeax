@@ -226,7 +226,7 @@ function styleDataRow(row: ExcelJS.Row, data: DataRow, statusColumn: number | un
   }
 }
 
-export async function createExportWorkbook(input: ExportWorkbookInput): Promise<ArrayBuffer> {
+export function buildExportWorkbook(input: ExportWorkbookInput): ExcelJS.Workbook {
   const columns = input.columns.filter((column) => column.enabled).slice().sort((a, b) => a.order - b.order);
   if (!columns.length) throw new Error("No export columns are enabled.");
   const factoryIds = [...new Set(input.factoryIds)];
@@ -419,6 +419,9 @@ export async function createExportWorkbook(input: ExportWorkbookInput): Promise<
     sheet.getColumn(1).alignment = { vertical: "middle", wrapText: true };
   }
 
-  const buffer = await workbook.xlsx.writeBuffer();
-  return buffer;
+  return workbook;
+}
+
+export async function createExportWorkbook(input: ExportWorkbookInput): Promise<ArrayBuffer> {
+  return buildExportWorkbook(input).xlsx.writeBuffer();
 }

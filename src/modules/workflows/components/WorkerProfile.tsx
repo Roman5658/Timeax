@@ -1,3 +1,4 @@
+import { getVisibleMessageThreads } from "../demo-store";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -93,8 +94,7 @@ function WorkerProfileDialog({ workerId, onClose }: { workerId: string; onClose:
   const factories = allowedFactoryIds.map((id) => workspace.factories.find((item) => item.id === id && (viewer.role === "worker" ? employmentPeriods.some((period) => period.organizationId === item.organizationId && period.placements.some((placement) => placement.factoryId === id)) : viewer.role === "factory-admin" ? factoryAdminWorkerRows.some((entry) => entry.factoryId === id) : item.organizationId === workspace.organization.id))).filter((factory) => Boolean(factory));
   const leaderIds = new Set(assignmentList.filter((item) => allowedFactoryIds.includes(item.factoryId) && item.leaderId).map((item) => item.leaderId));
   const leaders = workspace.members.filter((member) => leaderIds.has(member.id));
-  const threads = workspace.messageThreads.filter((thread) => (viewer.role === "worker" ? Boolean(thread.workerId && workerIds.has(thread.workerId)) : viewer.role === "factory-admin" ? thread.workerId === workerId && thread.participants.includes(viewer.id) : thread.organizationId === workspace.organization.id && thread.workerId === workerId)
-    && (thread.participants.includes(viewer.id) || viewer.role === "agency" && thread.recipientType === "agency" || viewer.role === "leader" && thread.factoryId === viewer.factoryId));
+  const threads = getVisibleMessageThreads(workspace).filter((thread) => thread.workerId === workerId);
   const localDayOffRows = useMemo(() => {
     const dates = new Set<string>();
     if (periodKind !== "current-month" && periodKind !== "month") return [];

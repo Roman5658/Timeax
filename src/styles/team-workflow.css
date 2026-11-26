@@ -1,0 +1,1 @@
+.team-panel{max-width:100%}.team-recipients{display:grid;gap:.6rem;max-height:16rem;overflow:auto}.team-recipients label{display:flex;gap:.6rem;align-items:center}.team-body{white-space:pre-wrap;overflow-wrap:anywhere}.team-bell{gap:.4rem}.team-panel fieldset{border:1px solid var(--border-color,#d9dfd8);border-radius:12px;padding:1rem}.team-panel input[readonly]{font-size:.8rem}

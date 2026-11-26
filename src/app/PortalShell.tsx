@@ -7,24 +7,19 @@ import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { PrototypeNotice } from "../components/PrototypeNotice";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { DemoRoleSwitcher } from "../modules/workflows/components/DemoRoleSwitcher";
+import { SignOutButton } from "../modules/auth/pages/SupabasePages";
+import { portalHome as roleRoute, type PortalRole } from "../modules/auth/portal-access";
+import { demoMode } from "../modules/auth/supabase-auth";
 import { NotificationCenter } from "../modules/workflows/components/NotificationCenter";
 import { useTargetHighlight } from "../shared/useTargetHighlight";
 
-export type PortalRole = "worker" | "agency" | "leader" | "factory-admin" | "admin";
+export type { PortalRole } from "../modules/auth/portal-access";
 
 interface PortalShellProps {
   role: PortalRole;
   children: ReactNode;
   navigationMode?: "factory-leader";
 }
-
-const roleRoute: Record<PortalRole, string> = {
-  worker: "/worker",
-  agency: "/agency",
-  leader: "/leader",
-  "factory-admin": "/factory",
-  admin: "/super-admin",
-};
 
 function HashTargetFocus() {
   const { hash } = useLocation();
@@ -50,6 +45,7 @@ export function PortalShell({ role, children, navigationMode }: PortalShellProps
       { path: "/agency/schedule", label: t("nav.schedule"), icon: <CalendarDays size={17} aria-hidden="true" />, group: "operations" },
       { path: "/agency/messages", label: t("nav.messages"), icon: <MessageCircle size={17} aria-hidden="true" />, group: "operations" },
       { path: "/agency/monthly-timesheets", label: t("nav.monthlyTimesheets"), icon: <ClipboardList size={17} aria-hidden="true" />, group: "reports" },
+      { path: "/agency/payroll", label: t("payroll.agencyTitle"), icon: <ClipboardList size={17} aria-hidden="true" />, group: "reports" },
       { path: "/agency/exports", label: t("nav.exports"), icon: <ArrowUpRight size={17} aria-hidden="true" />, group: "reports" },
       { path: "/agency/subscription", label: t("agencySubscription.title"), icon: <Settings2 size={17} aria-hidden="true" />, group: "account" },
       { path: "/settings", label: t("nav.profile"), icon: <Settings2 size={17} aria-hidden="true" />, group: "account" },
@@ -61,6 +57,7 @@ export function PortalShell({ role, children, navigationMode }: PortalShellProps
         { path: "/worker/work", label: t("nav.myWork"), icon: <UsersRound size={17} aria-hidden="true" />, group: "operations" },
         { path: "/worker/schedule", label: t("nav.schedule"), icon: <CalendarDays size={17} aria-hidden="true" />, group: "operations" },
         { path: "/worker/messages", label: t("nav.messages"), icon: <MessageCircle size={17} aria-hidden="true" />, group: "operations" },
+        { path: "/worker/payroll", label: t("payroll.workerTitle"), icon: <ClipboardList size={17} aria-hidden="true" />, group: "reports" },
         { path: "/settings", label: t("nav.profile"), icon: <Settings2 size={17} aria-hidden="true" />, group: "account" },
       ]
       : role === "factory-admin" ? [
@@ -131,7 +128,7 @@ export function PortalShell({ role, children, navigationMode }: PortalShellProps
       <div className="portal-main-column">
         <header className="portal-topline">
           <div className="portal-topline-left"><button className="portal-mobile-menu" type="button" aria-label={t("common.openMenu")} aria-expanded={mobileOpen} onClick={() => setMobileOpen(true)}><Menu size={19} /></button><div className="portal-breadcrumb"><span className="breadcrumb-dot" />{roleHomeLabel}</div></div>
-          <div className="portal-top-actions"><DemoRoleSwitcher /><NotificationCenter /><LanguageSwitcher compact /><ThemeToggle /></div>
+          <div className="portal-top-actions">{demoMode ? <DemoRoleSwitcher /> : <SignOutButton />}<NotificationCenter /><LanguageSwitcher compact /><ThemeToggle /></div>
         </header>
         <main className="portal-content">
           <PrototypeNotice subtle />

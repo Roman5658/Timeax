@@ -1,3 +1,5 @@
+import { zonedDateTime, nextLocalDate } from "./domain/zoned-time.ts";
+import { calculatePayroll, type PayrollSettings, type PayrollInput, type DemoPayslip } from "../payroll/domain/payroll.ts";
 import { useSyncExternalStore } from "react";
 import type { ActualBreakReport, Shift } from "../shifts/domain/types";
 import { createSeedWorkspace } from "./demo-data.ts";
@@ -6,11 +8,35 @@ import { buildMonthlyTimesheetSnapshot, factualShiftFingerprint, hasOpenMonthlyI
 import { activeLeaderMemberships, canLeaderAccessAssignment, effectiveLeaderPermissions, effectiveWorkflowSettings, getLeaderRoster, isLeaderWorkerRemoved, type LeaderRosterEntry } from "./domain/access.ts";
 import { workerHasProductionOnDate } from "../exports/domain/employment-scope.ts";
 import { canAddAgencyWorker, canAddFactoryWorker, countPayerWorkers, getPayerSummary, tierAcceptsCurrentWorkers, workerPayer } from "../subscriptions/domain/subscription.ts";
+import type { PortalRole } from "../auth/portal-access";
 
 const STORAGE_KEY = "timeax-demo-workspace-v1";
+type AuthenticatedPreviewAccount = { id: string; email?: string; role: PortalRole };
+let previewAccount: AuthenticatedPreviewAccount | undefined;
 let snapshot: DemoWorkspace | undefined;
 let storageWritesBlocked = false;
 const listeners = new Set<() => void>();
+
+function workspaceStorageKey() {
+  return previewAccount ? `timeax-preview-v1:${previewAccount.id}:${previewAccount.role}` : STORAGE_KEY;
+}
+
+export function setAuthenticatedPreviewAccount(account: AuthenticatedPreviewAccount | undefined) {
+  if (previewAccount?.id === account?.id && previewAccount?.role === account?.role && previewAccount?.email === account?.email) return;
+  previewAccount = account;
+  snapshot = undefined;
+  storageWritesBlocked = false;
+  listeners.forEach((listener) => listener());
+}
+
+function createWorkspace(): DemoWorkspace {
+  const seed = createSeedWorkspace();
+  if (!previewAccount) return seed;
+  const { id, email, role } = previewAccount;
+  const organization = { ...seed.organization, id: `preview-${id}`, name: "Timeax", contactEmail: undefined };
+  const member: DemoMember = { id, name: email ?? "Timeax", email, role: role === "admin" ? "agency" : role, organizationId: organization.id, status: "active" };
+  return { ...seed, organization, organizations: [organization], members: [member], activeMemberId: id };
+}
 
 type LegacyStoredMember = Omit<DemoMember, "role"> & { role: DemoRole | "factory" };
 type LegacyStoredChangeRequest = Omit<DemoChangeRequest, "approverType"> & { approverType: "agency" | "leader" | "factory" };
@@ -62,18 +88,31 @@ function newPublicIdentifier(prefix: "C" | "S", workspace: DemoWorkspace): strin
   }
 }
 
+function protectOriginalDemo(raw: string | null): boolean {
+  if (!raw || typeof window === "undefined") return true;
+  const key = `${workspaceStorageKey()}-backup-before-payroll-v1`;
+  try {
+    if (window.localStorage.getItem(key) === null) {
+      window.localStorage.setItem(key, raw);
+      if (window.localStorage.getItem(key) !== raw) return false;
+    }
+    return true;
+  } catch { return false; }
+}
+
 function readWorkspace(): DemoWorkspace {
   if (snapshot) return snapshot;
   if (typeof window !== "undefined") {
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
+      const key = workspaceStorageKey();
+      const raw = window.localStorage.getItem(key);
       if (raw) {
         const parsed = JSON.parse(raw) as StoredWorkspace;
         if ([1, 2, 3, 4, 5, 6, 7, 8].includes(parsed.schemaVersion ?? 0) && parsed.organization?.id && Array.isArray(parsed.members)
           && Array.isArray(parsed.factories) && Array.isArray(parsed.groups) && Array.isArray(parsed.shifts)
           && Array.isArray(parsed.templates) && Array.isArray(parsed.absences) && Array.isArray(parsed.notifications)) {
-          const seed = createSeedWorkspace();
-          storageWritesBlocked = false;
+          const seed = createWorkspace();
+          storageWritesBlocked = !protectOriginalDemo(raw);
           const seededOrganizations = new Map(seed.organizations.map((organization) => [organization.id, organization]));
           const organizations = mergeById([parsed.organization, ...(parsed.organizations ?? [])], seed.organizations).map((organization) => {
             const seeded = seededOrganizations.get(organization.id);
@@ -190,9 +229,9 @@ function readWorkspace(): DemoWorkspace {
             notifications: mergeById(parsed.notifications, seed.notifications),
           };
           snapshot = migrated;
-          if (parsed.schemaVersion !== 8) {
+          if (parsed.schemaVersion !== 8 && !storageWritesBlocked) {
             try {
-              window.localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+              window.localStorage.setItem(key, JSON.stringify(migrated));
               storageWritesBlocked = false;
             } catch {
               storageWritesBlocked = true;
@@ -205,20 +244,24 @@ function readWorkspace(): DemoWorkspace {
       storageWritesBlocked = true;
     }
   }
-  snapshot = createSeedWorkspace();
+  snapshot = createWorkspace();
   return snapshot;
 }
 
 function publish(next: DemoWorkspace, forcePersist = false) {
   snapshot = next;
   if (typeof window !== "undefined" && (!storageWritesBlocked || forcePersist)) {
-    try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* Retain the in-memory demo session when browser storage is unavailable. */ }
+    try {
+      const key = workspaceStorageKey();
+      if (!protectOriginalDemo(window.localStorage.getItem(key))) { storageWritesBlocked = true; return; }
+      window.localStorage.setItem(key, JSON.stringify(next));
+    } catch { storageWritesBlocked = true; }
   }
   listeners.forEach((listener) => listener());
 }
 
 export function applyCrossTabWorkspaceUpdate(event: Pick<StorageEvent, "key" | "newValue">): boolean {
-  if (event.key !== STORAGE_KEY || !event.newValue) return false;
+  if (event.key !== workspaceStorageKey() || !event.newValue) return false;
   try {
     const incoming = JSON.parse(event.newValue) as DemoWorkspace;
     if (incoming.schemaVersion !== 8 || !incoming.organization?.id || !Array.isArray(incoming.members)
@@ -677,20 +720,23 @@ export function getLeaderProductionWorkers(workspace: DemoWorkspace, leaderId: s
   return getLeaderProductionParticipants(workspace, leaderId, factoryId).filter((item) => item.accessState === "active").map((item) => item.worker);
 }
 
+export function isInternalAgencyFactory(workspace: DemoWorkspace, factoryId: string): boolean {
+  const factory = workspace.factories.find(item => item.id === factoryId);
+  const site = workspace.worksites?.find(item => item.id === factory?.worksiteId);
+  return Boolean(factory && !factory.ownerWorkforce && site && !site.businessEntityId);
+}
+
 export function getWorkerAccess(workspace: DemoWorkspace, workerId: string, factoryId?: string): WorkerInputAccess {
   const worker = workspace.members.find((member) => member.id === workerId && member.organizationId === workspace.organization.id);
   const factory = getFactory(workspace, factoryId ?? worker?.factoryId);
   if (!factory || !getWorkerProductionAssignment(workspace, workerId, factory.id)) return "leader";
-  if (factory.workflowSettings) {
-    if (!effectiveWorkflowSettings(factory).workerCanRecordHours) return "leader";
-    return factory.inputMode === "C" ? factory.workerAccess[workerId] ?? "leader" : "self";
-  }
-  if (factory.inputMode === "A") return "self";
-  if (factory.inputMode === "B") return "leader";
-  return factory.workerAccess[workerId] ?? "leader";
+  if (isInternalAgencyFactory(workspace, factory.id)) return "self";
+  // Explicit leader decisions take precedence; retain legacy defaults without rewriting saved records.
+  return factory.workerAccess[workerId] ?? (factory.inputMode === "A" ? "self" : "leader");
 }
 
 export function setActiveMember(memberId: string) {
+  if (previewAccount && memberId !== previewAccount.id) return;
   const workspace = readWorkspace();
   const member = workspace.members.find((item) => item.id === memberId);
   if (!member || member.accessState === "suspended" || member.accessState === "revoked") return;
@@ -1521,6 +1567,7 @@ export function createBusinessGroupForWorkers(input: { worksiteId: string; worke
 }
 
 export function resetDemoWorkspace(confirmed: boolean): boolean {
+  if (previewAccount) return false;
   if (!confirmed) return false;
   const current = readWorkspace();
   const activeMember = current.members.find((member) => member.id === current.activeMemberId);
@@ -1621,15 +1668,13 @@ export function resetDemoWorkspace(confirmed: boolean): boolean {
   return true;
 }
 
-function dateTime(date: string, time: string): Date {
-  return new Date(`${date}T${time}:00`);
+function draftTimeZone(draft: ShiftDraft): string {
+  const workspace = readWorkspace();
+  const factory = workspace.factories.find((item) => item.id === draft.factoryId);
+  return workspace.organizations.find((item) => item.id === factory?.organizationId)?.timezone ?? workspace.organization.timezone;
 }
 
-function nextDate(date: string): string {
-  const value = dateTime(date, "12:00");
-  value.setDate(value.getDate() + 1);
-  return [value.getFullYear(), String(value.getMonth() + 1).padStart(2, "0"), String(value.getDate()).padStart(2, "0")].join("-");
-}
+function nextDate(date: string): string { return nextLocalDate(date); }
 
 function todayDate(): string {
   const value = new Date();
@@ -1654,10 +1699,9 @@ export interface ShiftDraft {
 }
 
 export function isValidShiftDraft(draft: ShiftDraft): boolean {
-  const dateParts = draft.localDate.split("-").map(Number);
-  const parsedDate = dateTime(draft.localDate, "12:00");
-  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(draft.localDate) && !Number.isNaN(parsedDate.getTime())
-    && parsedDate.getFullYear() === dateParts[0] && parsedDate.getMonth() + 1 === dateParts[1] && parsedDate.getDate() === dateParts[2];
+  const dateTime = (date: string, time: string) => zonedDateTime(date, time, draftTimeZone(draft));
+  const parsedDate = new Date(`${draft.localDate}T12:00:00Z`);
+  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(draft.localDate) && Number.isFinite(parsedDate.getTime()) && parsedDate.toISOString().slice(0,10) === draft.localDate;
   const validTime = (value: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
   if (!validDate || !validTime(draft.startTime) || !validTime(draft.endTime) || draft.startTime === draft.endTime) return false;
   const start = dateTime(draft.localDate, draft.startTime);
@@ -1687,6 +1731,7 @@ function hasWorkerShiftConflict(workspace: DemoWorkspace, organizationId: string
 }
 
 function deriveValues(draft: ShiftDraft): DemoShiftValues {
+  const dateTime = (date: string, time: string) => zonedDateTime(date, time, draftTimeZone(draft));
   const start = dateTime(draft.localDate, draft.startTime);
   const endDate = draft.endTime <= draft.startTime ? nextDate(draft.localDate) : draft.localDate;
   const end = dateTime(endDate, draft.endTime);
@@ -1941,6 +1986,16 @@ function mutate(updater: (workspace: DemoWorkspace) => DemoWorkspace) {
   publish(reopenSubmittedTimesheets(previous, updater(previous)));
 }
 
+export function canFactorySubmitTimesheet(workspace: DemoWorkspace, organizationId: string, factoryId: string): boolean {
+  const actor = getActiveMember(workspace);
+  const entity = getActiveBusinessEntity(workspace);
+  const factory = getFactoryInOrganization(workspace, organizationId, factoryId);
+  const site = workspace.worksites?.find((item) => item.id === factory?.worksiteId);
+  if (actor.role !== "factory-admin" || !entity || actor.businessEntityId !== entity.id || !factory || factory.archivedAt || site?.businessEntityId !== entity.id) return false;
+  if (organizationId === entity.organizationId) return factory.ownerWorkforce === true;
+  return (workspace.agencyWorksites ?? []).some((connection) => connection.businessEntityId === entity.id && connection.worksiteId === site.id && connection.organizationId === organizationId && connection.state === "active");
+}
+
 function getTimesheetActor(workspace: DemoWorkspace, organizationId: string, factoryId: string, action: "submit" | "review"): DemoMember | undefined {
   const active = getActiveMember(workspace);
   const factory = getFactoryInOrganization(workspace, organizationId, factoryId);
@@ -1959,6 +2014,7 @@ function getTimesheetActor(workspace: DemoWorkspace, organizationId: string, fac
   const factoryAdminOwnWorkforce = active.role === "factory-admin" && active.organizationId === organizationId && factory.ownerWorkforce === true
     && Boolean(businessEntity && active.businessEntityId === businessEntity.id && site?.businessEntityId === businessEntity.id);
   if (factoryAdminOwnWorkforce && (action === "submit" || action === "review")) return active;
+  if (action === "submit" && canFactorySubmitTimesheet(workspace, organizationId, factoryId)) return active;
   return undefined;
 }
 
@@ -1978,12 +2034,12 @@ export function markMonthlyTimesheetReady(factoryId: string, month: string, orga
   const settings = factory && effectiveWorkflowSettings(factory);
   const snapshot = buildMonthlyTimesheetSnapshot(scoped, factoryId, month, "leader");
   const current = getMonthlyTimesheet(workspace, factoryId, month, organizationId);
-  if (!actor || actor.role !== "leader" && !(actor.role === "factory-admin" && factory?.ownerWorkforce) || !factory || actor.role === "leader" && !settings?.leaderCanSubmitTimesheet || !/^\d{4}-\d{2}$/.test(month) || hasOpenMonthlyIssues(snapshot.rows)
+  if (!actor || actor.role !== "leader" && !(actor.role === "factory-admin" && canFactorySubmitTimesheet(workspace, organizationId, factoryId)) || !factory || actor.role === "leader" && !settings?.leaderCanSubmitTimesheet || !/^\d{4}-\d{2}$/.test(month) || hasOpenMonthlyIssues(snapshot.rows)
     || !snapshot.rows.some((row) => row.kind === "shift" || row.kind === "absence")
     || ["submitted_to_agency", "accepted_by_agency", "submitted_by_factory", "accepted_by_factory"].includes(current?.status ?? "")) return false;
   const now = new Date().toISOString();
   const event = makeMonthlyTimesheetEvent(actor, "ready", current?.status, "ready_for_review", undefined, current?.currentVersion, now);
-  const record = current ? { ...current, status: "ready_for_review" as const, history: [...current.history, event], updatedAt: now } : makeMonthlyTimesheet(factoryId, month, actor, "ready_for_review", event);
+  const record = current ? { ...current, status: "ready_for_review" as const, history: [...current.history, event], updatedAt: now } : { ...makeMonthlyTimesheet(factoryId, month, actor, "ready_for_review", event), organizationId };
   const agencyIds = workspace.members.filter((member) => member.organizationId === organizationId && member.role === "agency" && member.id !== actor.id).map((member) => member.id);
   mutate((state) => ({
     ...state,
@@ -2033,7 +2089,7 @@ export function submitMonthlyTimesheet(factoryId: string, month: string, allowOp
   const versions = [...(current?.versions ?? []), version];
   const record = current
     ? { ...current, status: submissionStatus, currentVersion: versionNumber, versions, history: [...current.history, event], updatedAt: now }
-    : makeMonthlyTimesheet(factoryId, month, actor, submissionStatus, event, versions);
+    : { ...makeMonthlyTimesheet(factoryId, month, actor, submissionStatus, event, versions), organizationId };
   const recipients = timesheetReviewerIds(scoped, factoryId).filter((id) => id !== actor.id);
   if (!recipients.length && actor.role !== "agency" && actor.role !== "factory-admin") return false;
   const kind: DemoWorkspace["notifications"][number]["kind"] = versionNumber > 1 ? "timesheet-resent" : "timesheet-submitted";
@@ -2572,22 +2628,65 @@ export function cancelShift(shiftId: string, reason: string): boolean {
   return true;
 }
 
+function messageMembership(workspace: DemoWorkspace, thread: DemoMessageThread): DemoMember | undefined {
+  const actor = getActiveMember(workspace);
+  const identities = actor.role === "leader" ? activeLeaderMemberships(workspace, actor) : [actor];
+  return identities.find((member) => {
+    if (!thread.participants.includes(member.id) || member.accessState === "suspended" || member.accessState === "revoked") return false;
+    if (member.organizationId === thread.organizationId) return true;
+    if (member.role !== "factory-admin" || !member.businessEntityId || !thread.factoryId) return false;
+    const factory = workspace.factories.find((item) => item.id === thread.factoryId && item.organizationId === thread.organizationId && !item.archivedAt);
+    return Boolean(factory && workspace.agencyWorksites?.some((link) => link.organizationId === thread.organizationId && link.businessEntityId === member.businessEntityId && link.worksiteId === factory.worksiteId && link.state === "active"));
+  });
+}
+
+export function getVisibleMessageThreads(workspace = readWorkspace()): DemoMessageThread[] {
+  return workspace.messageThreads.filter((thread) => Boolean(messageMembership(workspace, thread)));
+}
+
+function messageNotice(workspace: DemoWorkspace, recipientId: string, thread: DemoMessageThread) {
+  const recipient = workspace.members.find((item) => item.id === recipientId);
+  return makeNotification(recipientId, "message-received", thread.id, recipient?.organizationId ?? thread.organizationId);
+}
+
+export function getWorkerMessageRecipient(recipientType: "agency" | "leader" | "production", factoryId?: string, workspace = readWorkspace()): { recipientId: string; factoryId?: string } | undefined {
+  const worker = getActiveMember(workspace);
+  if (worker.role !== "worker") return undefined;
+  let recipientId: string | undefined;
+  let selectedFactoryId: string | undefined;
+  if (recipientType === "agency") recipientId = workspace.members.find((item) => item.organizationId === workspace.organization.id && item.role === "agency")?.id;
+  else {
+    const assignment = getWorkerProductionAssignment(workspace, worker.id, factoryId);
+    if (!assignment) return undefined;
+    selectedFactoryId = factoryId;
+    const factory = workspace.factories.find((item) => item.id === factoryId && item.organizationId === worker.organizationId && !item.archivedAt);
+    if (!factory || !getProductionWorkers(workspace, factory.id).some((item) => item.id === worker.id)) return undefined;
+    if (recipientType === "leader") {
+      const leader = workspace.members.find((item) => item.id === assignment.leaderId && item.role === "leader" && item.organizationId === worker.organizationId && item.factoryId === factory.id && item.accessState !== "suspended" && item.accessState !== "revoked");
+      if (!leader || !getLeaderProductionParticipants(workspace, leader.id, factory.id).some((entry) => entry.worker.id === worker.id && entry.accessState === "active")) return undefined;
+      recipientId = leader.id;
+    } else {
+      const site = workspace.worksites?.find((item) => item.id === factory.worksiteId);
+      const entity = workspace.businessEntities?.find((item) => item.id === site?.businessEntityId);
+      const connected = entity && (entity.organizationId === worker.organizationId || workspace.agencyWorksites?.some((link) => link.organizationId === worker.organizationId && link.businessEntityId === entity.id && link.worksiteId === site?.id && link.state === "active"));
+      const admins = connected ? workspace.members.filter((item) => item.role === "factory-admin" && item.businessEntityId === entity.id && item.accessState !== "suspended" && item.accessState !== "revoked") : [];
+      if (admins.length !== 1) return undefined;
+      recipientId = admins[0].id;
+    }
+  }
+  if (!recipientId) return undefined;
+  return { recipientId, factoryId: selectedFactoryId };
+}
+
 export function createWorkerMessage(recipientType: "agency" | "leader" | "production", subject: string, text: string, factoryId?: string): boolean {
   const workspace = readWorkspace();
   const worker = getActiveMember(workspace);
   const cleanSubject = subject.trim();
   const cleanText = text.trim();
   if (worker.role !== "worker" || !cleanSubject || !cleanText) return false;
-  let recipientId: string | undefined;
-  let selectedFactoryId: string | undefined;
-  if (recipientType === "agency") recipientId = workspace.members.find((item) => item.organizationId === workspace.organization.id && item.role === "agency")?.id;
-  else {
-    const assignment = getWorkerProductionAssignment(workspace, worker.id, factoryId);
-    if (!assignment) return false;
-    selectedFactoryId = factoryId;
-    recipientId = recipientType === "leader" ? assignment.leaderId : assignment.leaderId ?? getProductionLeaderIds(workspace, factoryId ?? "", worker.id)[0];
-  }
-  if (!recipientId) return false;
+  const recipient = getWorkerMessageRecipient(recipientType, factoryId, workspace);
+  if (!recipient) return false;
+  const { recipientId, factoryId: selectedFactoryId } = recipient;
   const now = new Date().toISOString();
   const thread: DemoMessageThread = {
     id: `thread-${crypto.randomUUID()}`, organizationId: workspace.organization.id, workerId: worker.id,
@@ -2595,7 +2694,7 @@ export function createWorkerMessage(recipientType: "agency" | "leader" | "produc
     state: "open", createdAt: now, updatedAt: now,
     messages: [{ id: `message-${crypto.randomUUID()}`, senderId: worker.id, text: cleanText, sentAt: now, readByIds: [worker.id] }],
   };
-  mutate((state) => ({ ...state, messageThreads: [thread, ...state.messageThreads], notifications: [makeNotification(recipientId!, "message-received", thread.id), ...state.notifications] }));
+  mutate((state) => ({ ...state, messageThreads: [thread, ...state.messageThreads], notifications: [messageNotice(state, recipientId!, thread), ...state.notifications] }));
   return true;
 }
 
@@ -2714,25 +2813,25 @@ export function createLeaderWorkerMessage(leaderMembershipId: string, workerId: 
 
 export function replyToMessage(threadId: string, text: string): boolean {
   const workspace = readWorkspace();
-  const active = getActiveMember(workspace);
-  const thread = workspace.messageThreads.find((item) => item.id === threadId && item.organizationId === workspace.organization.id && item.participants.includes(active.id));
+  const thread = getVisibleMessageThreads(workspace).find((item) => item.id === threadId);
+  const active = thread ? messageMembership(workspace, thread)! : getActiveMember(workspace);
   const cleanText = text.trim();
   if (!thread || !cleanText || thread.state === "closed") return false;
   const now = new Date().toISOString();
   const message = { id: `message-${crypto.randomUUID()}`, senderId: active.id, text: cleanText, sentAt: now, readByIds: [active.id] };
-  const recipients = thread.participants.filter((participantId) => participantId !== active.id);
+  const recipients = [...new Set(thread.participants)].filter((participantId) => participantId !== active.id);
   mutate((state) => ({
     ...state,
     messageThreads: state.messageThreads.map((item) => item.id === threadId ? { ...item, updatedAt: now, messages: [...item.messages.map((entry) => ({ ...entry })), message] } : item),
-    notifications: [...recipients.map((recipientId) => makeNotification(recipientId, "message-received", threadId)), ...state.notifications],
+    notifications: [...recipients.map((recipientId) => messageNotice(state, recipientId, thread)), ...state.notifications],
   }));
   return true;
 }
 
 export function markMessageThreadRead(threadId: string): void {
   const workspace = readWorkspace();
-  const active = getActiveMember(workspace);
-  const thread = workspace.messageThreads.find((item) => item.id === threadId && item.organizationId === workspace.organization.id && item.participants.includes(active.id));
+  const thread = getVisibleMessageThreads(workspace).find((item) => item.id === threadId);
+  const active = thread ? messageMembership(workspace, thread)! : getActiveMember(workspace);
   if (!thread || thread.messages.every((message) => message.senderId === active.id || message.readByIds.includes(active.id))) return;
   mutate((state) => ({
     ...state,
@@ -3065,7 +3164,7 @@ export function recordLeaderAbsence(workerId: string, localDate: string, reason:
   const unreported = reason === "unreported";
   const record: DemoAbsence = {
     id: `absence-${crypto.randomUUID()}`, organizationId: workspace.organization.id, workerId, employmentId: activePlacement.period.id,
-    factoryId: active.factoryId, groupId: assignment?.groupId ?? "", localDate, reason: unreported ? undefined : reason, state: unreported ? "unreported" : "reviewed", leaderNote: cleanNote || undefined, agencyCategory: unreported ? "unreported" : undefined, agencyNote: unreported ? cleanNote : undefined, createdById: active.id,
+    factoryId: active.factoryId, groupId: assignment?.groupId ?? "", localDate, reason: unreported ? undefined : reason, state: unreported ? "unreported" : "reviewed", leaderNote: cleanNote || undefined, agencyCategory: unreported ? "unreported" : reason === "day-off" ? "agreed-day-off" : undefined, agencyNote: unreported ? cleanNote : undefined, createdById: active.id,
     history: [{ id: `absence-event-${crypto.randomUUID()}`, actorId: active.id, actorName: active.name, action: unreported ? "marked-unreported" : "recorded", occurredAt: now, note: cleanNote || undefined }, ...(unreported ? [{ id: `absence-event-${crypto.randomUUID()}`, actorId: active.id, actorName: active.name, action: "agency-notified" as const, occurredAt: now, note: cleanNote }] : [])],
   };
   const agencyId = unreported ? workspace.members.find((item) => item.organizationId === workspace.organization.id && item.role === "agency")?.id : undefined;
@@ -3119,14 +3218,8 @@ export function reorderTemplate(templateId: string, targetId: string) {
   mutate((state) => ({ ...state, templates: state.templates.map((template) => orderById.has(template.id) ? { ...template, order: orderById.get(template.id)! } : template) }));
 }
 
-export function setFactoryInputMode(factoryId: string, inputMode: ProductionInputMode): boolean {
-  const workspace = readWorkspace();
-  if (!canManageEmployment(workspace) || !getFactory(workspace, factoryId)) return false;
-  const factory = getFactory(workspace, factoryId);
-  if (!factory) return false;
-  mutate((state) => ({ ...state, factories: state.factories.map((item) => item.id === factoryId ? { ...item, inputMode } : item) }));
-  return true;
-}
+/** Legacy API retained for callers; agency-wide input modes are no longer configurable. */
+export function setFactoryInputMode(_factoryId: string, _inputMode: ProductionInputMode): boolean { return false; }
 
 export function createProduction(name: string, address = "", description = "", selectedWorksiteId?: string): DemoFactory | undefined {
   const workspace = readWorkspace();
@@ -3310,7 +3403,7 @@ export function setWorkerInputAccess(factoryId: string, workerId: string, access
   if (!canManageProductionRules(workspace, factoryId)) return false;
   const factory = getFactory(workspace, factoryId);
   const worker = workspace.members.find((member) => member.id === workerId && member.role === "worker" && getWorkerProductionAssignment(workspace, workerId, factoryId));
-  if (!factory || !worker || !canManageWorker(workerId, workspace) || factory.inputMode !== "C") return false;
+  if (!factory || !worker || !canManageWorker(workerId, workspace) || !["self", "leader"].includes(access)) return false;
   mutate((state) => ({ ...state, factories: state.factories.map((item) => item.id === factoryId ? { ...item, workerAccess: { ...item.workerAccess, [workerId]: access } } : item) }));
   return true;
 }
@@ -3432,7 +3525,7 @@ function canManageFactory(factoryId: string, workspace: DemoWorkspace): boolean 
   return active.role === "leader" && Boolean(activeLeaderMembershipFor(workspace, factory.organizationId, factoryId, "canManageGroups"));
 }
 
-function canManageProductionRules(workspace: DemoWorkspace, factoryId: string): boolean {
+export function canManageProductionRules(workspace: DemoWorkspace, factoryId: string): boolean {
   const factory = getFactory(workspace, factoryId);
   return Boolean(factory && activeLeaderMembershipFor(workspace, factory.organizationId, factoryId, "canManageGroups"));
 }
@@ -3851,3 +3944,112 @@ export function assignWorkerToFolder(workerId: string, folderId?: string): boole
   return true;
 }
 
+
+/** Local demo payroll: no tax assumptions, network calls or real delivery. */
+export function savePayrollSettings(settings: PayrollSettings): boolean {
+  const workspace = readWorkspace();
+  const actor = getActiveMember(workspace);
+  if (actor.role !== "agency" || storageWritesBlocked || typeof settings.issueEnabled !== "boolean"
+    || !calculatePayroll({ ...settings, dayHours: 0, nightHours: 0, additions: 0, deductions: 0, note: "" })) return false;
+  mutate((state) => ({ ...state, payrollSettings: { ...state.payrollSettings, [actor.organizationId]: { ...settings } } }));
+  return !storageWritesBlocked;
+}
+
+export function issueDemoPayslip(workerId: string, month: string, input: PayrollInput): boolean {
+  const workspace = readWorkspace();
+  const actor = getActiveMember(workspace);
+  const worker = workspace.members.find((member) => member.id === workerId && member.role === "worker" && member.organizationId === actor.organizationId);
+  const result = calculatePayroll(input);
+  if (actor.role !== "agency" || storageWritesBlocked || !worker || !result || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)
+    || !workspace.payrollSettings?.[actor.organizationId]?.issueEnabled || !input.note.trim()) return false;
+  const slip: DemoPayslip = { id: `payslip-${crypto.randomUUID()}`, organizationId: actor.organizationId, workerId,
+    month, workerName: worker.name, organizationName: workspace.organizations.find((org) => org.id === actor.organizationId)?.name ?? "",
+    issuedAt: new Date().toISOString(), issuedById: actor.id, input: { ...input, context: input.context ? { ...input.context } : undefined, note: input.note.trim() }, ...result, demo: true };
+  // One current statement per worker/month; prevent repeated-click duplicates. Corrections are a later stage.
+  if (workspace.payslips?.some((item) => item.organizationId === actor.organizationId && item.workerId === workerId && item.month === month)) return false;
+  mutate((state) => ({ ...state, payslips: [...(state.payslips ?? []), slip] }));
+  return !storageWritesBlocked;
+}
+
+export function getVisiblePayslips(workspace: DemoWorkspace): DemoPayslip[] {
+  const actor = getActiveMember(workspace);
+  if (actor.role === "agency") return (workspace.payslips ?? []).filter((item) => item.organizationId === actor.organizationId);
+  if (actor.role !== "worker") return [];
+  const identities = workspace.members.filter((member) => member.role === "worker" && (member.accountUid ?? member.id) === (actor.accountUid ?? actor.id));
+  return (workspace.payslips ?? []).filter((item) => identities.some((member) => member.id === item.workerId && member.organizationId === item.organizationId));
+}
+
+export function setLeaderWorkerInputAccess(leaderMembershipId: string, workerId: string, access: WorkerInputAccess): boolean {
+  const workspace = readWorkspace();
+  const actor = getActiveMember(workspace);
+  const member = actor.role === "leader" ? activeLeaderMemberships(workspace, actor).find((item) => item.id === leaderMembershipId) : undefined;
+  if (!member?.factoryId || !effectiveLeaderPermissions(member).canManageGroups || !["self", "leader"].includes(access)) return false;
+  const scoped = scopedWorkspace(workspace, member.organizationId);
+  const worker = workspace.members.find((item) => item.id === workerId && item.organizationId === member.organizationId && item.role === "worker");
+  const assignment = getWorkerProductionAssignment(scoped, workerId, member.factoryId);
+  if (!worker || !assignment || !canLeaderAccessAssignment(scoped, actor, member.organizationId, member.factoryId, worker, assignment, "canManageGroups")) return false;
+  mutate((state) => ({ ...state, factories: state.factories.map((item) => item.id === member.factoryId && item.organizationId === member.organizationId
+    ? { ...item, workerAccess: { ...item.workerAccess, [workerId]: access } } : item) }));
+  return !storageWritesBlocked;
+}
+
+export function createAgencyShift(workerId: string, draft: ShiftDraft): boolean {
+  const workspace = readWorkspace();
+  const actor = getActiveMember(workspace);
+  const factory = getFactory(workspace, draft.factoryId);
+  const site = workspace.worksites?.find((item) => item.id === factory?.worksiteId);
+  const worker = workspace.members.find((item) => item.id === workerId && item.organizationId === actor.organizationId && item.role === "worker");
+  if (actor.role !== "agency" || !factory || factory.archivedAt || site?.businessEntityId || !worker || storageWritesBlocked || !isValidShiftDraft(draft)) return false;
+  const placement = activeEmploymentAt(workspace, actor.organizationId, workerId, factory.id, draft.localDate);
+  if (!placement) return false;
+  const shift = { ...shiftFromDraft(workerId, draft, "agency-admin", actor.id, policyRequiresReview(workspace, workerId, draft), "pending"), employmentId: placement.period.id };
+  if (workspace.shifts.some((record) => record.organizationId === actor.organizationId && record.shift.workerUid === workerId && !record.shift.deletedAt
+    && record.shift.startAt < shift.endAt && shift.startAt < record.shift.endAt)) return false;
+  const record: DemoShiftRecord = { organizationId: actor.organizationId, shift, previousVersions: [], history: [makeHistoryEntry("created", actor.id, 1, undefined, valuesFromShift(shift))] };
+  mutate((state) => ({ ...state, shifts: [record, ...state.shifts], notifications: [makeNotification(workerId, "shift-pending", shift.id), ...state.notifications] }));
+  return !storageWritesBlocked;
+}
+
+export function savePersonalPayrollSettings(workerId: string, settings: PayrollSettings): boolean {
+  const workspace = readWorkspace();
+  const actor = getActiveMember(workspace);
+  const worker = workspace.members.find((item) => item.id === workerId && item.role === "worker");
+  if (actor.role !== "worker" || !worker || (worker.accountUid ?? worker.id) !== (actor.accountUid ?? actor.id) || storageWritesBlocked
+    || !calculatePayroll({ ...settings, dayHours: 0, nightHours: 0, additions: 0, deductions: 0, note: "" })) return false;
+  mutate((state) => ({ ...state, personalPayrollSettings: { ...state.personalPayrollSettings, [workerId]: { ...settings, issueEnabled: false } } }));
+  return !storageWritesBlocked;
+}
+
+/** Attendance classification only: never generates a fine, pay deduction or legal decision. */
+export function classifyRecordedAbsence(absenceId: string, category: "unreported" | "agreed-day-off", note: string): boolean {
+  const workspace = readWorkspace();
+  const actor = getActiveMember(workspace);
+  const record = workspace.absences.find((item) => item.id === absenceId && item.organizationId === actor.organizationId);
+  if (!record || !["unreported", "agreed-day-off"].includes(category) || !note.trim() || note.length > 500 || storageWritesBlocked
+    || record.state === "cancelled" || record.state === "rejected" || !absenceEmploymentIsValid(workspace, record)
+    || !(actor.role === "agency" || actor.role === "leader" && effectiveLeaderPermissions(actor).canReviewShifts && canManageWorker(record.workerId, workspace, record.factoryId))
+    || workspace.shifts.some((item) => item.organizationId === record.organizationId && item.shift.workerUid === record.workerId && item.shift.factoryId === record.factoryId && item.shift.localStartDate === record.localDate && !item.shift.deletedAt)) return false;
+  const reason = category === "agreed-day-off" ? "day-off" as const : undefined;
+  const event: DemoAbsenceHistoryEntry = { id: `absence-event-${crypto.randomUUID()}`, actorId: actor.id, actorName: actor.name,
+    action: category === "agreed-day-off" ? "agreed-day-off" : "marked-unreported", occurredAt: new Date().toISOString(), note: note.trim(),
+    before: { localDate: record.localDate, reason: record.reason, message: record.message }, after: { localDate: record.localDate, reason, message: record.message } };
+  mutate((state) => ({ ...state, absences: state.absences.map((item) => item.id === absenceId ? { ...item, reason, state: category === "agreed-day-off" ? "reviewed" : "unreported", agencyCategory: category, agencyNote: note.trim(), history: [...item.history, event] } : item),
+    notifications: [makeNotification(record.workerId, "absence-agency-decision", absenceId, record.organizationId), ...state.notifications] }));
+  return !storageWritesBlocked;
+}
+
+export function recordAgencyAbsence(workerId: string, factoryId: string, localDate: string, category: "unreported" | "agreed-day-off", note: string): boolean {
+  const workspace = readWorkspace();
+  const actor = getActiveMember(workspace);
+  const placement = activeEmploymentAt(workspace, actor.organizationId, workerId, factoryId, localDate);
+  if (actor.role !== "agency" || storageWritesBlocked || !placement || !/^\d{4}-\d{2}-\d{2}$/.test(localDate) || !Number.isFinite(Date.parse(localDate)) || !note.trim() || note.length > 500 || !["unreported", "agreed-day-off"].includes(category)
+    || workspace.absences.some((item) => item.organizationId === actor.organizationId && item.workerId === workerId && item.factoryId === factoryId && item.localDate === localDate && !["cancelled", "rejected"].includes(item.state))
+    || workspace.shifts.some((item) => item.organizationId === actor.organizationId && item.shift.workerUid === workerId && item.shift.localStartDate === localDate && !item.shift.deletedAt)) return false;
+  const now = new Date().toISOString();
+  const record: DemoAbsence = { id: `absence-${crypto.randomUUID()}`, organizationId: actor.organizationId, workerId, factoryId, employmentId: placement.period.id,
+    groupId: placement.placement.groupId ?? "", localDate, state: category === "agreed-day-off" ? "reviewed" : "unreported", reason: category === "agreed-day-off" ? "day-off" : undefined,
+    agencyCategory: category, agencyNote: note.trim(), createdById: actor.id,
+    history: [{ id: `absence-event-${crypto.randomUUID()}`, actorId: actor.id, actorName: actor.name, occurredAt: now, note: note.trim(), action: category === "agreed-day-off" ? "agreed-day-off" : "marked-unreported" }] };
+  mutate((state) => ({ ...state, absences: [record, ...state.absences], notifications: [makeNotification(workerId, "absence-agency-decision", record.id), ...state.notifications] }));
+  return !storageWritesBlocked;
+}

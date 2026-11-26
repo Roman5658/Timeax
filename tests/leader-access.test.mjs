@@ -51,11 +51,11 @@ test("shared roster filters by agency, worker name and ungrouped status", () => 
   assert.equal(filterLeaderRoster(roster, { organizationId: "org-independent-factory-demo" }).length, 0);
 });
 
-test("workflow scenarios keep input, review, confirmation and submission settings independent", () => {
+test("leader input is available independently of legacy agency mode; review and submission remain separate", () => {
   const workspace = createSeedWorkspace({ includeFeatureFixtures: true });
   const byId = new Map(workspace.factories.map((factory) => [factory.id, effectiveWorkflowSettings(factory)]));
-  assert.deepEqual([byId.get("factory-alpha").workerCanRecordHours, byId.get("factory-alpha").leaderCanRecordHours, byId.get("factory-alpha").leaderMustReviewShifts, byId.get("factory-alpha").leaderCanSubmitTimesheet, byId.get("factory-alpha").agencyMustAcceptTimesheet], [true, false, true, true, true]);
-  assert.deepEqual([byId.get("factory-partner").workerCanRecordHours, byId.get("factory-partner").leaderCanRecordHours, byId.get("factory-partner").workerMustConfirmShifts, byId.get("factory-partner").leaderCanSubmitTimesheet], [false, true, true, true]);
+  assert.deepEqual([byId.get("factory-alpha").workerCanRecordHours, byId.get("factory-alpha").leaderCanRecordHours, byId.get("factory-alpha").leaderMustReviewShifts, byId.get("factory-alpha").leaderCanSubmitTimesheet, byId.get("factory-alpha").agencyMustAcceptTimesheet], [true, true, true, true, true]);
+  assert.deepEqual([byId.get("factory-partner").workerCanRecordHours, byId.get("factory-partner").leaderCanRecordHours, byId.get("factory-partner").workerMustConfirmShifts, byId.get("factory-partner").leaderCanSubmitTimesheet], [true, true, true, true]);
   assert.deepEqual([byId.get("factory-gamma").workerCanRecordHours, byId.get("factory-gamma").leaderCanSubmitTimesheet, byId.get("factory-gamma").agencyMustReviewShifts, byId.get("factory-gamma").agencyCanSubmitTimesheet], [true, false, true, true]);
 });
 

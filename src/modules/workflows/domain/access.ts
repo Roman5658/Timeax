@@ -35,10 +35,10 @@ export function effectiveLeaderPermissions(member: DemoMember): DemoLeaderPermis
 }
 
 export function effectiveWorkflowSettings(factory: DemoFactory): DemoProductionWorkflowSettings {
-  if (factory.workflowSettings) return factory.workflowSettings;
+  if (factory.workflowSettings) return { ...factory.workflowSettings, workerCanRecordHours: true, leaderCanRecordHours: true, workerMustConfirmShifts: true, workerCanDisputeShifts: true };
   return {
-    workerCanRecordHours: factory.inputMode !== "B",
-    leaderCanRecordHours: factory.inputMode !== "A",
+    workerCanRecordHours: true,
+    leaderCanRecordHours: true,
     leaderMustReviewShifts: false,
     agencyMustReviewShifts: false,
     workerMustConfirmShifts: true,

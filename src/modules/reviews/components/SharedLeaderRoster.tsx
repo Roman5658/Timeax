@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { ClipboardCheck, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { confirmShiftForWorker, createLeaderShiftBatch, getActiveMember, getLeaderAccessPermissions, getLeaderAccessibleWorkers, getLeaderProductionMemberships, getProductionWorkflowSettings, reviewShiftRecord, useDemoWorkspace } from "../../workflows/demo-store";
+import { isInternalAgencyFactory, confirmShiftForWorker, setLeaderWorkerInputAccess, getWorkerAccess, createLeaderShiftBatch, getActiveMember, getLeaderAccessPermissions, getLeaderAccessibleWorkers, getLeaderProductionMemberships, getProductionWorkflowSettings, reviewShiftRecord, useDemoWorkspace } from "../../workflows/demo-store";
 import { todayLocalDate } from "../../workflows/workflow-utils";
 import { useToast } from "../../../app/ToastProvider";
 import { filterLeaderRoster } from "../../workflows/domain/access";
@@ -80,6 +80,7 @@ export function SharedLeaderRoster() {
         <input aria-label={entry.worker.name} type="checkbox" checked={selected.includes(entry.key)} onChange={() => toggle(entry.key)} disabled={!canRecord} />
         <div className="leader-shared-worker"><strong>{entry.worker.name}</strong><small>{entry.organizationName} · {entry.factory.name}</small></div>
         <span>{entry.groupName ?? t("workflow.leader.roster.noGroup")}</span>
+        {!isInternalAgencyFactory(workspace, entry.factory.id) && <label className="checkbox-field"><input type="checkbox" disabled={!permissions?.canManageGroups} checked={getWorkerAccess({ ...workspace, organization: workspace.organizations.find((org) => org.id === entry.organizationId)! }, entry.worker.id, entry.factory.id) === "self"} onChange={(event) => { const saved = setLeaderWorkerInputAccess(entry.leaderMembershipId, entry.worker.id, event.target.checked ? "self" : "leader"); showToast(t(saved ? "workflow.production.permissionSaved" : "workflow.errors.permission"), saved ? "success" : "error"); }} /><span>{t("payroll.selfEntry")}</span></label>}
         <span>{shiftDescription}</span>
         <span className={`status-pill status-pill--${shift?.workerConfirmation ?? "not-required"}`}>{shift ? t(`workflow.shiftStatus.${shift.workerConfirmation}`) : "—"}</span>
         <span className={entry.attention ? "roster-attention" : "muted-copy"}>{entry.attention ? t("workflow.leader.roster.attention") : t("workflow.memberState.active")}</span>

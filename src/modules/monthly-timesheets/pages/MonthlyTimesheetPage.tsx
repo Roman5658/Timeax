@@ -8,7 +8,7 @@ import { PageHeading } from "../../../components/PageHeading";
 import { useToast } from "../../../app/ToastProvider";
 import { formatDate } from "../../../shared/formatters";
 import { useTargetHighlight } from "../../../shared/useTargetHighlight";
-import { acceptMonthlyTimesheet, getActiveMember, getLeaderAccessPermissions, getLeaderProductionMemberships, getProductionWorkflowSettings, getWorkspaceForOrganization, markMonthlyTimesheetReady, reopenMonthlyTimesheet, returnMonthlyTimesheet, submitMonthlyTimesheet, useDemoWorkspace } from "../../workflows/demo-store";
+import { isInternalAgencyFactory, canFactorySubmitTimesheet, acceptMonthlyTimesheet, getActiveMember, getLeaderAccessPermissions, getLeaderProductionMemberships, getProductionWorkflowSettings, getWorkspaceForOrganization, markMonthlyTimesheetReady, reopenMonthlyTimesheet, returnMonthlyTimesheet, submitMonthlyTimesheet, useDemoWorkspace } from "../../workflows/demo-store";
 import type { DemoMonthlyTimesheetRow, DemoMonthlyTimesheetStatus } from "../../workflows/domain/demo-types";
 import { formatDuration } from "../../workflows/workflow-utils";
 import { buildMonthlyTimesheetSnapshot, hasOpenMonthlyIssues, monthlyAttentionReasons, monthlyRecordFlags } from "../domain/timesheet";
@@ -54,7 +54,7 @@ function actorMaySign(workspace: ReturnType<typeof useDemoWorkspace>, factoryId:
   if (!factory) return false;
   const settings = getProductionWorkflowSettings(factory);
   if (role === "leader") return member.role === "leader" && getLeaderProductionMemberships(workspace).some((membership) => membership.organizationId === organizationId && membership.factoryId === factoryId && getLeaderAccessPermissions(membership).canSubmitTimesheet) && settings.leaderCanSubmitTimesheet;
-  if (role === "factory-admin") return member.role === "factory-admin" && member.organizationId === organizationId && factory.ownerWorkforce === true;
+  if (role === "factory-admin") return canFactorySubmitTimesheet(workspace, organizationId, factoryId);
   return member.role === "agency" && member.organizationId === organizationId && settings.agencyCanSubmitTimesheet;
 }
 
@@ -69,7 +69,7 @@ export function MonthlyTimesheetPage() {
   const leaderMemberships = role === "leader" ? getLeaderProductionMemberships(workspace, member.id) : [];
   const factories = workspace.factories.filter((factory) => role === "leader"
     ? leaderMemberships.some((membership) => membership.organizationId === factory.organizationId && membership.factoryId === factory.id)
-    : role === "factory-admin" ? factory.organizationId === workspace.organization.id && factory.ownerWorkforce === true
+    : role === "factory-admin" ? canFactorySubmitTimesheet(workspace, factory.organizationId, factory.id)
       : factory.organizationId === workspace.organization.id);
   const initialFactoryId = searchParams.get("factory") ?? "";
   const [factoryId, setFactoryId] = useState(() => factories.some((factory) => factory.id === initialFactoryId) ? initialFactoryId : factories[0]?.id ?? "");
@@ -98,6 +98,7 @@ export function MonthlyTimesheetPage() {
   const viewedTotals = selectedVersion?.totals ?? (lockedStatus && latestVersion ? latestVersion.totals : liveSnapshot.totals);
   const status = timesheet?.status ?? (month < todayMonth() && liveSnapshot.rows.length > 0 && !hasOpenMonthlyIssues(liveSnapshot.rows) ? "ready_for_review" : "in_progress");
   const openIssues = hasOpenMonthlyIssues(liveSnapshot.rows);
+  const internalWorkplace = Boolean(factoryId && isInternalAgencyFactory(workspace, factoryId));
   const canSign = Boolean(factoryId && actorMaySign(workspace, factoryId, organizationId, role));
   const agencyCanReview = role === "agency" && member.role === "agency" && member.organizationId === organizationId && workflowSettings?.agencyMustAcceptTimesheet && timesheet?.status === "submitted_to_agency";
   const factoryCanReview = role === "factory-admin" && member.role === "factory-admin" && member.organizationId === organizationId && factory?.ownerWorkforce === true && timesheet?.status === "submitted_by_factory";
@@ -157,7 +158,7 @@ export function MonthlyTimesheetPage() {
 
   function submitTimesheet() {
     const saved = submitMonthlyTimesheet(factoryId, month, allowOpenIssues, organizationId);
-    showToast(t(saved ? (timesheet?.currentVersion ? "monthlyTimesheets.resent" : "monthlyTimesheets.submitted") : "monthlyTimesheets.submitBlocked"), saved ? "success" : "error");
+    showToast(t(saved ? (internalWorkplace && role === "agency" ? "monthlyTimesheets.acceptSaved" : timesheet?.currentVersion ? "monthlyTimesheets.resent" : "monthlyTimesheets.submitted") : "monthlyTimesheets.submitBlocked"), saved ? "success" : "error");
     setAllowOpenIssues(false);
   }
 
@@ -182,7 +183,7 @@ export function MonthlyTimesheetPage() {
         <label className="field-label"><span>{t("exports.periodMonth")}</span><input type="month" value={month} onChange={(event) => syncScope(factoryId, event.target.value)} /></label>
         <label className="field-label"><span>{t("monthlyTimesheets.search")}</span><input value={workerSearch} onChange={(event) => setWorkerSearch(event.target.value)} /></label>
       </div>
-      {role === "agency" && status === "in_progress" && <p className="policy-note">{t("monthlyTimesheets.liveDataNotice")}</p>}
+      {role === "agency" && status === "in_progress" && <p className="policy-note">{t(internalWorkplace ? "payroll.internalPolicy" : "monthlyTimesheets.liveDataNotice")}</p>}
     </section>
 
     <section className="monthly-timesheet-status-panel" aria-label={t("monthlyTimesheets.recordStatuses")}>
@@ -240,12 +241,12 @@ export function MonthlyTimesheetPage() {
         <div className="monthly-signature-icon"><BadgeCheck size={21} /></div><div className="monthly-signature-body"><strong>{t("monthlyTimesheets.signature.title")}</strong><b>{latestSignature.signerName}</b><span>{t(latestSignature.signerRole === "leader" ? "monthlyTimesheets.signature.leader" : latestSignature.signerRole === "factory-admin" ? "monthlyTimesheets.signature.factory" : "monthlyTimesheets.signature.agency")}</span><span>{t("monthlyTimesheets.signature.production")}: {latestSignature.factoryName} · {t("monthlyTimesheets.signature.month")}: {latestSignature.month} · {t("monthlyTimesheets.signature.version")}: {latestSignature.version}</span><span>{t("monthlyTimesheets.signature.date")}: {new Intl.DateTimeFormat(i18n.language, { dateStyle: "short" }).format(new Date(latestSignature.signedAt))} · {t("monthlyTimesheets.signature.time")}: {new Intl.DateTimeFormat(i18n.language, { timeStyle: "medium" }).format(new Date(latestSignature.signedAt))}</span><span className="monthly-signature-status"><BadgeCheck size={14} />{t("monthlyTimesheets.signature.confirmed")}</span><small>{t("monthlyTimesheets.signature.disclaimer")}</small></div>
       </section>}
 
-      {!timesheet && role === "agency" && <p className="muted-copy">{t("monthlyTimesheets.noSubmission")}</p>}
+      {!timesheet && role === "agency" && !internalWorkplace && <p className="muted-copy">{t("monthlyTimesheets.noSubmission")}</p>}
       {canSign && !lockedStatus && <section className="monthly-submit-panel">
         {status !== "ready_for_review" && !openIssues && <button type="button" className="button button--outline" onClick={confirmReady}><ClipboardCheck size={16} />{t("monthlyTimesheets.markReady")}</button>}
         {openIssues && <div className="monthly-warning"><strong>{t("monthlyTimesheets.openIssuesTitle")}</strong><span>{t("monthlyTimesheets.openIssuesDescription", { check: recordCounts.check, problem: recordCounts.problem })}</span></div>}
         {openIssues && <label className="monthly-acknowledge"><input type="checkbox" checked={allowOpenIssues} onChange={(event) => setAllowOpenIssues(event.target.checked)} /><span>{t("monthlyTimesheets.acknowledgeOpenIssues")}</span></label>}
-        <button type="button" className="button button--primary" disabled={!canSubmit} onClick={submitTimesheet}><Send size={16} />{t(timesheet?.currentVersion ? "monthlyTimesheets.confirmResend" : "monthlyTimesheets.confirmAndSend")}</button>
+        <button type="button" className="button button--primary" disabled={!canSubmit} onClick={submitTimesheet}><Send size={16} />{t(internalWorkplace && role === "agency" ? "monthlyTimesheets.confirmInternal" : timesheet?.currentVersion ? "monthlyTimesheets.confirmResend" : "monthlyTimesheets.confirmAndSend")}</button>
       </section>}
 
       {agencyCanReview && timesheet && <section className="monthly-agency-review">

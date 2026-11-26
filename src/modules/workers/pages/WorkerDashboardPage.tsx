@@ -366,10 +366,10 @@ export function WorkerDashboardPage({ section = "overview" }: { section?: Worker
     setMessage(deleted ? t("workflow.messages.templateDeleted") : t("workflow.errors.permission"));
   }
 
-  const formGross = shiftHours(draft.startTime, draft.endTime);
+  const formGross = shiftHours(draft.startTime, draft.endTime, draft.localDate, workspace.organization.timezone);
   const formBreak = draft.breakStatus === "taken" ? (draft.breakStartTime && draft.breakEndTime ? breakMinutes(draft.breakStartTime, draft.breakEndTime) : Number(draft.breakDurationMinutes ?? 0)) : 0;
   const formPaid = Math.max(0, formGross - (draft.breakStatus === "taken" && draft.breakTreatment === "unpaid" ? formBreak : 0));
-  const requestFormGross = shiftHours(requestDraft.startTime, requestDraft.endTime);
+  const requestFormGross = shiftHours(requestDraft.startTime, requestDraft.endTime, requestDraft.localDate, workspace.organization.timezone);
   const requestFormBreak = requestDraft.breakStatus === "taken" ? (requestDraft.breakStartTime && requestDraft.breakEndTime ? breakMinutes(requestDraft.breakStartTime, requestDraft.breakEndTime) : Number(requestDraft.breakDurationMinutes ?? 0)) : 0;
   const requestFormPaid = Math.max(0, requestFormGross - (requestDraft.breakStatus === "taken" && requestDraft.breakTreatment === "unpaid" ? requestFormBreak : 0));
   const formValid = isValidShiftDraft({ ...draft, factoryId: effectiveFactoryId });
@@ -473,7 +473,7 @@ export function WorkerDashboardPage({ section = "overview" }: { section?: Worker
 
       {section === "overview" && <div className="worker-overview-templates"><section className="dashboard-panel quick-template-panel">
           <div className="panel-heading"><div><span className="eyebrow">{t("workflow.templates.eyebrow")}</span><h2>{t("workflow.templates.title")}</h2></div>{canEnter && <button className="icon-button" type="button" aria-label={t("workflow.templates.add")} onClick={() => beginTemplateEdit()}><Plus size={17} /></button>}</div>
-          {!canEnter && <p className="inline-notice"><ShieldCheck size={16} />{t("workflow.permission.selfEntryDisabled")}</p>}
+          {!canEnter && <p className="inline-notice"><ShieldCheck size={16} />{t(productionAssignments.length ? "workflow.permission.selfEntryDisabled" : "workflow.permission.awaitingAssignment")}</p>}
           <div className="quick-template-list" onDragOver={(event) => event.preventDefault()}>
             {templates.map((template, index) => {
               const Icon = templateIcon[template.icon as TemplateIconName];
@@ -512,7 +512,7 @@ export function WorkerDashboardPage({ section = "overview" }: { section?: Worker
       <section className="dashboard-panel worker-shifts-panel" id="worker-shifts">
         <div className="panel-heading"><div><span className="eyebrow">{t("nav.shifts")}</span><h2>{activeHistoryMonth ? formatDate(new Date(`${activeHistoryMonth.key}-01T12:00:00`), { month: "long", year: "numeric" }) : t("nav.shifts")}</h2></div>{canEnter && <button className="button button--primary button--small" type="button" onClick={() => openNewShift()}><Plus size={15} />{t("workflow.worker.newShift")}</button>}</div>
         {activeHistoryMonth && <div className="worker-history-period-stats worker-history-month-stats"><span>{t("workflow.timekeeping.shifts")}: <strong>{activeHistoryMonth.workedShiftCount}</strong></span><span>{t("workflow.fields.paid")}: <strong>{formatDuration(activeHistoryMonth.paidMinutes, t)}</strong></span><span>{t("workflow.worker.historyMissed")}: <strong>{activeHistoryMonth.missedDayCount}</strong></span><span>{t("workflow.worker.historyDayOff")}: <strong>{activeHistoryMonth.restDayCount}</strong></span></div>}
-        {!canEnter && <div className="inline-notice"><ShieldCheck size={16} /><span>{t("workflow.permission.managerEntry", { factory: factory?.name ?? "" })}</span></div>}
+        {!canEnter && <div className="inline-notice"><ShieldCheck size={16} /><span>{t(productionAssignments.length ? "workflow.permission.managerEntry" : "workflow.permission.awaitingAssignment", { factory: factory?.name ?? "" })}</span></div>}
         {!activeHistoryMonth && <p className="muted-copy">{t("workflow.worker.historyEmpty")}</p>}
         {activeHistoryMonth?.days.length === 0 && <p className="muted-copy">{t("workflow.worker.historyMonthEmpty")}</p>}
         {activeHistoryMonth && <div className="worker-history-status-list">{activeHistoryMonth.days.filter((day) => day.absences.length > 0 || day.attendanceReviews.length > 0 || day.isConfirmedRestDay).map((day) => {

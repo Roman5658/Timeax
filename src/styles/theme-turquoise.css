@@ -1,0 +1,123 @@
+/* Optional light cyan theme. Other palettes and the system default stay independent. */
+:root[data-theme="turquoise"] {
+  color-scheme: light;
+  background: #e4f9fb;
+  color: #133442;
+  --page: #e4f9fb;
+  --page-warm: #d8f3f8;
+  --surface: #f8feff;
+  --surface-soft: #edfafd;
+  --surface-muted: #d9f4f8;
+  --ink: #133442;
+  --text: var(--ink);
+  --ink-soft: #1b4f60;
+  --muted: #426373;
+  --muted-strong: #325a6c;
+  --line: #add5dc;
+  --line-strong: #507e88;
+  --navy: #164459;
+  --navy-deep: #09394d;
+  --lime: #83e8ef;
+  --lime-dark: #33c2d0;
+  --mint: #caf4f8;
+  --blue: #dceefa;
+  --peach: #fff0e6;
+  --violet: #efe9ff;
+  --accent: #83e8ef;
+  --danger: #982c40;
+  --theme-focus: #17627a;
+  --turquoise-accent-ink: #073849;
+  --turquoise-active-ink: #07556b;
+  --turquoise-field: #fdfefe;
+  --turquoise-info-ink: #1a507c;
+  --turquoise-warning-ink: #655012;
+  --turquoise-warning-surface: #fff3d1;
+  --turquoise-attention-ink: #902a3a;
+  --turquoise-attention-surface: #fff0f1;
+  --turquoise-absence-ink: #573782;
+  --turquoise-page-wash: radial-gradient(ellipse at 100% 0%, #b7f4fb, transparent 64%), linear-gradient(140deg, #e4f9fb, #deeffd 85%);
+  --turquoise-card-wash: linear-gradient(142deg, #effbfe, #d1f4f9);
+  --shadow: 0 20px 55px rgba(27, 87, 111, .14);
+  --shadow-soft: 0 8px 25px rgba(27, 87, 111, .095);
+}
+:root[data-theme="turquoise"] :is(body, .landing-page, .public-page, .auth-page, .portal-layout) {
+  background: var(--turquoise-page-wash);
+}
+:root[data-theme="turquoise"] :is(.topbar, .portal-sidebar, .portal-topline) { border-color: var(--line); }
+:root[data-theme="turquoise"] :is(.portal-sidebar, .portal-topline, .notification-popover, .mobile-nav) { background: var(--surface); }
+:root[data-theme="turquoise"] :is(.workspace-card, .feature-card--dark, .stat-card, .action-panel, .payroll-slip) {
+  background: var(--turquoise-card-wash);
+  color: var(--ink);
+  border-color: var(--line);
+}
+:root[data-theme="turquoise"] :is(.feature-card--lime, .workspace-stat--lime, .prototype-notice, .portal-nav-link.is-active,
+  .factory-section-nav > button.is-active, .status-pill--confirmed, .status-pill--reviewed, .mode-badge--a,
+  .monthly-status-filter--ready strong, .monthly-record-tag--ready, .monthly-lifecycle--success, .monthly-signature) {
+  background: var(--mint);
+  color: var(--turquoise-active-ink);
+  border-color: var(--line);
+}
+:root[data-theme="turquoise"] .prototype-notice--subtle { background: var(--surface-soft); }
+:root[data-theme="turquoise"] :is(.workspace-stat--blue, .monthly-lifecycle--sent, .monthly-version-readonly) {
+  background: var(--blue);
+  color: var(--turquoise-info-ink);
+  border-color: var(--line);
+}
+:root[data-theme="turquoise"] :is(.workspace-stat--peach, .registration-icon--peach, .stat-icon--peach, .settings-icon--peach) {
+  background: var(--peach);
+  color: #703a2a;
+  border-color: var(--line);
+}
+:root[data-theme="turquoise"] :is(.status-pill--pending, .status-pill--reported, .notice-box--warm, .mode-badge--b,
+  .monthly-status-filter--check strong, .monthly-record-tag--check, .monthly-warning, .monthly-attention-details) {
+  background: var(--turquoise-warning-surface);
+  color: var(--turquoise-warning-ink);
+  border-color: #ad8d48;
+}
+:root[data-theme="turquoise"] :is(.status-pill--disputed, .status-pill--unreported, .monthly-status-filter--problem strong,
+  .monthly-record-tag--problem, .monthly-lifecycle--problem) {
+  background: var(--turquoise-attention-surface);
+  color: var(--turquoise-attention-ink);
+  border-color: #c97b87;
+}
+:root[data-theme="turquoise"] :is(.mode-badge--c, .monthly-status-filter--absence strong, .monthly-record-tag--absence) {
+  background: var(--violet);
+  color: var(--turquoise-absence-ink);
+  border-color: #a38fc1;
+}
+:root[data-theme="turquoise"] :is(.public-guide-marker, .note-check, .workspace-mark, .floating-chip--bottom, .auth-card-icon,
+  .registration-icon--mint, .support-card-icon--mint, .settings-icon--mint, .not-found-icon, .stat-icon--mint, .empty-state-icon,
+  .action-panel-icon, .permission-note svg, .break-summary-paid strong, .break-policy-note svg, .designer-prototype, .side-panel-icon,
+  .preview-badge, .notification-mark, .template-icon, .inline-notice svg, .workflow-message, .workflow-message svg, .policy-note svg,
+  .text-button, .assignment-summary-icon, .member-state--active, .monthly-checked-status, .toast--success > svg) {
+  color: var(--turquoise-active-ink);
+}
+:root[data-theme="turquoise"] :is(.button--primary, .notification-count, .switcher-pill[aria-pressed="true"],
+  .column-check input:checked + .checkbox-visual) {
+  background: var(--accent);
+  border-color: var(--line-strong);
+  color: var(--turquoise-accent-ink);
+}
+:root[data-theme="turquoise"] .button--primary:hover:not(:disabled) { background: #b6f4f6; }
+:root[data-theme="turquoise"] :is(.eyebrow-line, .breadcrumb-dot, .week-cell--active, .chip-pulse) { background: #16879a; }
+:root[data-theme="turquoise"] :is(.button, a, input, select, textarea, summary):focus-visible { outline: 2px solid var(--theme-focus); outline-offset: 3px; }
+:root[data-theme="turquoise"] ::selection { color: var(--turquoise-accent-ink); background: var(--accent); }
+:root[data-theme="turquoise"] :is(.field-label input, .field-label select, .field-label textarea, .theme-picker--expanded select):not([type="radio"]):not([type="checkbox"]) {
+  background: var(--turquoise-field);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+:root[data-theme="turquoise"] :is(.field-label input, .field-label select, .field-label textarea):disabled {
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+:root[data-theme="turquoise"] :is(input[type="checkbox"], input[type="radio"]) { accent-color: var(--theme-focus); }
+:root[data-theme="turquoise"] .toggle-row input:checked + .toggle-track { background: var(--theme-focus); }
+:root[data-theme="turquoise"] :is(.right-drawer, .compact-modal, .worker-profile-dialog, .notification-popover) {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+:root[data-theme="turquoise"] .notification-item:not(.is-read) > svg { fill: var(--accent); }
+:root[data-theme="turquoise"] .payroll-totals .payroll-total:last-child { background: var(--mint); border-color: var(--line-strong); }
+:root[data-theme="turquoise"] .payroll-totals .payroll-total:last-child strong { color: var(--turquoise-active-ink); }

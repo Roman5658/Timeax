@@ -3,6 +3,9 @@ import { createRoot } from "react-dom/client";
 import "./i18n";
 import { App } from "./app/App";
 import "./styles/global.css";
+import "./styles/theme-mint.css";
+import "./styles/theme-turquoise.css";
+import "./styles/theme-pink.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

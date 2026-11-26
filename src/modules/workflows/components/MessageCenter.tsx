@@ -1,3 +1,4 @@
+import { getVisibleMessageThreads, getWorkerMessageRecipient } from "../demo-store";
 import { useEffect, useState, type FormEvent } from "react";
 import { MessageCircle, Send } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -20,6 +21,7 @@ export function MessageCenter() {
     && workspace.employmentPeriods.some((period) => period.organizationId === item.organizationId && period.workerId === item.id && period.state === "active"));
   const [recipientType, setRecipientType] = useState<"agency" | "leader" | "production">(hasAgencyRecipient ? "agency" : "production");
   const [factoryId, setFactoryId] = useState(workerAssignments[0]?.factoryId ?? "");
+  const workerRecipient = member.role === "worker" ? getWorkerMessageRecipient(recipientType, factoryId, workspace) : undefined;
   const [factoryWorkerId, setFactoryWorkerId] = useState(ownedWorkers[0]?.id ?? "");
   const [subject, setSubject] = useState("");
   const [text, setText] = useState("");
@@ -34,7 +36,7 @@ export function MessageCenter() {
   const [agencyGroupId, setAgencyGroupId] = useState("");
   const [agencyWorkerIds, setAgencyWorkerIds] = useState<string[]>([]);
   const [agencyLeaderId, setAgencyLeaderId] = useState("");
-  const threads = workspace.messageThreads.filter((thread) => thread.organizationId === workspace.organization.id && thread.participants.includes(member.id)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const threads = getVisibleMessageThreads(workspace).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const focusId = searchParams.get("focus") === "message" ? searchParams.get("id") : "";
   const requestedLeaderId = searchParams.get("messageTo") ?? "";
   const currentAgencyWorkers = agencyAudience === "workers"
@@ -85,11 +87,12 @@ export function MessageCenter() {
     {notice && <p className="sr-only">{notice}</p>}
     {member.role === "agency" && <button className="button button--primary button--small" type="button" onClick={() => setAgencyComposeOpen(true)}><Send size={14} />{t("workflow.messagesCenter.startConversation")}</button>}
     {member.role === "worker" && <form className="workflow-form message-compose-form" onSubmit={sendMessage}>
+      <p className="muted-copy field-label--wide">{workerRecipient ? `${t("payroll.messageRecipient")}: ${workspace.members.find((person) => person.id === workerRecipient.recipientId)?.name}` : t("payroll.noMessageRecipient")}</p>
       <label className="field-label"><span>{t("workflow.messagesCenter.recipient")}</span><select value={recipientType} onChange={(event) => setRecipientType(event.target.value as typeof recipientType)}>{hasAgencyRecipient && <option value="agency">{t("workflow.messagesCenter.toAgency")}</option>}<option value="leader">{t("workflow.messagesCenter.toLeader")}</option><option value="production">{t("workflow.messagesCenter.toFactory")}</option></select></label>
       {recipientType !== "agency" && <label className="field-label"><span>{t("workflow.fields.production")}</span><select value={factoryId} onChange={(event) => setFactoryId(event.target.value)} required>{workerAssignments.map((assignment) => <option key={assignment.factoryId} value={assignment.factoryId}>{workspace.factories.find((factory) => factory.id === assignment.factoryId)?.name}</option>)}</select></label>}
       <label className="field-label"><span>{t("workflow.messagesCenter.subject")}</span><input value={subject} onChange={(event) => setSubject(event.target.value)} required maxLength={120} /></label>
       <label className="field-label field-label--wide"><span>{t("workflow.messagesCenter.message")}</span><textarea rows={3} value={text} onChange={(event) => setText(event.target.value)} required /></label>
-      <div className="form-actions field-label--wide"><button className="button button--primary button--small" type="submit"><Send size={14} />{t("workflow.messagesCenter.send")}</button></div>
+      <div className="form-actions field-label--wide"><button className="button button--primary button--small" type="submit" disabled={!workerRecipient}><Send size={14} />{t("workflow.messagesCenter.send")}</button></div>
     </form>}
     {member.role === "factory-admin" && <form className="workflow-form message-compose-form" onSubmit={sendFactoryMessage}>
       <label className="field-label"><span>{t("factorySubscription.chooseWorker")}</span><select value={factoryWorkerId} onChange={(event) => setFactoryWorkerId(event.target.value)} required>{ownedWorkers.map((worker) => <option key={worker.id} value={worker.id}>{worker.name}</option>)}</select></label>

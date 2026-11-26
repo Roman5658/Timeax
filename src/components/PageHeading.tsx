@@ -1,3 +1,4 @@
+import { ContextHelp } from "./ContextHelp";
 import type { ReactNode } from "react";
 
 export function PageHeading({ eyebrow, title, description, action }: {
@@ -11,7 +12,7 @@ export function PageHeading({ eyebrow, title, description, action }: {
       <div>
         {eyebrow && <div className="eyebrow page-eyebrow">{eyebrow}</div>}
         <h1>{title}</h1>
-        {description && <p>{description}</p>}
+        {description && <ContextHelp label={typeof title === "string" ? title : "Timeax"}>{description}</ContextHelp>}
       </div>
       {action && <div className="page-heading-action">{action}</div>}
     </div>

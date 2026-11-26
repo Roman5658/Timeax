@@ -1,5 +1,6 @@
+import { RightDrawer } from "./RightDrawer";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { CalendarDays, Send, X } from "lucide-react";
+import { CalendarDays, Send } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import { useToast } from "../../../app/ToastProvider";
@@ -165,8 +166,7 @@ export function ScheduleCenter({ openRequest = 0 }: { openRequest?: number }) {
       <p className="muted-copy">{t("workflow.schedule.plannedDisclaimer")}</p>
       {message && <p className="sr-only">{message}</p>}
     </section>}
-    {canPlanSchedule && panelOpen && <div className="modal-backdrop schedule-drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPanelOpen(false); }}><aside className="dashboard-panel schedule-drawer" role="dialog" aria-modal="true" aria-labelledby="schedule-drawer-title">
-      <div className="panel-heading"><div><span className="eyebrow"><CalendarDays size={14} /> {t("workflow.schedule.eyebrow")}</span><h2 id="schedule-drawer-title">{t("workflow.schedule.manage")}</h2></div><button className="icon-button" type="button" aria-label={t("common.cancel")} onClick={() => setPanelOpen(false)}><X size={16} /></button></div>
+    {canPlanSchedule && panelOpen && <RightDrawer title={t("workflow.schedule.manage")} eyebrow={t("workflow.schedule.eyebrow")} titleId="schedule-drawer-title" onClose={() => setPanelOpen(false)} hasUnsavedChanges={workerIds.length > 0}>
       <p className="muted-copy">{t("workflow.schedule.plannedDisclaimer")}</p>
       {workspace.groups.some((group) => group.factoryId === managedFactoryId && !group.archivedAt) && <label className="field-label schedule-factory-select"><span>{t("workflow.groups.title")}</span><select value={groupId} onChange={(event) => { setGroupId(event.target.value); setWorkerIds([]); }}><option value="">{t("workflow.schedule.allGroups")}</option>{workspace.groups.filter((group) => group.factoryId === managedFactoryId && !group.archivedAt).map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>}
       <form className="workflow-form schedule-create-form" onSubmit={submitSchedule}>
@@ -180,7 +180,7 @@ export function ScheduleCenter({ openRequest = 0 }: { openRequest?: number }) {
         <label className="field-label"><span>{t("workflow.schedule.plannedBreakEnd")}</span><input type="time" value={breakEnd} onChange={(event) => setBreakEnd(event.target.value)} /></label>
         <div className="form-actions field-label--wide"><button type="submit" className="button button--primary button--small" disabled={!workerIds.length || !weekdays.length}><Send size={14} />{t("workflow.schedule.create")}</button></div>
       </form>
-    </aside></div>}
+    </RightDrawer>}
     {member.role === "agency" && <section className="dashboard-panel schedule-center-panel schedule-agency-panel">
       <div className="panel-heading"><div><span className="eyebrow"><CalendarDays size={14} /> {t("workflow.schedule.eyebrow")}</span><h2>{t("workflow.schedule.title")}</h2></div><span className="panel-period">{schedules.filter((item) => item.state === "active").length}</span></div>
       <div className="schedule-readonly-filters">

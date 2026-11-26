@@ -1,3 +1,4 @@
+import { AgencyShiftEntry } from "../components/AgencyShiftEntry";
 import { useMemo, useState } from "react";
 import { ArrowLeft, FileSpreadsheet, RotateCcw } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -76,6 +77,7 @@ export function AgencyTimekeepingPage() {
 
   return <PortalShell role="agency">
     <PageHeading eyebrow={workspace.organization.name} title={t("workflow.timekeeping.title")} description={t("workflow.timekeeping.lead")} action={<Link className="button button--outline button--small" to="/agency"><ArrowLeft size={15} />{t("workflow.employment.backToAgency")}</Link>} />
+    <AgencyShiftEntry />
     <section className="dashboard-panel timekeeping-filters">
       <div className="panel-heading"><div><span className="eyebrow">{t("workflow.timekeeping.filters")}</span><h2>{t("workflow.timekeeping.chooseScope")}</h2></div><button type="button" className="button button--quiet button--small" onClick={reset}><RotateCcw size={14} />{t("workflow.timekeeping.reset")}</button></div>
       <div className="timekeeping-filter-grid">

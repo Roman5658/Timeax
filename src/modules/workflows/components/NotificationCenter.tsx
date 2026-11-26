@@ -1,3 +1,4 @@
+import { getVisibleMessageThreads } from "../demo-store";
 import { Bell, Check, Circle } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -108,7 +109,7 @@ function notificationDestination(notice: DemoNotification, workspace: DemoWorksp
       return `${targetRoute}?${params.toString()}#timesheet-${timesheet.id}`;
     }
     case "message-received": {
-      const thread = workspace.messageThreads.find((item) => item.id === subjectId && item.organizationId === organizationId && item.participants.includes(member.id));
+      const thread = getVisibleMessageThreads(workspace).find((item) => item.id === subjectId);
       if (!thread) return undefined;
       focus = "message";
       break;

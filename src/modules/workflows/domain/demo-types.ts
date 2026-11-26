@@ -7,7 +7,7 @@ export type DemoBreakRuleTreatment = "unpaid" | "paid";
 export type DemoTemplateBreakType = "none" | "paid" | "unpaid";
 export type DemoAbsenceReason = "day-off" | "vacation" | "illness" | "family" | "personal" | "other";
 export type DemoAbsenceState = "reported" | "reviewed" | "rejected" | "cancelled" | "unreported" | "clarification-requested";
-export type DemoAbsenceAgencyCategory = "confirmed-no-hours" | "urlop-na-zadanie" | "unreported" | "attention";
+export type DemoAbsenceAgencyCategory = "agreed-day-off" | "confirmed-no-hours" | "urlop-na-zadanie" | "unreported" | "attention";
 export type DemoAbsenceDecision = "confirmed-no-hours" | "urlop-na-zadanie" | "send-agency" | "unreported";
 export type DemoShiftStatus = "open" | "accepted" | "declined";
 export type DemoShiftAction = "created" | "edited" | "organization-edited" | "confirmed" | "leader-confirmed" | "disputed" | "corrected" | "declined" | "cancelled" | "reviewed" | "returned" | "break-reported" | "break-reviewed" | "break-returned" | "change-requested" | "change-request-approved" | "change-request-declined";
@@ -212,7 +212,7 @@ export interface DemoAbsenceHistoryEntry {
   id: string;
   actorId: string;
   actorName: string;
-  action: "reported" | "reviewed" | "edited" | "cancelled" | "rejected" | "recorded" | "marked-unreported" | "confirmed-no-hours" | "urlop-na-zadanie" | "agency-notified" | "clarification-requested" | "clarification-replied";
+  action: "agreed-day-off" | "reported" | "reviewed" | "edited" | "cancelled" | "rejected" | "recorded" | "marked-unreported" | "confirmed-no-hours" | "urlop-na-zadanie" | "agency-notified" | "clarification-requested" | "clarification-replied";
   occurredAt: string;
   note?: string;
   before?: { localDate: string; reason?: DemoAbsenceReason; message?: string };
@@ -657,6 +657,9 @@ export interface DemoLeaderPermissions {
 }
 
 export interface DemoWorkspace {
+  personalPayrollSettings?: Record<string, import("../../payroll/domain/payroll").PayrollSettings>;
+  payrollSettings?: Record<string, import("../../payroll/domain/payroll").PayrollSettings>;
+  payslips?: import("../../payroll/domain/payroll").DemoPayslip[];
   schemaVersion: 8;
   organization: DemoOrganization;
   organizations: DemoOrganization[];

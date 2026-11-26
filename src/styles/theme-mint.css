@@ -1,0 +1,222 @@
+/* The native picker preserves keyboard, touch, and screen reader behavior. */
+.theme-picker {
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: auto auto;
+  justify-content: center;
+  align-items: center;
+  gap: 1px;
+  flex: 0 0 auto;
+}
+.theme-picker:not(.theme-picker--expanded) {
+  grid-template-columns: 16px 10px;
+}
+.theme-picker-icon, .theme-picker-chevron { pointer-events: none; }
+.theme-picker:not(.theme-picker--expanded) .theme-picker-select {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.theme-picker:focus-within {
+  outline: 2px solid var(--theme-focus, #648e41);
+  outline-offset: 2px;
+}
+.theme-picker--expanded {
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 7px;
+  width: min(10.5rem, 62%);
+}
+.theme-picker--expanded .theme-picker-chevron { display: none; }
+.theme-picker--expanded .theme-picker-select {
+  min-width: 0;
+  width: 100%;
+  min-height: 38px;
+  padding: 5px 8px;
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+:root[data-theme="mint"] {
+  color-scheme: dark;
+  background-color: #173333;
+  color: #f4fbf7;
+  --page: #173333;
+  --page-warm: #153439;
+  --surface: #10282b;
+  --surface-soft: #1c3b3d;
+  --surface-muted: #274c47;
+  --ink: #f4fbf7;
+  --text: var(--ink);
+  --ink-soft: #d6ebe1;
+  --muted: #c2dbd1;
+  --muted-strong: #d6ebe1;
+  --line: #487069;
+  --line-strong: #83b3a5;
+  --navy: #214641;
+  --navy-deep: #122e31;
+  --lime: #b7edcf;
+  --lime-dark: #9cd8bc;
+  --mint: #274c47;
+  --blue: #233f52;
+  --peach: #4b3536;
+  --violet: #3e3652;
+  --accent: #b7edcf;
+  --danger: #ffb6ad;
+  --theme-focus: #b7edcf;
+  --mint-active-ink: #d0f8df;
+  --mint-active-surface: #31564f;
+  --mint-field: #153336;
+  --mint-info-ink: #c5e2fa;
+  --mint-warning-ink: #ffe1a4;
+  --mint-warning-surface: #4b3b25;
+  --mint-attention-ink: #ffd1c8;
+  --mint-absence-ink: #e6d8fc;
+  --mint-page-wash: radial-gradient(ellipse at 100% 0%, #276659, transparent 58%),
+    linear-gradient(137deg, #173333, #153439 72%);
+  --mint-card-wash: linear-gradient(142deg, #1c3b3d, #254b44);
+  --shadow: 0 20px 55px rgba(4, 22, 22, .34);
+  --shadow-soft: 0 8px 25px rgba(4, 22, 22, .24);
+}
+
+:root[data-theme="mint"] :is(body, .landing-page, .public-page, .auth-page, .portal-layout) {
+  background: var(--mint-page-wash);
+}
+:root[data-theme="mint"] :is(.portal-sidebar, .portal-topline, .notification-popover, .mobile-nav) {
+  border-color: var(--line);
+  background: var(--surface);
+}
+:root[data-theme="mint"] :is(.workspace-card, .feature-card--dark, .stat-card, .action-panel) {
+  border-color: var(--line);
+  background: var(--mint-card-wash);
+  color: var(--ink);
+}
+:root[data-theme="mint"] :is(.feature-card--lime, .workspace-stat--lime, .prototype-notice, .portal-nav-link.is-active, .factory-section-nav > button.is-active) {
+  background: var(--mint);
+  border-color: var(--line);
+  color: var(--mint-active-ink);
+}
+:root[data-theme="mint"] .prototype-notice--subtle { background: var(--surface); }
+:root[data-theme="mint"] :is(.workspace-stat--blue, .monthly-lifecycle--sent, .monthly-version-readonly) {
+  background: var(--blue);
+  border-color: var(--line);
+  color: var(--mint-info-ink);
+}
+:root[data-theme="mint"] .workspace-stat--peach {
+  background: var(--peach);
+  border-color: var(--line);
+  color: var(--mint-attention-ink);
+}
+:root[data-theme="mint"] :is(.breadcrumb-dot, .chip-pulse, .eyebrow-line, .week-cell--active) {
+  background-color: var(--accent);
+}
+:root[data-theme="mint"] :is(.button--dark, .button--outline) {
+  background: var(--surface-soft);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+:root[data-theme="mint"] .button--primary {
+  background: var(--accent);
+  color: #122e31;
+}
+:root[data-theme="mint"] .button--primary:hover:not(:disabled) { background: #d0f8df; }
+:root[data-theme="mint"] :is(.button, a, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--theme-focus);
+  outline-offset: 3px;
+}
+:root[data-theme="mint"] ::selection {
+  background: var(--accent);
+  color: #122e31;
+}
+:root[data-theme="mint"] :is(.field-label input, .field-label select, .field-label textarea):not([type="checkbox"]):not([type="radio"]) {
+  background: var(--mint-field);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+:root[data-theme="mint"] :is(.field-label input, .field-label select, .field-label textarea):disabled {
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+:root[data-theme="mint"] :is(input[type="checkbox"], input[type="radio"]) { accent-color: var(--accent); }
+:root[data-theme="mint"] .toggle-row input:checked + .toggle-track { background: var(--accent); }
+:root[data-theme="mint"] :is(.column-check input:checked + .checkbox-visual, .switcher-pill[aria-pressed="true"]) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #122e31;
+}
+:root[data-theme="mint"] :is(.note-check, .workspace-mark, .floating-chip--bottom, .auth-card-icon,
+  .registration-icon--mint, .support-card-icon--mint, .settings-icon--mint, .not-found-icon, .stat-icon--mint,
+  .empty-state-icon, .action-panel-icon, .permission-note svg, .break-summary-paid strong, .break-policy-note svg,
+  .designer-prototype, .side-panel-icon, .preview-badge, .notification-mark, .template-icon, .inline-notice svg,
+  .workflow-message, .workflow-message svg, .policy-note svg, .text-button, .assignment-summary-icon, .member-state--active,
+  .monthly-checked-status, .toast--success > svg) {
+  color: var(--accent);
+}
+:root[data-theme="mint"] :is(.stat-icon--blue, .settings-icon--blue, .mini-avatar, .factory-summary-icon, .toast--info > svg) {
+  color: var(--mint-info-ink);
+}
+:root[data-theme="mint"] :is(.registration-icon--peach, .stat-icon--peach, .settings-icon--peach) {
+  background: var(--peach);
+  color: var(--mint-attention-ink);
+}
+:root[data-theme="mint"] :is(.registration-icon--violet, .stat-icon--violet, .monthly-absence-label) {
+  color: var(--mint-absence-ink);
+}
+:root[data-theme="mint"] :is(.notice-box--warm, .status-pill--pending, .status-pill--reported, .mode-badge--b,
+  .monthly-status-filter--check strong, .monthly-record-tag--check, .monthly-warning, .monthly-attention-details) {
+  border-color: #b49969;
+  background: var(--mint-warning-surface);
+  color: var(--mint-warning-ink);
+}
+:root[data-theme="mint"] .monthly-attention-reason { border-color: #93784e; }
+:root[data-theme="mint"] :is(.status-pill--disputed, .status-pill--unreported, .monthly-status-filter--problem strong,
+  .monthly-record-tag--problem, .monthly-lifecycle--problem) {
+  border-color: #bd8c84;
+  background: var(--peach);
+  color: var(--mint-attention-ink);
+}
+:root[data-theme="mint"] :is(.status-pill--confirmed, .status-pill--reviewed, .mode-badge--a,
+  .monthly-status-filter--ready strong, .monthly-record-tag--ready, .monthly-lifecycle--success, .monthly-signature) {
+  border-color: var(--line-strong);
+  background: var(--mint);
+  color: var(--mint-active-ink);
+}
+:root[data-theme="mint"] .monthly-signature-icon { background: var(--surface); }
+:root[data-theme="mint"] .monthly-signature-body small { color: var(--muted); }
+:root[data-theme="mint"] :is(.mode-badge--c, .monthly-status-filter--absence strong, .monthly-record-tag--absence) {
+  border-color: #a29aba;
+  background: var(--violet);
+  color: var(--mint-absence-ink);
+}
+:root[data-theme="mint"] :is(.monthly-worker-table tfoot th, .monthly-lifecycle--progress, .worker-history-day--rest, .worker-profile-row--rest) {
+  background: var(--surface-muted);
+  color: var(--ink-soft);
+}
+:root[data-theme="mint"] .worker-history-day--missed { background: var(--blue); }
+:root[data-theme="mint"] .worker-profile-row--absence { background: var(--peach); }
+:root[data-theme="mint"] :is(.worker-profile-dialog, .right-drawer, .compact-modal, .notification-popover) {
+  background: var(--surface);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+:root[data-theme="mint"] :is(.modal-backdrop, .worker-profile-backdrop, .right-drawer-backdrop, .portal-sidebar-backdrop) {
+  background-color: rgb(4 18 19 / 65%);
+}
+:root[data-theme="mint"] .notification-item:not(.is-read) > svg { fill: var(--accent); }
+:root[data-theme="mint"] .notification-count { background: var(--accent); color: #122e31; }
+:root[data-theme="mint"] .payroll-slip {
+  border-color: #82bcaa;
+  background: var(--mint-card-wash);
+  color: var(--ink);
+}
+:root[data-theme="mint"] .payroll-totals .payroll-total:last-child {
+  background: var(--mint-active-surface);
+  border-color: #82bcaa;
+}
+:root[data-theme="mint"] .payroll-totals .payroll-total:last-child strong { color: var(--mint-active-ink); }

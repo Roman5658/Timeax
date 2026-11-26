@@ -1,0 +1,17 @@
+import {isWorkerLocal} from './worker-enrollment';
+export type FactoryRequest={id:string;name:string;nip:string;siteName:string;state:'pending'|'approved'|'rejected';organizationId:string|null;worksiteId:string|null;createdAt:string};
+export type FactoryIndependenceContext={reviewer:boolean;requests:FactoryRequest[];workerInvitations:{id:string;factoryId:string;worksiteId:string;membershipId:string|null;startsAt:string;state:string}[];agencyInvitations:{id:string;agencyId:string;factoryNip:string;state:string}[]};
+export async function independenceCall(action:string,body?:unknown,signal?:AbortSignal):Promise<unknown>{
+ if(location.protocol!=='https:'&&!isWorkerLocal())throw Error('unavailable');
+ const r=await fetch('/api/factory-registration/'+action,{method:body===undefined?'GET':'POST',credentials:'same-origin',redirect:'error',cache:'no-store',signal,headers:body===undefined?{Accept:'application/json'}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
+ if(!r.ok)throw Error(r.status===401?'login':r.status===403?'denied':r.status===400?'invalid':'unavailable');
+ if(r.headers.get('content-type')?.split(';')[0]!=='application/json')throw Error('unavailable');return r.json();
+}
+export function parseIndependence(v:unknown):FactoryIndependenceContext{
+ const c=v as FactoryIndependenceContext,id=(s:unknown)=>typeof s==='string'&&/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(s);
+ if(!c||typeof c.reviewer!=='boolean'||!Array.isArray(c.requests)||!Array.isArray(c.workerInvitations)||!Array.isArray(c.agencyInvitations))throw Error('unavailable');
+ for(const r of c.requests)if(!id(r.id)||typeof r.name!=='string'||typeof r.siteName!=='string'||!/^\d{10}$/.test(r.nip)||!['pending','approved','rejected'].includes(r.state)||!Number.isFinite(Date.parse(r.createdAt))||(r.state==='approved'?(!id(r.organizationId)||!id(r.worksiteId)):(r.organizationId!==null||r.worksiteId!==null)))throw Error('unavailable');
+ for(const r of c.workerInvitations)if(!id(r.id)||!id(r.factoryId)||!id(r.worksiteId)||!['pending','claimed','revoked','expired'].includes(r.state)||!Number.isFinite(Date.parse(r.startsAt)))throw Error('unavailable');
+ for(const r of c.agencyInvitations)if(!id(r.id)||!id(r.agencyId)||!/^\d{10}$/.test(r.factoryNip)||!['pending','claimed','revoked','expired'].includes(r.state))throw Error('unavailable');
+ return c;
+}

@@ -1784,3 +1784,95 @@ a.dashboard-panel:hover { border-color: var(--line-strong); transform: translate
   .portal-layout--worker .schedule-saved-panel .team-filter-row .field-label { display: grid; width: 100%; min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 5px; }
   .portal-layout--worker .schedule-saved-panel .team-filter-row select { width: 100%; min-width: 0; max-width: 100%; }
 }
+
+.payroll-slip { border: 1px solid var(--border-color, #d4dce5); border-radius: 16px; padding: 20px; margin-top: 16px; }
+.payroll-slip dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.payroll-slip dd { margin: 4px 0 0; font-weight: 700; }
+.payroll-slip p { overflow-wrap: anywhere; }
+
+/* Keep dialog geometry independent of the panel that opened it. */
+.right-drawer-heading { top: 0; align-items: flex-start; flex-wrap: nowrap; }
+.right-drawer-heading > div { min-width: 0; flex: 1 1 auto; }
+.right-drawer-heading h2 { overflow-wrap: anywhere; }
+.right-drawer-heading .icon-button { flex: 0 0 44px; width: 44px; height: 44px; }
+.right-drawer-content :is(input, select, textarea, fieldset) { min-width: 0; max-width: 100%; }
+.right-drawer-content :is(.form-actions, .panel-heading) { flex-wrap: wrap; }
+.right-drawer-content .button { white-space: normal; overflow-wrap: anywhere; }
+.payroll-context { margin: 16px 0; }
+.payroll-context summary { cursor: pointer; font-weight: 650; padding: 8px 0; }
+@media (max-width: 900px) {
+  .leader-team-panel .leader-participants-table { display: block; width: 100%; min-width: 0; }
+  .leader-team-panel .leader-participants-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .leader-team-panel .leader-participants-table tbody { display: grid; gap: 12px; }
+  .leader-team-panel .leader-participants-table tbody tr { display: block; min-width: 0; border: 1px solid var(--line); border-radius: 12px; padding: 8px; background: var(--surface); }
+  .leader-team-panel .leader-participants-table td { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 10px; align-items: start; padding: 8px 4px; overflow-wrap: anywhere; }
+  .leader-team-panel .leader-participants-table td::before { content: attr(data-label); color: var(--muted-strong); font-weight: 600; }
+  .leader-team-panel .leader-participants-table td:first-child, .leader-team-panel .leader-participants-table td:last-child { display: block; }
+  .leader-team-panel .leader-participants-table td:first-child::before { display: none; }
+  .leader-team-panel .leader-participants-table td:last-child { border-bottom: 0; }
+  .leader-team-panel .leader-participants-table .participant-select { min-width: 0; grid-template-columns: 24px minmax(0, 1fr); }
+  .leader-team-panel .team-row-actions { min-width: 0; padding-top: 8px; gap: 8px; }
+  .leader-team-panel .team-row-actions select { min-width: 0; max-width: 100%; flex: 1 1 150px; }
+  .leader-team-panel .team-row-actions :is(button, select) { min-height: 44px; }
+  .leader-team-panel .team-row-actions .text-button { white-space: normal; }
+}
+@media (max-width: 650px) {
+  .right-drawer .workflow-form { grid-template-columns: minmax(0, 1fr); }
+  .right-drawer .workflow-form > .field-label--wide { grid-column: auto; }
+  .right-drawer-heading { top: 0; }
+}
+
+.right-drawer-content .group-create-form { display: flex; flex-wrap: wrap; gap: 10px; }
+.right-drawer-content .group-create-form input { flex: 1 1 180px; min-width: 0; }
+.right-drawer-content .group-member-row { flex-wrap: wrap; }
+.right-drawer-content .group-manager-actions { flex-wrap: wrap; }
+.right-drawer-content .group-manager-card summary { overflow-wrap: anywhere; }
+/* Keep long translated selection actions below the team description on phones. */
+@media (max-width: 900px) {
+  .leader-team-panel > .panel-heading { flex-wrap: wrap; }
+  .leader-team-panel > .panel-heading > div:first-child { flex: 1 1 100%; min-width: 0; }
+  .leader-team-panel > .panel-heading > .panel-heading-side { flex: 1 1 100%; align-items: flex-start; }
+  .leader-team-panel > .panel-heading .text-button { min-height: 44px; width: auto; white-space: normal; }
+}
+
+/* Drawer forms retain one readable column regardless of the desktop page grid. */
+.right-drawer { background: var(--surface); }
+.right-drawer .employment-actions, .right-drawer .workflow-form { grid-template-columns: minmax(0, 1fr); }
+.right-drawer .employment-action-form { min-width: 0; align-items: start; }
+.right-drawer .employment-action-form > * { min-width: 0; }
+.right-drawer select { height: 44px; width: 100%; text-overflow: ellipsis; }
+.right-drawer .transfer-confirmation-details { overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .right-drawer { animation: none; transition: none; } }
+
+/* Export preview uses the exact workbook model; only its own table scrolls. */
+.workbook-preview, .workbook-preview > *, .designer-layout > *, .export-workers-panel { min-width: 0; max-width: 100%; }
+.workbook-preview { margin-top: 20px; }
+.workbook-preview .table-scroll { width: 100%; max-height: 560px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+.workbook-preview .export-preview-table { width: max-content; min-width: 100%; }
+.workbook-preview td { max-width: 320px; overflow-wrap: anywhere; border-bottom: 1px solid var(--line); }
+.workbook-preview p, .workbook-preview details { overflow-wrap: anywhere; }
+.export-workers-panel { margin-top: 14px; }
+.export-checkbox-list label { min-width: 0; overflow-wrap: anywhere; }
+.context-help-toggle { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--surface); color: var(--text); cursor: pointer; font-weight: 700; }
+.context-help-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.context-help-reveal { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 180ms ease, opacity 180ms ease; }
+.context-help-reveal.is-open { grid-template-rows: 1fr; opacity: 1; }
+.context-help-reveal > div { overflow: hidden; min-height: 0; }
+.context-help-reveal p { margin: 8px 0; color: var(--muted-strong); font-size: 13px; line-height: 1.5; }
+@media(max-width: 900px) { .designer-layout { grid-template-columns: minmax(0,1fr); } .designer-side { grid-row: 1; } .export-picker-toolbar, .template-action-row { flex-wrap: wrap; } }
+@media(prefers-reduced-motion: reduce) { .context-help-reveal { transition: none; } }
+
+.payroll-totals { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:20px; }
+.payroll-total { display:flex; flex-direction:column; gap:10px; padding:20px; border:1px solid var(--line); border-radius:14px; background:var(--surface-soft); min-width:0; }
+.payroll-total span { overflow-wrap:anywhere; line-height:1.5; }
+.payroll-total strong { font-size:clamp(22px,3vw,32px); font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.payroll-issue { display:flex; flex-direction:column; align-items:flex-start; gap:14px; margin-top:20px; }
+.payroll-issue .checkbox-field { align-items:flex-start; gap:12px; }
+.payroll-issue input[type=checkbox] { flex:0 0 auto; margin-top:3px; }
+.right-drawer-backdrop.is-closing { animation:drawer-fade-out 180ms ease forwards; pointer-events:none; }
+.right-drawer-backdrop.is-closing .right-drawer { animation:drawer-slide-out 180ms ease forwards; }
+@keyframes drawer-slide-out { to { transform:translateX(100%); } }
+@keyframes drawer-fade-out { to { opacity:0; } }
+@media(max-width:550px){ .payroll-totals{grid-template-columns:minmax(0,1fr)} .payroll-issue .button{width:100%} }
+@media(prefers-reduced-motion:reduce){ .right-drawer-backdrop.is-closing,.right-drawer-backdrop.is-closing .right-drawer{animation:none} }
+.factory-leader-identity { display:grid; grid-template-columns:34px minmax(0,1fr); gap:12px; justify-content:start; } .factory-leader-identity > span:last-child { min-width:0; overflow-wrap:anywhere; text-align:left; }

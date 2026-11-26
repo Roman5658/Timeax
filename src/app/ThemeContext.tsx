@@ -1,31 +1,32 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 
-export type ThemeName = "light" | "dark";
+import { readThemePreference, saveThemePreference, type ThemeName } from "./theme-preference";
 
 interface ThemeContextValue {
   theme: ThemeName;
-  toggleTheme: () => void;
+  setTheme: (theme: ThemeName) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function getInitialTheme(): ThemeName {
-  const stored = window.localStorage.getItem("timeax-theme");
-  if (stored === "dark" || stored === "light") return stored;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  try { return readThemePreference(window.localStorage, prefersDark); }
+  catch { return readThemePreference(undefined, prefersDark); }
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<ThemeName>(getInitialTheme);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem("timeax-theme", theme);
+    try { saveThemePreference(window.localStorage, theme); }
+    catch { /* The selection still works if storage access is blocked. */ }
   }, [theme]);
 
   const value = useMemo<ThemeContextValue>(() => ({
     theme,
-    toggleTheme: () => setTheme((current) => current === "light" ? "dark" : "light"),
+    setTheme,
   }), [theme]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

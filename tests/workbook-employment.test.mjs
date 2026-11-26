@@ -125,3 +125,29 @@ test("duplicate production selection does not duplicate worker totals or product
   assert.equal(summary.getColumn(1).values.filter((value) => value === "factory-b · monthlyTimesheets.productionTotal").length, 1);
   assert.equal(summary.getColumn(1).values.filter((value) => value === "monthlyTimesheets.productionTotal").length, 1);
 });
+
+test("preview and XLSX share sheets, all calendar rows, typed durations, absences and totals", async () => {
+  const { buildExportWorkbook } = await import("../src/modules/exports/domain/workbook.ts");
+  const { workbookPreview } = await import("../src/modules/exports/domain/preview.ts");
+  const days = Array.from({length:30}, (_,i)=>`2026-11-${String(i+1).padStart(2,"0")}`);
+  const a=worker("a","QA A"), b=worker("b","QA B");
+  const fa=factory("fa"), fb=factory("fb"); fa.workCalendar.workingWeekdays=[1,2,3,4,5];
+  const pa=period("pa","a","2026-11-01",undefined,[{factoryId:"fa",startDate:"2026-11-01"}]);
+  const pb=period("pb","b","2026-11-01",undefined,[{factoryId:"fb",startDate:"2026-11-01"}]);
+  const selectedColumns=Object.keys(columnHeaders).map((key,order)=>({key,order,enabled:true}));
+  const input={organizationName:"QA Agency",workers:[a,b],factories:[fa,fb],folders:[],employmentPeriods:[pa,pb],shifts:[shift("sa","a","fa","2026-11-02","pa"),shift("sb","b","fb","2026-11-03","pb")],absences:[{id:"abs",organizationId:"agency-a",workerId:"a",factoryId:"fa",employmentId:"pa",localDate:"2026-11-04",state:"unreported",agencyCategory:"unreported",agencyNote:"QA absence"}],factoryIds:["fa","fb"],dates:days,columns:selectedColumns,dateFormat:"yyyy-MM-dd",timeFormat:"24-hour",language:"en",columnHeaders,translate};
+  const planned=buildExportWorkbook(input); const serialized=await createExportWorkbook(input);
+  const loaded=new ExcelJS.Workbook(); await loaded.xlsx.load(Buffer.from(serialized));
+  assert.deepEqual(workbookPreview(loaded,"en"),workbookPreview(planned,"en"));
+  assert.equal(loaded.worksheets.length,3);
+  const detail=loaded.getWorksheet("QA A");
+  const dateCol=selectedColumns.findIndex(c=>c.key==="shiftDate")+1;
+  const paidCol=selectedColumns.findIndex(c=>c.key==="paidTime")+1;
+  const typeCol=selectedColumns.findIndex(c=>c.key==="shiftNote")+1;
+  assert.equal(Array.from({length:30},(_,i)=>detail.getCell(i+6,dateCol).value).filter(v=>v instanceof Date).length,30);
+  assert.equal(planned.getWorksheet("QA A").getCell(7,paidCol).value,480/1440);
+  assert.equal(detail.getCell(7,paidCol).numFmt,"[h]:mm");
+  assert.equal(detail.getCell(9,typeCol).value,"exports.absenceLabel");
+  assert.ok(workbookPreview(loaded,"en")[1].rows.flat().some(c=>c.text==="exports.notRecorded"));
+  const summary=loaded.worksheets[0]; assert.equal(summary.lastRow.getCell(3).value,2); assert.equal(planned.worksheets[0].lastRow.getCell(6).value,960/1440); assert.equal(summary.lastRow.getCell(7).value,1);
+});

@@ -1,0 +1,6 @@
+.factory-fieldset{border:0;padding:0;margin:0;min-width:0}
+.factory-actions{display:grid;gap:12px;margin:16px 0}
+.factory-links{display:flex;gap:16px;flex-wrap:wrap;margin:18px 0}
+.factory-actions textarea{width:100%;min-height:72px}
+.membership-record details{margin:16px 0}
+.membership-record li{margin:8px 0;overflow-wrap:anywhere}

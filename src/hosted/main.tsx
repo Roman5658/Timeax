@@ -1,0 +1,12 @@
+import {StrictMode} from "react";
+import {createRoot} from "react-dom/client";
+import {BrowserRouter} from "react-router-dom";
+import "../i18n";
+import "../styles/global.css";
+import "../styles/theme-mint.css";
+import "../styles/theme-turquoise.css";
+import "../styles/theme-pink.css";
+import "../styles/agency-registration.css";
+import {ThemeProvider} from "../app/ThemeContext";
+import {HostedApp} from "./HostedApp";
+createRoot(document.getElementById("root")!).render(<StrictMode><ThemeProvider><BrowserRouter><HostedApp/></BrowserRouter></ThemeProvider></StrictMode>);

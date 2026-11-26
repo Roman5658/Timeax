@@ -1,0 +1,204 @@
+/* Optional rose palette. All decorative flourishes are confined to this theme. */
+:root[data-theme="pink"] {
+  color-scheme: light;
+  background-color: #fff2f7;
+  color: #3e2034;
+  --page: #fff2f7;
+  --page-warm: #f9e9f0;
+  --surface: #fffafd;
+  --surface-soft: #fdf3f7;
+  --surface-muted: #f6e5ee;
+  --ink: #3e2034;
+  --text: var(--ink);
+  --ink-soft: #61334e;
+  --muted: #78546a;
+  --muted-strong: #683c55;
+  --line: #e6c4d5;
+  --line-strong: #9a607e;
+  --navy: #63334d;
+  --navy-deep: #4c253e;
+  --lime: #f4abc9;
+  --lime-dark: #ce648e;
+  --mint: #f8dbea;
+  --blue: #e9e8fa;
+  --peach: #fce9e3;
+  --violet: #f0e4f8;
+  --accent: #f4abc9;
+  --danger: #8e2749;
+  --theme-focus: #8b2d58;
+  --pink-glow: #f6d3e4;
+  --pink-accent-ink: #4a1731;
+  --pink-accent-hover: #f8c6db;
+  --pink-active-ink: #763355;
+  --pink-field: #fffcfe;
+  --pink-info-ink: #45417d;
+  --pink-peach-ink: #773f36;
+  --pink-warning-ink: #694915;
+  --pink-warning-surface: #fff0cd;
+  --pink-error-ink: #8e2749;
+  --pink-error-surface: #fce8ed;
+  --pink-absence-ink: #613585;
+  --pink-success-ink: #2c624c;
+  --pink-success-surface: #e6f2e9;
+  --pink-page-wash: radial-gradient(ellipse at 95% 0%, var(--pink-glow), transparent 52%), linear-gradient(149deg, var(--page), #fff9fc 80%);
+  --pink-card-wash: linear-gradient(141deg, var(--surface), var(--mint));
+  --shadow: 0 20px 52px rgba(114, 50, 82, .14);
+  --shadow-soft: 0 8px 24px rgba(114, 50, 82, .09);
+}
+:root[data-theme="pink"] :is(.landing-page, .public-page, .auth-page, .portal-layout) {
+  background: var(--pink-page-wash);
+}
+:root[data-theme="pink"] :is(.portal-sidebar, .portal-topline, .mobile-nav) {
+  background-color: var(--surface);
+  border-color: var(--line);
+}
+:root[data-theme="pink"] :is(.workspace-card, .stat-card, .action-panel, .payroll-slip) {
+  background: var(--pink-card-wash);
+  color: var(--ink);
+  border-color: var(--line);
+}
+:root[data-theme="pink"] .feature-card--dark { border-color: var(--navy-deep); }
+:root[data-theme="pink"] .feature-card--dark p { opacity: .9; }
+:root[data-theme="pink"] .feature-card--dark .feature-icon { color: var(--pink-accent-hover); }
+:root[data-theme="pink"] :is(.feature-card--lime, .workspace-stat--lime, .portal-nav-link.is-active, .factory-section-nav > button.is-active) {
+  background: var(--mint);
+  color: var(--pink-active-ink);
+  border-color: var(--line);
+}
+:root[data-theme="pink"] :is(.workspace-stat--blue, .monthly-lifecycle--sent, .monthly-version-readonly, .settings-icon--blue) {
+  background: var(--blue);
+  color: var(--pink-info-ink);
+  border-color: var(--line);
+}
+:root[data-theme="pink"] :is(.workspace-stat--peach, .registration-icon--peach, .stat-icon--peach, .settings-icon--peach) {
+  background: var(--peach);
+  color: var(--pink-peach-ink);
+  border-color: var(--line);
+}
+/* Keep attention states distinct from the theme accent. */
+:root[data-theme="pink"] :is(.status-pill--confirmed, .status-pill--reviewed, .mode-badge--a,
+  .monthly-status-filter--ready strong, .monthly-record-tag--ready, .monthly-lifecycle--success, .monthly-signature) {
+  background: var(--pink-success-surface);
+  color: var(--pink-success-ink);
+  border-color: #779d89;
+}
+:root[data-theme="pink"] :is(.status-pill--pending, .status-pill--reported, .notice-box--warm, .mode-badge--b,
+  .monthly-status-filter--check strong, .monthly-record-tag--check, .monthly-warning, .monthly-attention-details) {
+  background: var(--pink-warning-surface);
+  color: var(--pink-warning-ink);
+  border-color: #ab8b4b;
+}
+:root[data-theme="pink"] :is(.status-pill--disputed, .status-pill--unreported, .monthly-status-filter--problem strong,
+  .monthly-record-tag--problem, .monthly-lifecycle--problem) {
+  background: var(--pink-error-surface);
+  color: var(--pink-error-ink);
+  border-color: #bc758b;
+}
+:root[data-theme="pink"] :is(.mode-badge--c, .monthly-status-filter--absence strong, .monthly-record-tag--absence) {
+  background: var(--violet);
+  color: var(--pink-absence-ink);
+  border-color: #9c76b8;
+}
+:root[data-theme="pink"] :is(.public-guide-marker, .note-check, .workspace-mark, .floating-chip--bottom, .auth-card-icon,
+  .registration-icon--mint, .support-card-icon--mint, .settings-icon--mint, .not-found-icon, .stat-icon--mint, .empty-state-icon,
+  .action-panel-icon, .permission-note svg, .break-summary-paid strong, .break-policy-note svg, .designer-prototype, .side-panel-icon,
+  .preview-badge, .notification-mark, .template-icon, .inline-notice svg, .workflow-message, .workflow-message svg, .policy-note svg,
+  .text-button, .assignment-summary-icon, .theme-picker-icon) { color: var(--pink-active-ink); }
+:root[data-theme="pink"] :is(.member-state--active, .monthly-checked-status, .toast--success > svg) { color: var(--pink-success-ink); }
+:root[data-theme="pink"] :is(.button--primary, .notification-count, .switcher-pill[aria-pressed="true"],
+  .column-check input:checked + .checkbox-visual) {
+  background: var(--accent);
+  border-color: var(--line-strong);
+  color: var(--pink-accent-ink);
+}
+:root[data-theme="pink"] .button--primary:hover:not(:disabled) { background: var(--pink-accent-hover); }
+:root[data-theme="pink"] :is(.eyebrow-line, .breadcrumb-dot, .week-cell--active, .chip-pulse) { background: var(--theme-focus); }
+:root[data-theme="pink"] :is(button, a, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--theme-focus);
+  outline-offset: 3px;
+}
+:root[data-theme="pink"] .feature-card--dark :focus-visible { outline-color: var(--pink-accent-hover); }
+:root[data-theme="pink"] ::selection { color: var(--pink-accent-ink); background: var(--accent); }
+:root[data-theme="pink"] :is(.field-label input, .field-label select, .field-label textarea, .theme-picker--expanded select):not([type="radio"]):not([type="checkbox"]) {
+  background: var(--pink-field);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+:root[data-theme="pink"] :is(.field-label input, .field-label select, .field-label textarea):disabled {
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+:root[data-theme="pink"] :is(input[type="checkbox"], input[type="radio"]) { accent-color: var(--theme-focus); }
+:root[data-theme="pink"] .toggle-row input:checked + .toggle-track { background: var(--theme-focus); }
+:root[data-theme="pink"] :is(.right-drawer, .compact-modal, .worker-profile-dialog, .notification-popover) {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+:root[data-theme="pink"] .notification-item:not(.is-read) > svg { fill: var(--accent); }
+:root[data-theme="pink"] .payroll-totals .payroll-total:last-child { background: var(--mint); border-color: var(--line-strong); }
+:root[data-theme="pink"] .payroll-totals .payroll-total:last-child strong { color: var(--pink-active-ink); }
+/* Motifs stay inside existing elements; they take no layout space or input. */
+:root[data-theme="pink"] .preview-scene::before,
+:root[data-theme="pink"] .preview-scene::after { border-color: #c989a853; }
+:root[data-theme="pink"] .preview-orbit {
+  border-radius: 0;
+  filter: none;
+  pointer-events: none;
+}
+:root[data-theme="pink"] .preview-orbit--one {
+  top: 1%;
+  right: 2%;
+  background: url("/timeax-pink-mouse-happy.svg") center / contain no-repeat;
+  rotate: 9deg;
+  opacity: .98;
+}
+:root[data-theme="pink"] .preview-orbit--two {
+  bottom: 2%;
+  left: 5%;
+  background: url("/timeax-pink-mouse-wink.svg") center / contain no-repeat;
+  rotate: -13deg;
+  opacity: .92;
+}
+:root[data-theme="pink"] .preview-spark--a {
+  background: var(--surface) url("/timeax-pink-bow.svg") center / 80% auto no-repeat;
+  pointer-events: none;
+}
+:root[data-theme="pink"] .preview-spark--a > svg { visibility: hidden; }
+
+:root[data-theme="pink"] .settings-card--appearance {
+  background-color: var(--surface);
+  background-image: url("/timeax-pink-sticker-trio.svg");
+  background-repeat: no-repeat;
+  background-size: 116px auto;
+  background-position: right 12px top 8px;
+}
+/* Keep the original icon cells and all label/target geometry. Artwork is purely decorative. */
+:root[data-theme="pink"] .workflow-stat-grid .workflow-stat-card > .stat-icon {
+  background-image: var(--pink-stat-sticker, url("/timeax-pink-mouse-happy.svg"));
+  background-repeat: no-repeat;
+  background-size: 94%;
+  background-position: center;
+}
+:root[data-theme="pink"] .workflow-stat-grid .workflow-stat-card:nth-child(3n + 2) > .stat-icon {
+  --pink-stat-sticker: url("/timeax-pink-mouse-wink.svg");
+}
+:root[data-theme="pink"] .workflow-stat-grid .workflow-stat-card:nth-child(3n) > .stat-icon {
+  --pink-stat-sticker: url("/timeax-pink-mouse-giggle.svg");
+}
+:root[data-theme="pink"] .workflow-stat-grid .workflow-stat-card > .stat-icon > svg { visibility: hidden; }
+:root[data-theme="pink"] .factory-daily-overview > .panel-heading {
+  background: url("/timeax-pink-mouse-giggle.svg") right 5px top / 46px auto no-repeat;
+}
+@media (max-width: 560px) {
+  :root[data-theme="pink"] .preview-orbit--one { top: 0; right: 0; width: 73px; height: 73px; }
+  :root[data-theme="pink"] .preview-orbit--two { bottom: 0; left: 4%; width: 56px; height: 56px; }
+  :root[data-theme="pink"] .settings-card--appearance { background-size: 97px auto; background-position: right 8px top 8px; }
+  :root[data-theme="pink"] .factory-daily-overview > .panel-heading { background-size: 36px auto; }
+}
+@media (forced-colors: active) {
+  :root[data-theme="pink"] .workflow-stat-grid .workflow-stat-card > .stat-icon,
+  :root[data-theme="pink"] .preview-spark--a { background-image: none; }
+  :root[data-theme="pink"] .workflow-stat-grid .workflow-stat-card > .stat-icon > svg,
+  :root[data-theme="pink"] .preview-spark--a > svg { visibility: visible; }
+}

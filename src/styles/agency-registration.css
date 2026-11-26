@@ -1,0 +1,21 @@
+.registration-card { width: min(100%, 490px); }
+.registration-card > .button, .registration-card > .notice-box { margin-top: 18px; }
+.registration-card > .muted-copy { font-size: 13px; line-height: 1.65; }
+.registration-card .auth-form { margin-block: 22px; }
+.registration-card .registration-field-hint { margin-top: -8px; font-size: 12px; line-height: 1.5; }
+.registration-card .registration-error { color: var(--danger, #8e2749); font-size: 13px; line-height: 1.5; margin-top: -7px; }
+.registration-card [aria-invalid="true"] { border-color: var(--danger, #8e2749); }
+.registration-receipt h2 { font-size: 20px; margin-block: 10px; }
+.registration-receipt p, .registration-receipt dd { line-height: 1.6; }
+.registration-receipt dt { margin-top: 12px; font-weight: 700; }
+.registration-receipt dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .registration-card .button, .registration-card input { min-height: 44px; }
+}
+
+.registration-session { display: grid; gap: 12px; margin: 24px 0; }
+.registration-session > h2, .registration-session > p { margin: 0; }
+
+.worker-join-panel { display: grid; gap: 16px; min-width: 0; }
+.worker-join-receipts { margin: 0; padding: 0; list-style: none; }
+.worker-join-receipts dd { margin: 4px 0 12px; overflow-wrap: anywhere; }

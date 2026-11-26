@@ -128,10 +128,22 @@ test("leaders request scoped access, duplicate submissions count once, and both 
     assert.equal(store.createLeaderShiftBatch([{ organizationId: "org-demo-02", factoryId: factoryB.id, workerId: workerA.id, employmentId: periodA.id }], draft), 0, "a leader cannot work outside granted organization scopes");
 
     store.setActiveMember("agency-demo");
+    assert.equal(store.submitMonthlyTimesheet(factoryA.id, todayDate.slice(0, 7), false, "org-demo-01"), false, "leader-entered shifts need worker confirmation");
+    for (const worker of [workerA, workerB]) {
+      store.setActiveMember(worker.id);
+      const shift = readSaved(saved).shifts.find((record) => record.shift.workerUid === worker.id && record.shift.factoryId === factoryA.id);
+      assert.equal(store.confirmShift(shift.shift.id), true);
+    }
+    store.setActiveMember(registration.admin.id);
+    assert.equal(store.canFactorySubmitTimesheet(readSaved(saved), "org-demo-01", factoryA.id), true);
+    assert.equal(store.canFactorySubmitTimesheet(readSaved(saved), "org-demo-02", factoryA.id), false, "mismatched organization is denied");
+    assert.equal(store.submitMonthlyTimesheet(factoryA.id, todayDate.slice(0, 7), false, "org-demo-02"), false);
     assert.equal(store.submitMonthlyTimesheet(factoryA.id, todayDate.slice(0, 7), false, "org-demo-01"), true);
     state = readSaved(saved);
     const timesheet = state.monthlyTimesheets.find((item) => item.organizationId === "org-demo-01" && item.factoryId === factoryA.id);
     assert.ok(timesheet);
+    assert.equal(timesheet.versions[0].signature.signerRole, "factory-admin");
+    assert.equal(timesheet.organizationId, "org-demo-01");
     assert.equal(timesheet.versions[0].rows.filter((row) => row.kind === "shift").length, 2);
     assert.deepEqual(new Set(timesheet.versions[0].rows.map((row) => row.workerId)), new Set([workerA.id, workerB.id]));
     assert.equal(state.monthlyTimesheets.some((item) => item.organizationId === "org-demo-02" && item.factoryId === factoryB.id), false);

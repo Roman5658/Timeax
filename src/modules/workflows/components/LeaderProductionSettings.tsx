@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Settings2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { getActiveMember, getFactory, getLeaderProductionWorkers, getWorkerAccess, setWorkerInputAccess, updateFactoryBreakRule, updateFactoryWorkCalendar, useDemoWorkspace } from "../demo-store";
+import { isInternalAgencyFactory, canManageProductionRules, getActiveMember, getFactory, getLeaderProductionWorkers, getWorkerAccess, setWorkerInputAccess, updateFactoryBreakRule, updateFactoryWorkCalendar, useDemoWorkspace } from "../demo-store";
 import type { DemoWorkCalendar, WorkerInputAccess } from "../domain/demo-types";
 import { useToast } from "../../../app/ToastProvider";
 
@@ -51,6 +51,7 @@ export function LeaderProductionSettings({ factoryId }: { factoryId: string }) {
   }
 
   if (!factory || leader.role !== "leader" || leader.factoryId !== factoryId) return null;
+  if (isInternalAgencyFactory(workspace, factoryId) || !canManageProductionRules(workspace, factoryId)) return null;
   return <details className="dashboard-panel leader-production-settings">
     <summary className="agency-collapsible-heading"><span><span className="eyebrow"><Settings2 size={14} /> {t("workflow.production.operationalSettings")}</span><strong>{factory.name}</strong></span><span className="panel-period">{workers.length}</span></summary>
     {message && <p className="sr-only">{message}</p>}
@@ -62,6 +63,6 @@ export function LeaderProductionSettings({ factoryId }: { factoryId: string }) {
       <button className="button button--primary button--small field-label--wide" type="submit">{t("common.save")}</button>
     </form>
     <p className="policy-note"><Settings2 size={15} />{t("workflow.production.breakRuleExplanation")}</p>
-    {factory.inputMode === "C" && <div className="leader-worker-access"><h3>{t("workflow.production.workerInputAccess")}</h3><p className="muted-copy">{t("workflow.production.workerInputAccessLead")}</p>{workers.length ? <div className="workflow-form"><label className="field-label"><span>{t("workflow.fields.name")}</span><select value={accessWorkerId} onChange={(event) => { setAccessWorkerId(event.target.value); setWorkerAccess(event.target.value ? getWorkerAccess(workspace, event.target.value, factoryId) : "leader"); }}><option value="">{t("common.select")}</option>{workers.map((worker) => <option key={worker.id} value={worker.id}>{worker.name}</option>)}</select></label><label className="field-label"><span>{t("workflow.production.workerInputAccess")}</span><select value={workerAccess} onChange={(event) => setWorkerAccess(event.target.value as WorkerInputAccess)}><option value="leader">{t("workflow.agency.access.leader")}</option><option value="self">{t("workflow.agency.access.self")}</option></select></label><button type="button" className="button button--outline button--small" onClick={saveWorkerAccess}>{t("common.save")}</button></div> : <p className="muted-copy">{t("workflow.production.noProductionWorkers")}</p>}</div>}
+    {<div className="leader-worker-access"><h3>{t("workflow.production.workerInputAccess")}</h3><p className="muted-copy">{t("workflow.production.workerInputAccessLead")}</p>{workers.length ? <div className="workflow-form"><label className="field-label"><span>{t("workflow.fields.name")}</span><select value={accessWorkerId} onChange={(event) => { setAccessWorkerId(event.target.value); setWorkerAccess(event.target.value ? getWorkerAccess(workspace, event.target.value, factoryId) : "leader"); }}><option value="">{t("common.select")}</option>{workers.map((worker) => <option key={worker.id} value={worker.id}>{worker.name}</option>)}</select></label><label className="field-label"><span>{t("workflow.production.workerInputAccess")}</span><select value={workerAccess} onChange={(event) => setWorkerAccess(event.target.value as WorkerInputAccess)}><option value="leader">{t("workflow.agency.access.leader")}</option><option value="self">{t("workflow.agency.access.self")}</option></select></label><button type="button" className="button button--outline button--small" onClick={saveWorkerAccess}>{t("common.save")}</button></div> : <p className="muted-copy">{t("workflow.production.noProductionWorkers")}</p>}</div>}
   </details>;
 }
