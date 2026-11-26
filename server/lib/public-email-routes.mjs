@@ -9,11 +9,11 @@ const token=/^[A-Za-z0-9_-]{43}$/;
 const uuid=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/;
 const TTL=300_000,COOLDOWN=60_000,MAX_RECORDS=1_000,MAX_ATTEMPTS=5,GLOBAL_MINUTE_LIMIT=30;
 const cookie=(name,value='',seconds=0)=>name+'='+value+'; Max-Age='+seconds+'; Path=/; Secure; HttpOnly; SameSite=Strict';
-function getChallenge(request){
+function getChallenge(request,challengeName){
  const header=request.headers.get('cookie');
  if(!header||header.length>8192)return null;
- const matches=header.split(';').map(s=>s.trim()).filter(s=>s.startsWith(CHALLENGE+'='));
- const id=matches.length===1?matches[0].slice(CHALLENGE.length+1):'';
+ const matches=header.split(';').map(s=>s.trim()).filter(s=>s.startsWith(challengeName+'='));
+ const id=matches.length===1?matches[0].slice(challengeName.length+1):'';
  return token.test(id)?id:null;
 }
 function respond(status,body,cookies=[]){
@@ -27,11 +27,13 @@ export const isPublicEmailRoute=path=>path===START||path===VERIFY;
 
 // Single-process challenge lane. A deployment must supply an independent send
 // admission/abuse check and its own identity-only session issuer before enabling.
-export function createPublicEmailRoutes({origin,provider,admitSend,issueIdentitySession,tagKey,otpLength,now=Date.now}){
- if(!['https://timeax.pl','https://www.timeax.pl'].includes(origin)||![6,8].includes(otpLength)
+export function createPublicEmailRoutes({origin,provider,admitSend,issueIdentitySession,tagKey,otpLength,localLoopback=false,now=Date.now}){
+ if(!(localLoopback?/^http:\/\/127\.0\.0\.1:[1-9][0-9]{3,4}$/.test(origin):['https://timeax.pl','https://www.timeax.pl'].includes(origin))||![6,8].includes(otpLength)
   ||typeof provider?.requestCode!=='function'||typeof provider?.verifyCode!=='function'
   ||typeof admitSend!=='function'||typeof issueIdentitySession!=='function'
   ||!Buffer.isBuffer(tagKey)||tagKey.length<32)throw Error('Public email route configuration incomplete');
+ const challengeName=localLoopback?'timeax-loopback-email-challenge':CHALLENGE,sessionName=localLoopback?'timeax-loopback-email-identity':SESSION;
+ const issueCookie=(...args)=>localLoopback?cookie(...args).replace('; Secure',''):cookie(...args);
  const challenges=new Map(),lastSend=new Map(),sendTimes=[],pattern=new RegExp('^[0-9]{'+otpLength+'}$');
  const tag=email=>createHmac('sha256',tagKey).update(email).digest('hex');
  const clean=at=>{
@@ -39,7 +41,7 @@ export function createPublicEmailRoutes({origin,provider,admitSend,issueIdentity
   for(const [id,last] of lastSend)if(last+COOLDOWN<=at)lastSend.delete(id);
   while(sendTimes.length&&sendTimes[0]+COOLDOWN<=at)sendTimes.shift();
  };
- return async request=>{
+ const handler=async request=>{
   try{
    const url=new URL(request.url);
    if(url.origin!==origin||url.username||url.password||url.search||url.hash||!isPublicEmailRoute(url.pathname))
@@ -56,11 +58,11 @@ export function createPublicEmailRoutes({origin,provider,admitSend,issueIdentity
    if(url.pathname===START){
     const email=normalizePublicEmail(body.email),flow=body.flow;
     if(!email||!['login','registration'].includes(flow))return respond(400,{error:'invalid-request'});
-    const previous=getChallenge(request),previousChallenge=challenges.get(previous);
+    const previous=getChallenge(request,challengeName),previousChallenge=challenges.get(previous);
     const key=tag(email);
     if(lastSend.has(key))return respond(202,{status:'accepted'});
     if(challenges.size>=MAX_RECORDS||sendTimes.length>=GLOBAL_MINUTE_LIMIT)return respond(429,{error:'try-later'});
-    if(await admitSend({request,flow,emailTag:key})!==true)return respond(429,{error:'try-later'});
+    if(await admitSend({request,flow,emailTag:key,email})!==true)return respond(429,{error:'try-later'});
     // Recheck after awaiting admission so parallel sends cannot share one slot.
     const startedAt=now();clean(startedAt);
     if(request.signal.aborted)return respond(400,{error:'invalid-request'});
@@ -72,10 +74,10 @@ export function createPublicEmailRoutes({origin,provider,admitSend,issueIdentity
     challenges.set(id,challenge);lastSend.set(key,startedAt);sendTimes.push(startedAt);
     // Return the same external status for provider accept/deny; never claim delivery.
     try{challenge.acknowledged=await provider.requestCode(email,flow)===true}catch{}
-    return respond(202,{status:'accepted'},[cookie(CHALLENGE,id,TTL/1000)]);
+    return respond(202,{status:'accepted'},[issueCookie(challengeName,id,TTL/1000)]);
    }
    if(typeof body.code!=='string'||!pattern.test(body.code))return respond(400,{error:'invalid-request'});
-   const id=getChallenge(request),challenge=challenges.get(id);
+   const id=getChallenge(request,challengeName),challenge=challenges.get(id);
    if(!challenge||challenge.busy||!challenge.acknowledged||challenge.attempts>=MAX_ATTEMPTS)return denied();
    challenge.attempts++;challenge.busy=true;
    try{
@@ -88,8 +90,9 @@ export function createPublicEmailRoutes({origin,provider,admitSend,issueIdentity
      emailConfirmed:true,isAnonymous:false,flow:challenge.flow});
     if(!token.test(session?.id??'')||!Number.isInteger(session?.maxAge)||session.maxAge<1||session.maxAge>900)
      return respond(503,{error:'service-unavailable'});
-    return respond(200,{status:'email-verified'},[cookie(SESSION,session.id,session.maxAge),cookie(CHALLENGE)]);
+    return respond(200,{status:'email-verified'},[issueCookie(sessionName,session.id,session.maxAge),issueCookie(challengeName)]);
    }finally{challenge.busy=false}
   }catch{return respond(503,{error:'service-unavailable'})}
  };
+ return Object.assign(handler,{hasChallenge(request){clean(now());return challenges.has(getChallenge(request,challengeName))}});
 }

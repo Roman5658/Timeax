@@ -1,4 +1,4 @@
-import { agencyDraft, createWorkingRegistrationClient, type PendingRegistration, type RegistrationOutcome } from "./contract/registration-client.ts";
+import { agencyDraft, createWorkingRegistrationClient, isLoopbackEmailOrigin, type PendingRegistration, type RegistrationOutcome } from "./contract/registration-client.ts";
 
 export const reviewOrigin = "https://127.0.0.1:43817";
 export type RegistrationState = RegistrationOutcome | { state: "uncertain" | "busy" };
@@ -30,7 +30,7 @@ export function isStagingRegistration(mode: string, origin: string) {
 }
 export function createRegistrationTransport(mode: string, origin: string, transport: typeof fetch): RegistrationTransport | undefined {
   // UI build mode enables only same-origin requests. Server capabilities remain authoritative.
-  if (!isRegistrationReview(mode, origin) && !isStagingRegistration(mode, origin)) return;
+  if (!isRegistrationReview(mode, origin) && !isStagingRegistration(mode, origin) && !(mode === "enrollment-staging" && isLoopbackEmailOrigin(origin))) return;
   const client = createWorkingRegistrationClient(origin, transport);
   let submitting = false;
   return {

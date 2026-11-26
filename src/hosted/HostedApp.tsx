@@ -15,7 +15,7 @@ import {RegistrationChoices, RegistrationFrame, RegistrationProgress} from "../c
 import {StartPage} from "../modules/auth/pages/HostedStartPage";
 import {StagingSessionPanel} from "../modules/auth/pages/StagingSessionPanel";
 import {createRegistrationTransport,validateAgencyDraft,type RegistrationState} from "../modules/auth/registration/agency-registration";
-import {createWorkingRegistrationClient} from "../modules/auth/registration/contract/registration-client";
+import {createWorkingRegistrationClient,isLoopbackEmailOrigin} from "../modules/auth/registration/contract/registration-client";
 import {WorkerEnrollmentEntry,AgencyWorkerPanel,WorkerWorkspacePanel,EnrollmentDestinations} from './WorkerEnrollmentPage';
 import {WorkspaceReadPage} from "./WorkspaceReadPage";
 function AgencyStep({existing}:{existing:boolean}){
@@ -25,7 +25,8 @@ function AgencyStep({existing}:{existing:boolean}){
  const pending=useRef<AbortController|null>(null);
  const nameInput=useRef<HTMLInputElement>(null),nipInput=useRef<HTMLInputElement>(null);
  const api=useMemo(()=>createRegistrationTransport("enrollment-staging",location.origin,window.fetch.bind(window)),[]);
- const auth=useMemo(()=>location.protocol==="https:"?createWorkingRegistrationClient(location.origin,window.fetch.bind(window),existing?"existing":"enrollment"):undefined,[existing]);
+ const loopback=isLoopbackEmailOrigin(location.origin);
+ const auth=useMemo(()=>location.protocol==="https:"||loopback?createWorkingRegistrationClient(location.origin,window.fetch.bind(window),existing?"existing":"enrollment"):undefined,[existing,loopback]);
  const refresh=useCallback(()=>{pending.current?.abort();pending.current=null;setState({state:"unavailable"});setRevision(v=>v+1)},[]);
  useEffect(()=>{if(!auth){setBusy(false);setState({state:"unavailable"});return;}const c=new AbortController();pending.current=c;setBusy(true);
   void auth.registration(c.signal).then(v=>{if(!c.signal.aborted)setState(v)}).finally(()=>{if(pending.current===c)pending.current=null;if(!c.signal.aborted)setBusy(false)});
@@ -40,7 +41,7 @@ function AgencyStep({existing}:{existing:boolean}){
  const receipt=state.state==="pending"?state.registration:null;
  return <>
   {!existing&&<RegistrationProgress current={receipt?2:state.state==="none"?1:0}/>}
-  <PrivateAccess onOpened={()=>{setAccessRevision(v=>v+1);refresh()}}/>
+  {!loopback&&<PrivateAccess onOpened={()=>{setAccessRevision(v=>v+1);refresh()}}/>}
   <StagingSessionPanel guided key={(existing?"existing":"enrollment")+accessRevision} purpose={existing?"existing":"enrollment"} onChanged={refresh}/>
   {receipt?<div className="notice-box registration-receipt" role="status" data-testid="hosted-pending"><h2>{t("stagingRegistration.pendingTitle")}</h2><p>{t("stagingRegistration.pendingLead")}</p><dl><dt>{t("stagingRegistration.receiptLabel")}</dt><dd>{receipt.requestId}</dd><dt>{t("agencyRegistration.dateLabel")}</dt><dd>{new Intl.DateTimeFormat(i18n.language,{dateStyle:"medium",timeStyle:"short"}).format(new Date(receipt.requestedAt))}</dd></dl></div>:
    <div className="enrollment-details">{(busy||state.state==="none"||state.state==="uncertain")&&<p className="notice-box" role="status" data-testid="hosted-registration">{busy?tx("checking"):state.state==="none"?tx("ready"):state.state==="uncertain"?tx("uncertain"):t("publicExperience.closed")}</p>}
