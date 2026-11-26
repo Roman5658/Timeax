@@ -1,4 +1,5 @@
 import { parseArgs } from 'node:util';
+import { existsSync } from 'node:fs';
 import { buildSite, publicDir } from './build-site.mjs';
 import { createRuntimeServer } from './lib/node-host.mjs';
 import { assembleRuntime } from './lib/runtime.mjs';
@@ -16,7 +17,7 @@ const host = '127.0.0.1';
 // The HTTP listener is loopback-only. Its closed router uses the same authority
 // with the HTTPS scheme required by the hosted code; no cookies are issued.
 const origin = `https://${host}:${port}`;
-const realAuth=values['real-auth']===true;
+const realAuth=values['real-auth']===true||existsSync('.timeax-auth.local');
 if(realAuth){
   try{process.loadEnvFile('.timeax-auth.local')}catch{throw Error('Missing or unreadable .timeax-auth.local; see LOCAL-AUTH.md')}
   try{process.loadEnvFile('.env.local')}catch{/* The explicit server key can be used instead. */}

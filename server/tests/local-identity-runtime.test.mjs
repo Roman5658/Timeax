@@ -8,9 +8,11 @@ import {ISSUER} from '../lib/provider-adapters.mjs';
 const subject='1c556e2f-a8fc-4bb5-a02b-6c5566b38daa',mail='owner@example.test';
 test('browser URL goes through HTTP: signup, saved pending agency, logout and existing sign-in',async t=>{
  const origin='http://127.0.0.1:55173',sends=[],records=new Map();let at=Date.now();
- const runtime=createLocalIdentityRuntime({origin,allowedEmail:mail,otpLength:8,provider:{
+ const runtime=createLocalIdentityRuntime({origin,otpLength:8,provider:{
   async requestCode(address,flow){sends.push({address,flow});return true},
-  async verifyCode(address,code){assert.equal(address,mail);return code==='34567812'?{subject,issuer:ISSUER,emailConfirmed:true,isAnonymous:false}:null}
+  async verifyCode(address,code){const other='67207522-4f73-4506-a23c-917baf14d399';
+   return address===mail&&code==='34567812'||address==='another@example.test'&&code==='98765432'
+    ?{subject:address===mail?subject:other,issuer:ISSUER,emailConfirmed:true,isAnonymous:false}:null}
  },pendingStore:{
   async get(identity){return records.get(identity.subject)??null},
   async submit(identity,draft){
@@ -29,7 +31,6 @@ test('browser URL goes through HTTP: signup, saved pending agency, logout and ex
  assert.equal((await call(context)).status,200);
  assert.equal((await call(agency)).status,401);
  assert.equal((await call(api+'start',{body:{email:mail,flow:'registration'},host:'https://example.test'})).status,403);
- assert.equal((await call(api+'start',{body:{email:'another@example.test',flow:'registration'}})).status,429);
  const sent=await call(api+'start',{body:{email:mail,flow:'registration'}});
  assert.equal(sent.status,202);
  const challenge=sent.headers.getSetCookie()[0].split(';')[0];
@@ -47,5 +48,12 @@ test('browser URL goes through HTTP: signup, saved pending agency, logout and ex
  assert.equal(second.status,200);
  const saved=await call(agency,{cookie:second.headers.getSetCookie()[0].split(';')[0]});
  assert.equal((await saved.json()).registration.status,'pending');
- assert.deepEqual(sends.map(v=>v.flow),['registration','login']);
+ const another=await call(api+'start',{body:{email:'another@example.test',flow:'registration'}});
+ assert.equal(another.status,202);
+ const anotherVerified=await call(api+'verify',{body:{code:'98765432'},cookie:another.headers.getSetCookie()[0].split(';')[0]});
+ assert.equal(anotherVerified.status,200);
+ const anotherSession=anotherVerified.headers.getSetCookie()[0].split(';')[0];
+ const anotherStatus=await call(agency,{cookie:anotherSession});
+ assert.equal((await anotherStatus.json()).registration,null);
+ assert.deepEqual(sends.map(v=>v.flow),['registration','login','registration']);
 });

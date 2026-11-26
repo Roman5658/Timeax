@@ -1,6 +1,6 @@
 import {randomBytes} from 'node:crypto';
 import {createPublicEmailRoutes} from './public-email-routes.mjs';
-import {createPublicEmailProvider,normalizePublicEmail} from './public-email-provider.mjs';
+import {createPublicEmailProvider} from './public-email-provider.mjs';
 import {createAgencyPendingHandler} from './agency-pending.server.mjs';
 import {createScopedPgLane} from './scoped-pg.mjs';
 import {createPendingStore,pendingStatements} from './pending-store.server.mjs';
@@ -18,9 +18,8 @@ const idFrom=request=>{
  const id=matching.length===1?matching[0].slice(name.length+1):'';
  return /^[A-Za-z0-9_-]{43}$/.test(id)?id:null;
 };
-export function createLocalIdentityRuntime({origin,provider,pendingStore,allowedEmail,otpLength,now=Date.now}){
- const email=normalizePublicEmail(allowedEmail);
- if(!loopback.test(origin)||!email)throw Error('Real authentication must be restricted to the configured local origin and mailbox');
+export function createLocalIdentityRuntime({origin,provider,pendingStore,otpLength,now=Date.now}){
+ if(!loopback.test(origin))throw Error('The local listener must use a loopback origin');
  const sessions=new Map();
  function purge(){for(const [id,s] of sessions)if(s.expiresAt<=now())sessions.delete(id)}
  const resolve=async request=>{
@@ -29,7 +28,8 @@ export function createLocalIdentityRuntime({origin,provider,pendingStore,allowed
    :{state:'anonymous'};
  };
  const auth=createPublicEmailRoutes({origin,provider,otpLength,tagKey:randomBytes(32),localLoopback:true,now,
-  admitSend:({email:recipient})=>recipient===email,
+  // Local requests bind to loopback. The email route still limits sends and verification attempts.
+  admitSend:()=>true,
   issueIdentitySession(identity){
    purge();if(sessions.size>=1000)throw Error('Session capacity reached');
    const id=randomBytes(32).toString('base64url');
@@ -63,7 +63,7 @@ const role='timeax_pending_registration_login';
 export async function assembleLocalIdentityRuntime({origin,env=process.env}){
  const config={
   host:env.TIMEAX_LOCAL_DB_HOST, password:env.TIMEAX_LOCAL_PENDING_PASSWORD,ca:env.TIMEAX_LOCAL_DB_CA?.replaceAll('\\n','\n'),
-  key:env.TIMEAX_LOCAL_SUPABASE_KEY??env.VITE_SUPABASE_PUBLISHABLE_KEY,email:env.TIMEAX_LOCAL_EMAIL,otpLength:Number(env.TIMEAX_LOCAL_OTP_LENGTH??8),
+  key:env.TIMEAX_LOCAL_SUPABASE_KEY??env.VITE_SUPABASE_PUBLISHABLE_KEY,otpLength:Number(env.TIMEAX_LOCAL_OTP_LENGTH??8),
   registrationSha:env.TIMEAX_LOCAL_REGISTRATION_SHA256,statusSha:env.TIMEAX_LOCAL_STATUS_SHA256
  };
  if(Object.values(config).some(v=>v===undefined||v===''))throw Error('Local authentication config is incomplete; see LOCAL-AUTH.md');
@@ -74,5 +74,5 @@ export async function assembleLocalIdentityRuntime({origin,env=process.env}){
  ],statements:Object.values(statements)});
  await lane.preflight();
  const provider=createPublicEmailProvider({publishableKey:config.key,otpLength:config.otpLength});
- return createLocalIdentityRuntime({origin,provider,pendingStore:createPendingStore(lane,{role}),allowedEmail:config.email,otpLength:config.otpLength});
+ return createLocalIdentityRuntime({origin,provider,pendingStore:createPendingStore(lane,{role}),otpLength:config.otpLength});
 }
