@@ -4,7 +4,7 @@ import {ISSUER,createProviderTransport} from './provider-adapters.mjs';
 
 const PROJECT_REF=new URL(ISSUER).hostname.split('.')[0];
 const emailPattern=/^[^@\s\p{Cc}\p{Cf}]{1,64}@[a-z0-9-]+(?:\.[a-z0-9-]+)+$/iu;
-const normalizeEmail=value=>typeof value==='string'&&value.length<=254&&emailPattern.test(value.trim())?value.trim().toLowerCase():null;
+export const normalizePublicEmail=value=>typeof value==='string'&&value.length<=254&&emailPattern.test(value.trim())?value.trim().toLowerCase():null;
 const maxResponse=64*1024;
 async function readJson(response){
  if(!response.body||response.headers.get('content-type')?.split(';',1)[0].trim().toLowerCase()!=='application/json')throw Error('Invalid provider response');
@@ -31,7 +31,7 @@ export function createPublicEmailProvider({publishableKey,otpLength},{fetchImpl=
   redirect:'error',credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(3500)});
  return Object.freeze({
   async requestCode(rawEmail,flow){
-   const email=normalizeEmail(rawEmail);
+   const email=normalizePublicEmail(rawEmail);
    if(!email||!['login','registration'].includes(flow))return false;
    try{
     const response=await post('/otp',{email,create_user:flow==='registration'});
@@ -40,7 +40,7 @@ export function createPublicEmailProvider({publishableKey,otpLength},{fetchImpl=
    }catch{return false}
   },
   async verifyCode(rawEmail,code){
-   const email=normalizeEmail(rawEmail);
+   const email=normalizePublicEmail(rawEmail);
    if(!email||typeof code!=='string'||!pattern.test(code))return null;
    try{
     const response=await post('/verify',{email,token:code,type:'email'});
@@ -52,7 +52,7 @@ export function createPublicEmailProvider({publishableKey,otpLength},{fetchImpl=
      const result=await send(url,{...init,redirect:'error',credentials:'omit',cache:'no-store'});
      if(result.status!==200)return result;
      const user=await readJson(result);
-     verifiedEmail=normalizeEmail(user?.email);
+     verifiedEmail=normalizePublicEmail(user?.email);
      return Response.json(user);
     }});
     const result=await verifier.verify({headers:new Headers({authorization:'Bearer '+accessToken})});
