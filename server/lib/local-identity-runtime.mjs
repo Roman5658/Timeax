@@ -71,13 +71,17 @@ export async function assembleLocalIdentityRuntime({origin,env=process.env}){
   key:env.TIMEAX_LOCAL_SUPABASE_KEY??env.VITE_SUPABASE_PUBLISHABLE_KEY,otpLength:Number(env.TIMEAX_LOCAL_OTP_LENGTH??8),
   registrationSha:env.TIMEAX_LOCAL_REGISTRATION_SHA256,statusSha:env.TIMEAX_LOCAL_STATUS_SHA256
  };
- if(Object.values(config).some(v=>v===undefined||v===''))throw Error('Local authentication config is incomplete; see LOCAL-AUTH.md');
+ const pendingStore=await assembleScopedPendingStore(config);
+ const provider=createPublicEmailProvider({publishableKey:config.key,otpLength:config.otpLength});
+ return createLocalIdentityRuntime({origin,provider,pendingStore,otpLength:config.otpLength});
+}
+export async function assembleScopedPendingStore(config,{laneFactory=createScopedPgLane}={}){
+ if(['host','password','ca','registrationSha','statusSha'].some(k=>typeof config[k]!=='string'||!config[k]))throw Error('Scoped registration config is incomplete');
  const statements=pendingStatements(role);
- const lane=createScopedPgLane({...config,role,namespace:'timeax_api',functions:[
+ const lane=laneFactory({host:config.host,password:config.password,ca:config.ca,role,namespace:'timeax_api',functions:[
   {signature:'timeax_api.request_agency_registration(text,text,text,text)',owner:'postgres',sha256:config.registrationSha},
   {signature:'timeax_api.my_agency_registration(text,text)',owner:'postgres',sha256:config.statusSha},
  ],statements:Object.values(statements)});
  await lane.preflight();
- const provider=createPublicEmailProvider({publishableKey:config.key,otpLength:config.otpLength});
- return createLocalIdentityRuntime({origin,provider,pendingStore:createPendingStore(lane,{role}),otpLength:config.otpLength});
+ return createPendingStore(lane,{role});
 }

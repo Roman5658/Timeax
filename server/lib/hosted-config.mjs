@@ -20,6 +20,17 @@ export async function loadHostedConfiguration({root,configPath,version=process.v
  if(!configPath)return {mode:'closed',origin:'https://staging.invalid'};
  const c=JSON.parse(await readFile(configPath,'utf8'));
  if(c.mode==='closed')return c;
+ if(c.mode==='public-email-v1'){
+  requireTargetNode(version);
+  const build=await verifyRuntimeManifest(root);requireTargetNode(build.builtWith);
+  if(build.profile!==INTEGRATED_PROFILE||c.instances!==1||
+   !['https://timeax.pl','https://www.timeax.pl'].includes(c.origin)||
+   !['password','ca','webhookSecret'].every(name=>typeof c.secretFiles?.[name]==='string'&&path.isAbsolute(c.secretFiles[name])))
+   throw Error('Explicit public email profile and secret mounts required');
+  const secrets={};
+  for(const name of ['password','ca','webhookSecret'])secrets[name]=(await readFile(c.secretFiles[name],'utf8')).trim();
+  return {...c,...secrets};
+ }
  if(c.mode!=='configured')throw Error('Unknown runtime mode');
  requireTargetNode(version);
  if(!['agency-pending-single-process-v1',WORKSPACE_PROFILE,INTEGRATED_PROFILE].includes(c.hostedProfile?.id)||c.hostedProfile.instances!==1||typeof c.deploymentApprovalPath!=='string')throw Error('Closed hosted profile required');

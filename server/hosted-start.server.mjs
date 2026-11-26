@@ -1,12 +1,13 @@
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {assembleRuntime} from './lib/runtime.mjs';
+import {assembleHostedEmailAuth} from './lib/hosted-email-auth.mjs';
 import {createRuntimeServer} from './lib/node-host.mjs';
 import {loadHostedConfiguration,targetNode} from './lib/hosted-config.mjs';
 const root=path.dirname(fileURLToPath(import.meta.url));
 try{
  const config=await loadHostedConfiguration({root,configPath:process.env.TIMEAX_RUNTIME_CONFIG});
- const runtime=await assembleRuntime(config);
+ const runtime=config.mode==='public-email-v1'?await assembleHostedEmailAuth(config):await assembleRuntime(config);
  const port=Number(process.env.PORT??10000),bind=process.env.TIMEAX_BIND??'127.0.0.1';
  if(!Number.isInteger(port)||port<0||port>65535||!['127.0.0.1','0.0.0.0'].includes(bind))throw Error('Listener configuration denied');
  const server=await createRuntimeServer({runtime,origin:config.origin,publicDir:path.join(root,'public')});
