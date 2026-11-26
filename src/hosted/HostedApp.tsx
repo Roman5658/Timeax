@@ -9,9 +9,10 @@ import {TimecardsPage} from './TimecardsPage';
 import {FactoryEnrollmentPage} from './FactoryEnrollmentPage';
 import {PrivateAccess} from "./PrivateAccess";
 import {useCallback,useEffect,useMemo,useRef,useState} from "react";
-import {Link,useLocation} from "react-router-dom";
+import {Link,useLocation,useNavigate} from "react-router-dom";
 import {useTranslation} from "react-i18next";
-import {RegistrationChoices, RegistrationFrame, RegistrationProgress} from "../components/PublicExperience";
+import {X} from "lucide-react";
+import {AuthPanelContext, RegistrationChoices, RegistrationFrame, RegistrationProgress} from "../components/PublicExperience";
 import {StartPage} from "../modules/auth/pages/HostedStartPage";
 import {StagingSessionPanel} from "../modules/auth/pages/StagingSessionPanel";
 import {createRegistrationTransport,validateAgencyDraft,type RegistrationState} from "../modules/auth/registration/agency-registration";
@@ -26,6 +27,8 @@ function AgencyStep({existing}:{existing:boolean}){
  const nameInput=useRef<HTMLInputElement>(null),nipInput=useRef<HTMLInputElement>(null);
  const api=useMemo(()=>createRegistrationTransport(isCanonicalEmailOrigin(location.origin)?"public-registration":"enrollment-staging",location.origin,window.fetch.bind(window)),[]);
  const loopback=isEmailIdentityOrigin(location.origin);
+ const publicAuth=isEmailIdentityOrigin(location.origin);
+ const publicSignup=!existing&&publicAuth;
  const auth=useMemo(()=>location.protocol==="https:"||loopback?createWorkingRegistrationClient(location.origin,window.fetch.bind(window),existing?"existing":"enrollment"):undefined,[existing,loopback]);
  const refresh=useCallback(()=>{pending.current?.abort();pending.current=null;setState({state:"unavailable"});setRevision(v=>v+1)},[]);
  useEffect(()=>{if(!auth){setBusy(false);setState({state:"unavailable"});return;}const c=new AbortController();pending.current=c;setBusy(true);
@@ -40,24 +43,24 @@ function AgencyStep({existing}:{existing:boolean}){
  }
  const receipt=state.state==="pending"?state.registration:null;
  return <>
-  {!existing&&<RegistrationProgress current={receipt?2:state.state==="none"?1:0}/>}
+  {!existing&&<RegistrationProgress current={receipt?2:state.state==="none"?1:0} twoSteps={publicSignup}/>}
   {!loopback&&<PrivateAccess onOpened={()=>{setAccessRevision(v=>v+1);refresh()}}/>}
-  <StagingSessionPanel guided key={(existing?"existing":"enrollment")+accessRevision} purpose={existing?"existing":"enrollment"} onChanged={refresh}/>
-  {receipt?<div className="notice-box registration-receipt" role="status" data-testid="hosted-pending"><h2>{t("stagingRegistration.pendingTitle")}</h2><p>{t("stagingRegistration.pendingLead")}</p><dl><dt>{t("stagingRegistration.receiptLabel")}</dt><dd>{receipt.requestId}</dd><dt>{t("agencyRegistration.dateLabel")}</dt><dd>{new Intl.DateTimeFormat(i18n.language,{dateStyle:"medium",timeStyle:"short"}).format(new Date(receipt.requestedAt))}</dd></dl></div>:
-   <div className="enrollment-details">{(busy||state.state==="none"||state.state==="uncertain")&&<p className="notice-box" role="status" data-testid="hosted-registration">{busy?tx("checking"):state.state==="none"?tx("ready"):state.state==="uncertain"?tx("uncertain"):t("publicExperience.closed")}</p>}
+  <StagingSessionPanel guided simple={publicAuth} signup={publicSignup} key={(existing?"existing":"enrollment")+accessRevision} purpose={existing?"existing":"enrollment"} onChanged={refresh}/>
+  {receipt?<div className="notice-box registration-receipt" role="status" data-testid="hosted-pending">{!publicAuth&&<h2>{t("stagingRegistration.pendingTitle")}</h2>}<p>{t(publicAuth?"publicSignup.saved":"stagingRegistration.pendingLead")}</p><dl><dt>{t("stagingRegistration.receiptLabel")}</dt><dd>{receipt.requestId}</dd><dt>{t("agencyRegistration.dateLabel")}</dt><dd>{new Intl.DateTimeFormat(i18n.language,{dateStyle:"medium",timeStyle:"short"}).format(new Date(receipt.requestedAt))}</dd></dl></div>:
+   (!publicSignup||state.state==="none"||state.state==="uncertain")&&<div className="enrollment-details">{((!publicSignup&&(busy||state.state==="none"))||state.state==="uncertain")&&<p className="notice-box" role="status" data-testid="hosted-registration">{busy?tx("checking"):state.state==="none"?tx("ready"):state.state==="uncertain"?tx("uncertain"):t("publicExperience.closed")}</p>}
     {!existing&&state.state==="none"?<><h2 className="enrollment-subtitle">{t("publicExperience.detailsTitle")}</h2><form className="auth-form" noValidate aria-busy={busy} onSubmit={e=>{e.preventDefault();void submit()}}>
      <label className="field-label" htmlFor="agency-name"><span>{t("agencyRegistration.nameLabel")}</span><input ref={nameInput} id="agency-name" autoComplete="organization" maxLength={120} required disabled={busy} value={name} aria-invalid={!!errors.name} aria-describedby={errors.name?"agency-name-error":undefined} onChange={e=>{setName(e.target.value);setErrors(v=>({...v,name:undefined}))}}/></label>
      {errors.name&&<p id="agency-name-error" className="registration-error" role="alert">{t("agencyRegistration.nameError")}</p>}
      <label className="field-label" htmlFor="agency-nip"><span>{t("agencyRegistration.nipLabel")}</span><input ref={nipInput} id="agency-nip" inputMode="numeric" maxLength={24} disabled={busy} value={nip} aria-invalid={!!errors.nip} aria-describedby={errors.nip?"agency-nip-error":"agency-nip-hint"} onChange={e=>{setNip(e.target.value);setErrors(v=>({...v,nip:undefined}))}}/></label>
      {errors.nip&&<p id="agency-nip-error" className="registration-error" role="alert">{t("agencyRegistration.nipError")}</p>}<p id="agency-nip-hint" className="muted-copy">{t("agencyRegistration.nipHint")}</p>
-     <button data-testid="hosted-submit" className="button button--primary button--full" disabled={busy||state.state!=="none"}>{t("stagingSession.submit")}</button>
-    </form></>:!existing&&<p className="muted-copy">{t("publicExperience.detailsAfter")}</p>}
+     <button data-testid="hosted-submit" className="button button--primary button--full" disabled={busy||state.state!=="none"}>{t(publicSignup?"publicSignup.save":"stagingSession.submit")}</button>
+    </form></>:!existing&&!publicSignup&&<p className="muted-copy">{t("publicExperience.detailsAfter")}</p>}
     {existing&&state.state==="none"&&<Link to="/register/agency">{t("existingSession.registrationLink")}</Link>}
    </div>}
-  {(receipt||state.state==="uncertain")&&<button data-testid="hosted-refresh" className="button button--outline button--full" disabled={busy} onClick={refresh}>{t("agencyRegistration.recheck")}</button>}
+  {((receipt&&!publicSignup)||state.state==="uncertain")&&<button data-testid="hosted-refresh" className="button button--outline button--full" disabled={busy} onClick={refresh}>{t("agencyRegistration.recheck")}</button>}
   {existing&&<><EnrollmentDestinations revision={revision}/><OwnerQaLink revision={revision}/><Link to="/account/recovery">{t("workerAccount.recoveryTitle")}</Link></>}
-  <details className="enrollment-disclosure"><summary>{t("publicExperience.statusDetails")}</summary><p>{tx("scope")}</p><p>{tx("noModules")}</p></details>
-  <p className="muted-copy"><Link to={existing?"/register/agency":"/login"}>{tx(existing?"registerTitle":"loginTitle")}</Link></p>
+  {!publicAuth&&<details className="enrollment-disclosure"><summary>{t("publicExperience.statusDetails")}</summary><p>{tx("scope")}</p><p>{tx("noModules")}</p></details>}
+  <p className="muted-copy"><Link to={existing?"/register/agency":"/login"}>{publicAuth?t(existing?"publicExperience.create":"common.login"):tx(existing?"registerTitle":"loginTitle")}</Link></p>
  </>;
 }
 
@@ -66,6 +69,38 @@ function WorkspaceStep({organizationId}:{organizationId:string}){
  return <><PrivateAccess onOpened={()=>{setAccessRevision(n=>n+1);setRevision(n=>n+1)}}/>
   <StagingSessionPanel key={accessRevision} purpose="existing" onChanged={()=>setRevision(n=>n+1)}/>
   <WorkspaceReadPage organizationId={organizationId} revision={revision}/><EnrollmentDestinations revision={revision}/></>;
+}
+function PublicAuthPanel({pathname}:{pathname:string}){
+ const dialog=useRef<HTMLDialogElement>(null), previous=useRef<HTMLElement|null>(null);
+ const {t}=useTranslation(),navigate=useNavigate();
+ useEffect(()=>{
+  const node=dialog.current;
+  if(!node)return;
+  previous.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
+  const overflow=document.body.style.overflow;
+  node.showModal();
+  document.body.style.overflow="hidden";
+  return()=>{node.close();document.body.style.overflow=overflow;previous.current?.focus({preventScroll:true})};
+ },[]);
+ useEffect(()=>{
+  const node=dialog.current;
+  if(!node)return;
+  node.scrollTop=0;
+  const title=node.querySelector<HTMLElement>("#auth-book-title");
+  if(title){title.tabIndex=-1;title.focus({preventScroll:true})}
+ },[pathname]);
+ const close=()=>navigate("/",{replace:true});
+ const existing=pathname==="/login";
+ return <dialog ref={dialog} className="auth-book enrollment-card" aria-labelledby="auth-book-title" onCancel={e=>{e.preventDefault();close()}}
+  onClick={e=>{if(e.target===e.currentTarget){const r=e.currentTarget.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)close()}}}>
+  <button type="button" className="icon-button auth-book-close" aria-label={t("common.backHome")} onClick={close}><X size={20}/></button>
+  <AuthPanelContext.Provider value>
+   {pathname==="/register"?<RegistrationChoices/>:<RegistrationFrame back={existing?"/":"/register"}
+     title={t(existing?"common.login":"closedHosted.registerTitle")} lead="">
+     <AgencyStep key={pathname} existing={existing}/>
+   </RegistrationFrame>}
+  </AuthPanelContext.Provider>
+ </dialog>;
 }
 export function HostedApp(){
  const {t}=useTranslation(),loc=useLocation(),tx=(k:string)=>t("closedHosted."+k);
@@ -84,8 +119,10 @@ export function HostedApp(){
  if(['/account','/account/settings','/account/recovery','/account/reauth'].includes(loc.pathname))return <WorkerAccountPage/>;
  if(loc.pathname==="/super-admin")return <OwnerQaPage/>;
  if(loc.pathname==="/privacy"||loc.pathname==="/privacy/")return <HostedPrivacyPage/>;
- if(loc.pathname==="/")return <StartPage closedHosted/>;
- if(loc.pathname==="/register")return <RegistrationChoices/>;
+ if(["/","/register","/register/agency","/login"].includes(loc.pathname))return <>
+  <StartPage closedHosted/>
+  {loc.pathname!=="/"&&<PublicAuthPanel pathname={loc.pathname}/>}
+ </>;
  const role=loc.pathname==="/register/worker"||loc.pathname==="/worker/join"||loc.pathname==="/worker/register"?"worker":loc.pathname==="/register/factory"||loc.pathname==="/factory/register"?"factory":null;
  const admin=loc.pathname.match(/^\/workspace\/([0-9a-f-]+)\/workers$/);
  if(admin)return <HostedCabinetRoute key={admin[1]} organizationId={admin[1]} section="workers" fallback={<RegistrationFrame title={t('workerEnrollment.manage')} lead={t('workerEnrollment.adminScope')}><AgencyWorkerPanel organizationId={admin[1]}/></RegistrationFrame>}/>;

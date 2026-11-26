@@ -1,4 +1,14 @@
 {
+  "publicSignup": {
+    "retry": "Try again",
+    "saved": "Agency details were saved. An agency account has not been created yet.",
+    "emailUse": "We use your email to send a code and verify your account, not to send marketing.",
+    "accepted": "Check your inbox and enter the code from the email.",
+    "enterCode": "Enter the code from the email.",
+    "verified": "Email verified.",
+    "logout": "Sign out",
+    "save": "Save agency details"
+  },
   "common": {
     "mint": "Mint",
     "turquoise": "Turquoise",

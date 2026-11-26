@@ -1,4 +1,14 @@
 {
+  "publicSignup": {
+    "retry": "Spróbuj ponownie",
+    "saved": "Dane agencji zapisano. Konto agencji nie zostało jeszcze utworzone.",
+    "emailUse": "Na ten adres wyślemy kod. Adres służy do potwierdzenia konta, nie do wysyłania reklam.",
+    "accepted": "Sprawdź skrzynkę i wpisz kod z wiadomości.",
+    "enterCode": "Wpisz kod z wiadomości.",
+    "verified": "Adres e-mail potwierdzony.",
+    "logout": "Wyloguj się",
+    "save": "Zapisz dane agencji"
+  },
   "common": {
     "mint": "Miętowy",
     "turquoise": "Turkusowy",

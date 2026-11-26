@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowRight, Building2, Factory, LockKeyhole, Menu, ShieldCheck, UserRound, X } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { BrandMark } from "./BrandMark";
@@ -32,8 +32,14 @@ export function PublicFooter() {
   const { t } = useTranslation();
   return <footer className="public-footer"><span>© Timeax</span><span>{t("home.footerLine")}</span><Link to="/privacy">{t("hostedPrivacy.link")}</Link><Link to="/login">{t("common.login")}</Link></footer>;
 }
+export const AuthPanelContext = createContext(false);
 export function RegistrationFrame({ children, title, lead, back = "/register" }: { children: ReactNode; title: string; lead: string; back?: string }) {
   const { t } = useTranslation();
+  const inPanel=useContext(AuthPanelContext);
+  if(inPanel)return <section className="enrollment-card auth-book-content">
+    {back!=="/"&&<Link className="back-link" to={back}><ArrowLeft size={16}/>{t("common.back")}</Link>}
+    <h1 id="auth-book-title">{title}</h1>{lead&&<p className="enrollment-lead">{lead}</p>}{children}
+  </section>;
   return <div className="public-experience"><PublicHeader /><main className="enrollment-layout">
     <aside className="enrollment-intro"><span className="public-kicker">TIMEAX</span><h2>{t("publicExperience.joinTitle")}</h2><p>{t("publicExperience.joinLead")}</p>
       <div className="enrollment-trust"><ShieldCheck size={24} /><p>{t("publicExperience.access")}</p></div>
@@ -44,10 +50,10 @@ export function RegistrationFrame({ children, title, lead, back = "/register" }:
     </section>
   </main><PublicFooter /></div>;
 }
-export function RegistrationProgress({ current = 0 }: { current?: number }) {
+export function RegistrationProgress({ current = 0, twoSteps = false }: { current?: number; twoSteps?: boolean }) {
   const { t } = useTranslation();
   return <ol className="enrollment-progress" aria-label={t("publicExperience.steps")}>
-    {["emailStep", "detailsStep", "reviewStep"].map((key, index) => <li key={key} aria-current={index === current ? "step" : undefined} className={index < current ? "complete" : ""}><span>{index + 1}</span>{t("publicExperience." + key)}</li>)}
+    {(twoSteps ? ["emailStep", "detailsStep"] : ["emailStep", "detailsStep", "reviewStep"]).map((key, index) => <li key={key} aria-current={index === current ? "step" : undefined} className={index < current ? "complete" : ""}><span>{index + 1}</span>{t("publicExperience." + key)}</li>)}
   </ol>;
 }
 export function RegistrationChoices() {
