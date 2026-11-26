@@ -22,7 +22,7 @@ async function readJson(response){
 // Provider-only boundary. The HTTP layer must first authorize the requested flow,
 // reserve a short-lived browser-bound challenge and enforce send/attempt limits.
 // This module grants neither a Timeax session nor any workspace access.
-export function createPublicEmailProvider({publishableKey,otpLength},{fetchImpl=globalThis.fetch,now=Date.now}={}){
+export function createPublicEmailProvider({publishableKey,otpLength,signupIntent},{fetchImpl=globalThis.fetch,now=Date.now}={}){
  if(!/^sb_publishable_[A-Za-z0-9_-]{20,160}$/.test(publishableKey??'')||![6,8].includes(otpLength))throw Error('Invalid email provider configuration');
  const send=createProviderTransport({fetchImpl});
  const pattern=new RegExp('^[0-9]{'+otpLength+'}$');
@@ -34,9 +34,12 @@ export function createPublicEmailProvider({publishableKey,otpLength},{fetchImpl=
    const email=normalizePublicEmail(rawEmail);
    if(!email||!['login','registration'].includes(flow))return false;
    try{
-    const response=await post('/otp',{email,create_user:flow==='registration'});
-    void response.body?.cancel().catch(()=>{});
-    return response.status===200;
+    const sendCode=async data=>{
+     const response=await post('/otp',{email,create_user:flow==='registration',...(data?{data}:{})});
+     void response.body?.cancel().catch(()=>{});
+     return response.status===200;
+    };
+    return flow==='registration'&&signupIntent?await signupIntent(email,sendCode):await sendCode();
    }catch{return false}
   },
   async verifyCode(rawEmail,code){
