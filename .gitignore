@@ -5,3 +5,6 @@ dist/
 
 /dist-hosted/
 /.tmp/
+
+/server/public/
+/server/runtime-manifest.json

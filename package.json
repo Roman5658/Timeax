@@ -11,7 +11,9 @@
     "preview": "vite preview --config vite.hosted.config.ts --host 127.0.0.1",
     "dev:legacy": "vite",
     "build:hosted": "npm run build",
-    "build:legacy": "tsc --noEmit && vite build"
+    "build:legacy": "tsc --noEmit && vite build",
+    "build:release": "tsc --noEmit && node server/prepare-hosted.mjs",
+    "start": "node server/production-start.mjs"
   },
   "dependencies": {
     "@supabase/auth-js": "2.119.2",
