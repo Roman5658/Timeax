@@ -51,12 +51,15 @@ function parseReceipt(raw:unknown):RegistrationOutcome{
 export const isLoopbackEmailOrigin=(origin:string)=>/^http:\/\/127\.0\.0\.1:[1-9][0-9]{3,4}$/.test(origin);
 
 /** Future same-origin BFF owns the session; UI never reads or supplies a credential outside email/OTP form POSTs. */
+export const isCanonicalEmailOrigin=(origin:string)=>origin==="https://timeax.pl"||origin==="https://www.timeax.pl";
+export const isEmailIdentityOrigin=(origin:string)=>isLoopbackEmailOrigin(origin)||isCanonicalEmailOrigin(origin);
+
 export function createWorkingRegistrationClient(origin:string,transport:typeof fetch,purpose:"enrollment"|"existing"="enrollment"){
   if(!["enrollment","existing"].includes(purpose))throw Error("Unknown sign-in purpose");
-  const local=isLoopbackEmailOrigin(origin);
-  const contextPath=local?"/v1/session/timeax-email":purpose==="existing"?"/v1/session/existing-context":"/v1/session/context";
-  const startPath=local?"/api/timeax/auth/public/start":purpose==="existing"?"/api/timeax/auth/existing/start":"/api/timeax/auth/start";
-  const verifyPath=local?"/api/timeax/auth/public/verify":purpose==="existing"?"/api/timeax/auth/existing/verify":"/api/timeax/auth/verify";
+  const local=isLoopbackEmailOrigin(origin),emailIdentity=isEmailIdentityOrigin(origin);
+  const contextPath =emailIdentity?"/v1/session/timeax-email":purpose==="existing"?"/v1/session/existing-context":"/v1/session/context";
+  const startPath =emailIdentity?"/api/timeax/auth/public/start":purpose==="existing"?"/api/timeax/auth/existing/start":"/api/timeax/auth/start";
+  const verifyPath =emailIdentity?"/api/timeax/auth/public/verify":purpose==="existing"?"/api/timeax/auth/existing/verify":"/api/timeax/auth/verify";
   const base=new URL(origin);
   if(base.origin!==origin||!local&&base.protocol!=="https:"||base.username||base.password)throw Error("Explicit HTTPS origin required");
   async function request(path:string,signal:AbortSignal,post?:object){
@@ -83,19 +86,19 @@ export function createWorkingRegistrationClient(origin:string,transport:typeof f
     const scope=await context(signal);
     if(signal.aborted||!scope||scope.state==="verified"||!scope.capabilities.login)return "unavailable";
     try{
-      const res=await request(startPath,signal,local?{email,flow:purpose==="existing"?"login":"registration"}:{email});
+      const res=await request(startPath,signal,emailIdentity?{email,flow:purpose==="existing"?"login":"registration"}:{email});
       return res.status===202&&record(await json(res))?.status==="accepted"?"accepted":"unavailable";
     }catch{return "unavailable";}
   }
   async function verifyCode(email:string,code:string,signal:AbortSignal):Promise<ActionState>{
-    if(!local&&!validEmail(email)||!(validOtp(code,6)||validOtp(code,8)))return "invalid";
+    if(!emailIdentity&&!validEmail(email)||!(validOtp(code,6)||validOtp(code,8)))return "invalid";
     const scope=await context(signal);
     if(signal.aborted||!scope||scope.state==="verified"||!scope.capabilities.verify)return "unavailable";
     if(!validOtp(code,scope.otpLength??6))return "invalid";
     try{
-      const res=await request(verifyPath,signal,local?{code}:{email,code});
+      const res=await request(verifyPath,signal,emailIdentity?{code}:{email,code});
       if(res.status===400||res.status===401)return "invalid";
-      if(res.status!==200||record(await json(res))?.status!==(local?"email-verified":"authenticated"))return "unavailable";
+      if(res.status!==200||record(await json(res))?.status!==(emailIdentity?"email-verified":"authenticated"))return "unavailable";
       return (await context(signal))?.state==="verified"?"verified":"unavailable";
     }catch{return "unavailable";}
   }
@@ -103,7 +106,7 @@ export function createWorkingRegistrationClient(origin:string,transport:typeof f
     const scope=await context(signal);
     if(signal.aborted||scope?.state!=="verified"||!scope.capabilities.logout)return false;
     try{
-      const res=await request(local?"/api/timeax/auth/public/logout":logoutPath,signal,{});
+      const res=await request(emailIdentity?"/api/timeax/auth/public/logout":logoutPath,signal,{});
       return res.status===204&&(await context(signal))?.state==="anonymous";
     }catch{return false;}
   }

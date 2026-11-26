@@ -15,7 +15,7 @@ import {RegistrationChoices, RegistrationFrame, RegistrationProgress} from "../c
 import {StartPage} from "../modules/auth/pages/HostedStartPage";
 import {StagingSessionPanel} from "../modules/auth/pages/StagingSessionPanel";
 import {createRegistrationTransport,validateAgencyDraft,type RegistrationState} from "../modules/auth/registration/agency-registration";
-import {createWorkingRegistrationClient,isLoopbackEmailOrigin} from "../modules/auth/registration/contract/registration-client";
+import {createWorkingRegistrationClient,isCanonicalEmailOrigin,isEmailIdentityOrigin} from "../modules/auth/registration/contract/registration-client";
 import {WorkerEnrollmentEntry,AgencyWorkerPanel,WorkerWorkspacePanel,EnrollmentDestinations} from './WorkerEnrollmentPage';
 import {WorkspaceReadPage} from "./WorkspaceReadPage";
 function AgencyStep({existing}:{existing:boolean}){
@@ -24,8 +24,8 @@ function AgencyStep({existing}:{existing:boolean}){
  const [name,setName]=useState(""),[nip,setNip]=useState(""),[errors,setErrors]=useState<{name?:true;nip?:true}>({});
  const pending=useRef<AbortController|null>(null);
  const nameInput=useRef<HTMLInputElement>(null),nipInput=useRef<HTMLInputElement>(null);
- const api=useMemo(()=>createRegistrationTransport("enrollment-staging",location.origin,window.fetch.bind(window)),[]);
- const loopback=isLoopbackEmailOrigin(location.origin);
+ const api=useMemo(()=>createRegistrationTransport(isCanonicalEmailOrigin(location.origin)?"public-registration":"enrollment-staging",location.origin,window.fetch.bind(window)),[]);
+ const loopback=isEmailIdentityOrigin(location.origin);
  const auth=useMemo(()=>location.protocol==="https:"||loopback?createWorkingRegistrationClient(location.origin,window.fetch.bind(window),existing?"existing":"enrollment"):undefined,[existing,loopback]);
  const refresh=useCallback(()=>{pending.current?.abort();pending.current=null;setState({state:"unavailable"});setRevision(v=>v+1)},[]);
  useEffect(()=>{if(!auth){setBusy(false);setState({state:"unavailable"});return;}const c=new AbortController();pending.current=c;setBusy(true);
