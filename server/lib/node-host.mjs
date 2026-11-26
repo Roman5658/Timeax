@@ -3,10 +3,22 @@ import {Readable} from 'node:stream';
 import {readFile,readdir} from 'node:fs/promises';
 import path from 'node:path';
 const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.ico':'image/x-icon'};
-export async function createRuntimeServer({runtime,origin,publicDir}){
- const assets=new Map(),base=new URL(origin);
- async function scan(dir){for(const e of await readdir(dir,{withFileTypes:true})){const p=path.join(dir,e.name);if(e.isSymbolicLink())throw Error('Static symlink denied');if(e.isDirectory())await scan(p);else if(e.isFile())assets.set('/'+path.relative(publicDir,p).split(path.sep).join('/'),await readFile(p))}}
- await scan(publicDir);
+export async function createRuntimeServer({runtime,origin,publicDir,localReload=false}){
+ let assets=new Map(),revision=0;
+ const base=new URL(origin);
+ if(localReload&&(base.hostname!=='127.0.0.1'||!base.port))throw Error('Live reload is local only');
+ async function scan(dir,next){for(const e of await readdir(dir,{withFileTypes:true})){const p=path.join(dir,e.name);if(e.isSymbolicLink())throw Error('Static symlink denied');if(e.isDirectory())await scan(p,next);else if(e.isFile())next.set('/'+path.relative(publicDir,p).split(path.sep).join('/'),await readFile(p))}}
+ async function reloadAssets(){
+  const next=new Map();await scan(publicDir,next);
+  if(localReload&&!next.has('/index.html'))throw Error('Application HTML missing');
+  if(localReload){
+   const html=next.get('/index.html').toString('utf8');
+   next.set('/index.html',Buffer.from(html.replace('</body>', '<script src="/__timeax-reload.js" defer></script></body>')));
+   next.set('/__timeax-reload.js',Buffer.from("let rev;setInterval(async()=>{try{const r=await fetch('/__timeax-revision',{cache:'no-store'});if(!r.ok)return;const next=await r.text();if(rev!==undefined&&rev!==next)location.reload();rev=next}catch{}},1000);"));
+  }
+  assets=next;revision++;
+ }
+ await reloadAssets();
  const server=http.createServer(async(req,res)=>{
   const safe={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',
    'Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'"};
@@ -19,6 +31,10 @@ export async function createRuntimeServer({runtime,origin,publicDir}){
   }
   if(req.url==='/healthz')return send(200,JSON.stringify({status:runtime.state,publicRegistrationEnabled:false}),{'Content-Type':'application/json'});
   const target=new URL(req.url,base);
+  if(localReload&&target.pathname==='/__timeax-revision'){
+   if(req.headers.host!==base.host||req.method!=='GET')return send(403,'Not permitted');
+   return send(200,String(revision),{'Content-Type':'text/plain; charset=utf-8'});
+  }
   if(['GET','HEAD'].includes(req.method)&&(req.headers['transfer-encoding']||Number(req.headers['content-length']??0)!==0))return send(400,'Unexpected request body');
   if(target.pathname.startsWith('/api/')||target.pathname.startsWith('/v1/')||target.pathname.startsWith('/hooks/')){
    // Fixed configured authority. Never construct an origin from proxy headers.
@@ -48,5 +64,6 @@ export async function createRuntimeServer({runtime,origin,publicDir}){
   send(200,req.method==='HEAD'?undefined:value,{'Content-Type':types[path.extname(key)]??'application/octet-stream'});
  });
  server.requestTimeout=5000;server.headersTimeout=5000;server.on('clientError',(_e,socket)=>socket.destroy());
+ if(localReload)server.reloadAssets=reloadAssets;
  return server;
 }

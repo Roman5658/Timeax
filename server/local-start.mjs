@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util';
-import { existsSync } from 'node:fs';
+import { existsSync, watch } from 'node:fs';
 import { buildSite, publicDir } from './build-site.mjs';
 import { createRuntimeServer } from './lib/node-host.mjs';
 import { assembleRuntime } from './lib/runtime.mjs';
@@ -25,7 +25,7 @@ if(realAuth){
 const activeOrigin=realAuth?origin.replace(/^https:/,'http:'):origin;
 const runtime = realAuth?await assembleLocalIdentityRuntime({origin:activeOrigin}):await assembleRuntime({ mode: 'closed', origin });
 await buildSite();
-const server = await createRuntimeServer({ runtime, origin:activeOrigin, publicDir });
+const server = await createRuntimeServer({ runtime, origin:activeOrigin, publicDir, localReload:true });
 try {
   await new Promise((resolve, reject) => {
     server.once('error', reject);
@@ -35,5 +35,24 @@ try {
   if (error.code !== 'EADDRINUSE') throw error;
   console.error(`Port ${port} is in use. Stop the old Timeax server or pass --port 5177.`);
   process.exitCode = 1;
+}
+if(server.listening){
+ let timer,building=false,pending=false;
+ function rebuild(){
+  clearTimeout(timer);
+  timer=setTimeout(async()=>{
+   if(building){pending=true;return;}
+   building=true;
+   try{await buildSite();await server.reloadAssets();console.log('Timeax: source changes rebuilt.');}
+   catch{console.error('Timeax: rebuild failed; serving the last successful build.');}
+   finally{building=false;if(pending){pending=false;rebuild();}}
+  },220);
+ }
+ const watchers=['src','public'].map(relative=>watch(new URL('../'+relative,import.meta.url),{recursive:true},rebuild));
+ watchers.push(watch(new URL('../',import.meta.url),(_event,name)=>{
+  if(name==='hosted.html'||name==='vite.hosted.config.ts')rebuild();
+ }));
+ for(const watcher of watchers)watcher.on('error',()=>console.error('Timeax: source watcher stopped. Restart npm run dev.'));
+ server.once('close',()=>{clearTimeout(timer);for(const watcher of watchers)watcher.close();});
 }
 if (server.listening) console.log(`Timeax: http://${host}:${port}/ ${realAuth?"(local; real email authentication)":"(local; sign-in and signup closed)"}`);
