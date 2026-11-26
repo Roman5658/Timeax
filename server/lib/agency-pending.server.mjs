@@ -42,10 +42,10 @@ async function draftFrom(request) {
  * listener, environment credentials, or fixture allowlist is installed here.
  * A trusted HTTPS framework must construct Request.url from its fixed authority.
  */
-export function createAgencyPendingHandler({origin,issuer,sessionResolver=null,store=null,now=Date.now,localLoopback=false}) {
+export function createAgencyPendingHandler({origin,issuer,sessionResolver=null,store=null,now=Date.now,localLoopback=false,publicOrigin=false}) {
  const url=new URL(origin);
  if(url.origin!==origin||(localLoopback?!(url.protocol==='http:'&&url.hostname==='127.0.0.1'&&url.port):url.protocol!=='https:')||url.username||url.password
-  ||['timeax.pl','www.timeax.pl'].includes(url.hostname)||!/^https:\/\/[a-z0-9]{20}\.supabase\.co\/auth\/v1$/.test(issuer))
+  ||(publicOrigin!==['https://timeax.pl','https://www.timeax.pl'].includes(origin))||!/^https:\/\/[a-z0-9]{20}\.supabase\.co\/auth\/v1$/.test(issuer))
   throw Error('Invalid isolated registration origin or issuer');
  if(sessionResolver!==null&&typeof sessionResolver!=='function')throw Error('Invalid session resolver');
  if(store!==null&&(typeof store.get!=='function'||typeof store.submit!=='function'))throw Error('Invalid pending store');

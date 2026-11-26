@@ -6,39 +6,44 @@ import {createScopedPgLane} from './scoped-pg.mjs';
 import {createPendingStore,pendingStatements} from './pending-store.server.mjs';
 import {ISSUER} from './provider-adapters.mjs';
 const endpoint='/v1/session/timeax-email',logout='/api/timeax/auth/public/logout';
-const name='timeax-loopback-email-identity',ttl=900;
+const ttl=900;
 const loopback=/^http:\/\/127\.0\.0\.1:[1-9][0-9]{3,4}$/;
 const reply=(status,body,headers={})=>new Response(body===undefined?null:JSON.stringify(body),{status,headers:{
  'Content-Type':'application/json','Cache-Control':'private, no-store','Vary':'Cookie',...headers}});
-const revoked=name+'=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict';
-const idFrom=request=>{
+const idFrom=(request,name)=>{
  const value=request.headers.get('cookie')??'';
  if(value.length>8192)return null;
  const matching=value.split(';').map(p=>p.trim()).filter(p=>p.startsWith(name+'='));
  const id=matching.length===1?matching[0].slice(name.length+1):'';
  return /^[A-Za-z0-9_-]{43}$/.test(id)?id:null;
 };
-export function createLocalIdentityRuntime({origin,provider,pendingStore,otpLength,now=Date.now}){
+export function createLocalIdentityRuntime({origin,...options}){
  if(!loopback.test(origin))throw Error('The local listener must use a loopback origin');
+ return createEmailIdentityRuntime({origin,...options,localLoopback:true,admitSend:()=>true,signupHook:null});
+}
+export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLength,admitSend,signupHook,localLoopback=false,now=Date.now}){
+ if(!localLoopback && (!['https://timeax.pl','https://www.timeax.pl'].includes(origin)||typeof signupHook?.handler!=='function'))
+  throw Error('HTTPS Timeax signup must use the verified provider hook');
+ const name=localLoopback?'timeax-loopback-email-identity':'__Host-timeax-email-identity';
+ const cookieEnd='=; Max-Age=0; Path=/; '+(localLoopback?'':'Secure; ')+'HttpOnly; SameSite=Strict';
  const sessions=new Map();
  function purge(){for(const [id,s] of sessions)if(s.expiresAt<=now())sessions.delete(id)}
  const resolve=async request=>{
-  purge();const id=idFrom(request),s=sessions.get(id);
+  purge();const id=idFrom(request,name),s=sessions.get(id);
   return s?{...s,state:'verified',registrationAllowed:true,isActive:async()=>sessions.get(id)===s&&s.expiresAt>now()}
    :{state:'anonymous'};
  };
- const auth=createPublicEmailRoutes({origin,provider,otpLength,tagKey:randomBytes(32),localLoopback:true,now,
-  // Local requests bind to loopback. The email route still limits sends and verification attempts.
-  admitSend:()=>true,
+ const auth=createPublicEmailRoutes({origin,provider,otpLength,tagKey:randomBytes(32),localLoopback,now,admitSend,
   issueIdentitySession(identity){
    purge();if(sessions.size>=1000)throw Error('Session capacity reached');
    const id=randomBytes(32).toString('base64url');
    sessions.set(id,{...identity,expiresAt:now()+ttl*1000});return {id,maxAge:ttl};
   }
  });
- const agency=createAgencyPendingHandler({origin,issuer:ISSUER,sessionResolver:resolve,store:pendingStore,now,localLoopback:true});
- return {state:'local-email-auth',async handler(request){
+ const agency=createAgencyPendingHandler({origin,issuer:ISSUER,sessionResolver:resolve,store:pendingStore,now,localLoopback,publicOrigin:!localLoopback});
+ return {state:localLoopback?'local-email-auth':'public-email-auth',async handler(request){
   const url=new URL(request.url),site=request.headers.get('sec-fetch-site'),from=request.headers.get('origin');
+  if(!localLoopback&&url.pathname==='/hooks/before-user-created')return signupHook.handler(request);
   if(url.origin!==origin||url.search||url.hash||site!==null&&site!=='same-origin'||(request.method==='POST'?from!==origin:from!==null&&from!==origin))
    return reply(403,{error:'not-permitted'});
   if(url.pathname===endpoint){
@@ -51,8 +56,8 @@ export function createLocalIdentityRuntime({origin,provider,pendingStore,otpLeng
   }
   if(url.pathname===logout){
    if(request.method!=='POST')return reply(405,{error:'not-allowed'});
-   sessions.delete(idFrom(request));
-   return reply(204,undefined,{'Set-Cookie':revoked});
+   sessions.delete(idFrom(request,name));
+   return reply(204,undefined,{'Set-Cookie':name+cookieEnd});
   }
   if(url.pathname==='/api/agency-registration')return agency(request);
   if(url.pathname.startsWith('/api/timeax/auth/public/'))return auth(request);
