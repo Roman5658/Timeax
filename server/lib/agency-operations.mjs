@@ -14,8 +14,8 @@ import {createTeamHandler,createTeamStore,TEAM_SQL,TEAM_FUNCTION} from './team-w
 const id='[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}';
 const orgRoute=(prefix,actions)=>new RegExp('^/api/'+prefix+'/('+id+')/(?:'+actions+')$');
 const specs={
- profile:{handler:createAgencyProfileHandler,match:orgRoute('agency-profile','context|settings')},
- worker:{handler:createWorkerEnrollmentHandler,match:new RegExp('^/api/worker-enrollment/agency/('+id+')(?:/(?:invite|approve))?$')},
+ profile:{handler:createAgencyProfileHandler,match:new RegExp('^/api/agency-profile/('+id+')(?:/worksite/'+id+')?/(?:context|settings)$')},
+ worker:{handler:createWorkerEnrollmentHandler,match:new RegExp('^/api/worker-enrollment/(?:agency/('+id+')(?:/(?:invite|approve))?|context|lookup|request|claim)$')},
  timecards:{handler:createTimecardsHandler,match:orgRoute('timecards','context|archive|(?:read|history)/'+id)},
  factoryTimecards:{handler:createFactoryTimecardsHandler,match:orgRoute('factory-timecards','context|propose-placement|revoke-placement|read/'+id)},
  payroll:{handler:createPayslipsHandler,match:orgRoute('payslips','context|settings|group|group-member|rate|create|assign|save|issue|read/'+id)},
@@ -33,6 +33,9 @@ export function managedAgencyOperations(env){
  try{
   const v=JSON.parse(env.TIMEAX_AGENCY_OPERATIONS??'null');
   if(!v||Array.isArray(v)||typeof v!=='object')return null;
+  const profileFingerprint=env.TIMEAX_AGENCY_PROFILE_RPC_SHA256;
+  if(sha(profileFingerprint)&&v.profile&&typeof v.profile==='object'&&!Array.isArray(v.profile))
+   v.profile={...v.profile,hashes:{...v.profile.hashes,[AGENCY_PROFILE_SIGNATURE]:profileFingerprint}};
   const teamFingerprint=env.TIMEAX_AGENCY_TEAM_RPC_SHA256;
   if(sha(teamFingerprint)&&v.team&&typeof v.team==='object'&&!Array.isArray(v.team))
    v.team={...v.team,hashes:{...v.team.hashes,[TEAM_FUNCTION.signature]:teamFingerprint}};
@@ -69,6 +72,6 @@ export async function assembleAgencyOperations(config,lane,{now=Date.now}={}){
      return scope?.organization.kind==='agency'&&scope.membership.role==='agency_admin'&&await session.isActive()?session:{state:'anonymous'};
     }})];
   });
-  return {enabled:ready.map(([name])=>name),find:path=>handlers.find(([match])=>match.test(path))?.[1]};
+  return {enabled:ready.map(([name])=>name),workerSelfService:ready.some(([name])=>name==='worker'),find:path=>handlers.find(([match])=>match.test(path))?.[1]};
  };
 }

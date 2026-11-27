@@ -37,3 +37,35 @@ test('canonical HTTPS auth issues secure host cookies and grants only its own pe
  assert.match(logged.headers.get('set-cookie'),/^__Host-timeax-email-identity=; Max-Age=0; Path=\/; Secure; HttpOnly; SameSite=Strict$/);
  assert.equal((await handler(request('/api/agency-registration',{cookie}))).status,401);
 });
+
+const sessionsTest = new Map();
+test('ordinary login survives process restart with durable storage and logout revokes it',async()=>{
+ const sessionStore={
+  async get(id){return sessionsTest.get(id)??null},
+  async put(id,identity){sessionsTest.set(id,{...identity,expiresAt:Date.now()+43_200_000})},
+  async delete(id){sessionsTest.delete(id)}
+ };
+ const first=make({sessionStore});
+ const challenge=(await first.handler(request(api+'start',{body:{email:'worker@example.test',flow:'login'}}))).headers.getSetCookie()[0].split(';')[0];
+ const verify=await first.handler(request(api+'verify',{body:{code:'00000001'},cookie:challenge}));
+ assert.equal(verify.status,200);
+ const token=verify.headers.getSetCookie()[0];
+ assert.match(token,/Max-Age=43200; Path=\/; Secure; HttpOnly; SameSite=Strict$/);
+ const cookie=token.split(';')[0];
+ const restarted=make({sessionStore});
+ assert.equal((await (await restarted.handler(request(context,{cookie}))).json()).state,'verified');
+ assert.equal((await restarted.handler(request('/api/agency-registration',{cookie}))).status,200);
+ assert.equal((await restarted.handler(request(api+'logout',{cookie,body:{}}))).status,204);
+ const afterLogout=make({sessionStore});
+ assert.equal((await (await afterLogout.handler(request(context,{cookie}))).json()).state,'anonymous');
+});
+test('unfinished registration remains a short-lived process proof, not a durable login',async()=>{
+ let writes=0;
+ const store={get:async()=>null,put:async()=>{writes++},delete:async()=>{}};
+ const first=make({sessionStore:store});
+ const challenge=(await first.handler(request(api+'start',{body:{email:'new@example.test',flow:'registration'}}))).headers.getSetCookie()[0].split(';')[0];
+ const verified=await first.handler(request(api+'verify',{cookie:challenge,body:{code:'00000001'}}));
+ assert.equal(verified.status,200);
+ assert.match(verified.headers.getSetCookie()[0],/Max-Age=900;/);
+ assert.equal(writes,0);
+});

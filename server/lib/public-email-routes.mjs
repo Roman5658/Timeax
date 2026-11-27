@@ -27,7 +27,7 @@ export const isPublicEmailRoute=path=>path===START||path===VERIFY;
 
 // Single-process challenge lane. A deployment must supply an independent send
 // admission/abuse check and its own identity-only session issuer before enabling.
-export function createPublicEmailRoutes({origin,provider,admitSend,issueIdentitySession,tagKey,otpLength,localLoopback=false,now=Date.now,retainPasswordSetup=false,readSessionId=()=>null}){
+export function createPublicEmailRoutes({origin,provider,admitSend,issueIdentitySession,tagKey,otpLength,localLoopback=false,now=Date.now,retainPasswordSetup=false,maxSessionAge=900,readSessionId=()=>null}){
  if(!(localLoopback?/^http:\/\/127\.0\.0\.1:[1-9][0-9]{3,4}$/.test(origin):['https://timeax.pl','https://www.timeax.pl'].includes(origin))||![6,8].includes(otpLength)
   ||typeof provider?.requestCode!=='function'||typeof provider?.verifyCode!=='function'
   ||typeof admitSend!=='function'||typeof issueIdentitySession!=='function'
@@ -89,11 +89,12 @@ export function createPublicEmailRoutes({origin,provider,admitSend,issueIdentity
     challenges.delete(id);
     const session=await issueIdentitySession({issuer:identity.issuer,subject:identity.subject,
      email:challenge.email,emailConfirmed:true,isAnonymous:false,flow:challenge.flow},setup?identity:null,readSessionId(request));
-    if(!token.test(session?.id??'')||!Number.isInteger(session?.maxAge)||session.maxAge<1||session.maxAge>900)
+    if(!token.test(session?.id??'')||!Number.isInteger(session?.maxAge)||session.maxAge<1||session.maxAge>maxSessionAge)
      return respond(503,{error:'service-unavailable'});
     return respond(200,{status:'email-verified'},[issueCookie(sessionName,session.id,session.maxAge),issueCookie(challengeName)]);
    }finally{challenge.busy=false}
   }catch{return respond(503,{error:'service-unavailable'})}
  };
- return Object.assign(handler,{hasChallenge(request){clean(now());return challenges.has(getChallenge(request,challengeName))}});
+ return Object.assign(handler,{hasChallenge(request){clean(now());return challenges.has(getChallenge(request,challengeName))},
+  challengeFlow(request){clean(now());return challenges.get(getChallenge(request,challengeName))?.flow}});
 }

@@ -13,7 +13,7 @@ const api='/api/timeax/auth/public/',setup='/api/timeax/agency/setup';
 const simulate=(handler,path,body,cookie,from=origin)=>handler(new Request(origin+path,{method:body?'POST':'GET',headers:{
  origin:from,...(cookie?{cookie}:{}),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})}));
 const cookie=res=>res.headers.getSetCookie()[0].split(';')[0];
-function fixture(){
+function fixture(sessionStore=null){
  let set=false,failed=true,creates=0;
  const issued=new WeakSet(),owners=new Map();
  const provider={
@@ -28,7 +28,7 @@ function fixture(){
    if(failed){failed=false;throw Error('fixture interruption')}
    creates++;owners.set(subject.subject,orgId);return orgId;},
  };
- const start=()=>createEmailIdentityRuntime({origin,provider,otpLength:8,admitSend:()=>true,
+ const start=()=>createEmailIdentityRuntime({origin,provider,otpLength:8,admitSend:()=>true,sessionStore,
   signupHook:{handler:async()=>new Response(null,{status:204})},onboardingStore,
   pendingStore:{get:async()=>null,submit:async()=>null},
   workspaceFactory:resolveSession=>createWorkspaceReadHandler({origin,resolveSession,store:{get:async(identity,id)=>
@@ -81,4 +81,25 @@ test('login OTP cannot overwrite a password and cross-origin setup is denied',as
  assert.equal((await simulate(handler,setup,{agencyName:'Test agency',nip:'',password,termsVersion},session,'https://elsewhere.test')).status,403);
  assert.equal((await simulate(handler,api+'password',{email,password})).status,401);
  assert.equal(f.creates(),0);
+});
+
+test('completed agency setup switches to an ordinary session that survives restart',async()=>{
+ const kept=new Map();
+ const store={get:async id=>kept.get(id)??null,put:async (id,s)=>{kept.set(id,{...s,expiresAt:Date.now()+43_200_000})},delete:async id=>{kept.delete(id)}};
+ const f=fixture(store);let handler=f.start();
+ const signup=await verification(handler,'registration');
+ assert.equal((await simulate(handler,setup,{agencyName:'Test agency',nip,password,termsVersion},signup)).status,503);
+ const finish=await simulate(handler,setup,{agencyName:'Test agency',nip,termsVersion},signup);
+ assert.equal(finish.status,200);
+ assert.notEqual(cookie(finish),signup);
+ assert.match(finish.headers.getSetCookie()[0],/Max-Age=43200;/);
+ assert.equal(f.creates(),1);
+ handler=f.start();
+ assert.equal((await simulate(handler,'/api/workspace-access/'+orgId,null,cookie(finish))).status,200);
+ assert.equal((await simulate(handler,'/api/workspace-access/'+other,null,cookie(finish))).status,403);
+ assert.equal((await simulate(handler,setup,null,signup)).status,401);
+ const login=await simulate(handler,api+'password',{email,password},cookie(finish));
+ assert.equal(login.status,200);
+ assert.equal((await simulate(handler,setup,null,cookie(finish))).status,401);
+ assert.equal((await simulate(f.start(),'/api/workspace-access/'+orgId,null,cookie(login))).status,200);
 });

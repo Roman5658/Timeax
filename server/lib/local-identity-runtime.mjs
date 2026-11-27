@@ -1,5 +1,6 @@
 import {ACCOUNT_ADMIN_ROUTE} from './account-admin.mjs';
 import {randomBytes} from 'node:crypto';
+import {SESSION_TTL_SECONDS} from './web-session-store.mjs';
 import {createPublicEmailRoutes} from './public-email-routes.mjs';
 import {createAgencyOnboardingRoutes} from './agency-onboarding.server.mjs';
 import {createPublicEmailProvider} from './public-email-provider.mjs';
@@ -23,7 +24,7 @@ export function createLocalIdentityRuntime({origin,...options}){
  if(!loopback.test(origin))throw Error('The local listener must use a loopback origin');
  return createEmailIdentityRuntime({origin,...options,localLoopback:true,admitSend:()=>true,signupHook:null});
 }
-export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLength,admitSend,signupHook,onboardingStore=null,workspaceFactory=null,accountAdminFactory=null,agencyProductionsFactory=null,agencyOperationsFactory=null,localLoopback=false,now=Date.now}){
+export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLength,admitSend,signupHook,onboardingStore=null,workspaceFactory=null,accountAdminFactory=null,agencyProductionsFactory=null,agencyOperationsFactory=null,sessionStore=null,localLoopback=false,now=Date.now}){
  if(!localLoopback && (!['https://timeax.pl','https://www.timeax.pl'].includes(origin)||typeof signupHook?.handler!=='function'))
   throw Error('HTTPS Timeax signup must use the verified provider hook');
  const name=localLoopback?'timeax-loopback-email-identity':'__Host-timeax-email-identity';
@@ -35,28 +36,37 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
   for(const [subject,until] of removedSubjects)if(until<=current)removedSubjects.delete(subject);
  }
  const resolve=async request=>{
-  purge();const id=idFrom(request,name),s=sessions.get(id);
-  return s?{issuer:s.issuer,subject:s.subject,email:s.email,emailConfirmed:true,isAnonymous:false,expiresAt:s.expiresAt,
-   state:'verified',registrationAllowed:true,isActive:async()=>sessions.get(id)===s&&s.expiresAt>now()}
+  purge();const id=idFrom(request,name),local=sessions.get(id),s=local??await sessionStore?.get(id);
+  return s&&s.expiresAt>now()&&!removedSubjects.has(s.subject)?{issuer:s.issuer,subject:s.subject,email:s.email,emailConfirmed:true,isAnonymous:false,expiresAt:s.expiresAt,
+   state:'verified',registrationAllowed:true,isActive:async()=>s.expiresAt>now()&&!removedSubjects.has(s.subject)&&(local?sessions.get(id)===s:(await sessionStore.get(id))?.subject===s.subject)}
    :{state:'anonymous'};
  };
- function issueIdentitySession(identity,credential=null,prior=null){
+ async function issueIdentitySession(identity,credential=null,prior=null){
   purge();if(removedSubjects.has(identity.subject))throw Error('Account no longer exists');
-  if(sessions.size>=1000&&!sessions.has(prior))throw Error('Session capacity reached');
-  if(prior)sessions.delete(prior);
   const id=randomBytes(32).toString('base64url');
+  if(sessionStore&&['login','password'].includes(identity.flow)){
+   if(prior&&!sessions.has(prior))await sessionStore.delete(prior);
+   await sessionStore.put(id,identity);
+   if(prior)sessions.delete(prior);
+   return {id,maxAge:SESSION_TTL_SECONDS};
+  }
+  if(sessions.size>=1000&&!sessions.has(prior))throw Error('Session capacity reached');
+  if(prior){if(!sessions.has(prior))await sessionStore?.delete(prior);sessions.delete(prior)}
   sessions.set(id,{...identity,credential,expiresAt:now()+ttl*1000});return {id,maxAge:ttl};
  }
  const auth=createPublicEmailRoutes({origin,provider,otpLength,tagKey:randomBytes(32),localLoopback,now,admitSend,
-  retainPasswordSetup:onboardingStore!==null,issueIdentitySession,readSessionId:request=>idFrom(request,name)
+  retainPasswordSetup:onboardingStore!==null,maxSessionAge:sessionStore?SESSION_TTL_SECONDS:ttl,issueIdentitySession,readSessionId:request=>idFrom(request,name)
  });
  const onboarding=onboardingStore&&createAgencyOnboardingRoutes({origin,now,provider,store:onboardingStore,
-  readSession:request=>{purge();return sessions.get(idFrom(request,name))},
-  issueSession:(identity,request)=>{
-   const issued=issueIdentitySession({...identity,flow:'password'},null,idFrom(request,name));
+  readSession:async request=>{purge();const id=idFrom(request,name);return sessions.get(id)??await sessionStore?.get(id)},
+  issueSession:async (identity,request,completed=true)=>{
+   const issued=await issueIdentitySession({...identity,flow:completed?'password':'password-setup'},null,idFrom(request,name));
    return name+'='+issued.id+'; Max-Age='+issued.maxAge+'; Path=/; '+(localLoopback?'':'Secure; ')+'HttpOnly; SameSite=Strict';
   },
-  isActive:(request,session)=>sessions.get(idFrom(request,name))===session&&session.expiresAt>now()&&!request.signal.aborted,
+  isActive:async(request,session)=>{const id=idFrom(request,name);if(session.expiresAt<=now()||request.signal.aborted||removedSubjects.has(session.subject))return false;
+   const local=sessions.get(id);if(local)return local===session;
+   const stored=await sessionStore?.get(id);return stored?.subject===session.subject&&!request.signal.aborted},
+  rotateOnComplete:Boolean(sessionStore),
  });
  const workspace=onboarding&&workspaceFactory?.(resolve);
  const productions=onboarding&&agencyProductionsFactory?.(resolve);
@@ -71,18 +81,21 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
   if(!localLoopback&&url.pathname==='/hooks/before-user-created')return signupHook.handler(request);
   if(url.origin!==origin||url.search||url.hash||site!==null&&site!=='same-origin'||(request.method==='POST'?from!==origin:from!==null&&from!==origin))
    return reply(403,{error:'not-permitted'});
-  const service=onboarding?{selfService:true,agencyProductions:Boolean(productions),...(ops?{agencyOperations:ops.enabled}:{})}:{};
+  const service=onboarding?{selfService:true,agencyProductions:Boolean(productions),...(ops?{agencyOperations:ops.enabled,workerSelfService:ops.workerSelfService===true}:{})}:{};
   if(url.pathname===endpoint){
    if(request.method!=='GET')return reply(405,{error:'not-allowed'});
-   const s=await resolve(request);
+   let s;try{s=await resolve(request)}catch{return reply(503,{error:'service-unavailable'})}
    if(s.state==='verified')return reply(200,{version:1,state:'verified',verified:true,...service,serverTime:new Date(now()).toISOString(),
     expiresAt:new Date(s.expiresAt).toISOString(),grants:[],capabilities:{login:false,verify:false,agencyRegistration:true,logout:true}});
-   return reply(200,{version:1,state:auth.hasChallenge(request)?'verification-required':'anonymous',otpLength,...service,
-    capabilities:{login:true,verify:auth.hasChallenge(request),agencyRegistration:false,logout:false}});
+   const emailChallengeFlow=auth.challengeFlow(request);
+   return reply(200,{version:1,state:emailChallengeFlow?'verification-required':'anonymous',otpLength,...service,...(emailChallengeFlow?{emailChallengeFlow}:{}),
+    capabilities:{login:true,verify:!!emailChallengeFlow,agencyRegistration:false,logout:false}});
   }
   if(url.pathname===logout){
    if(request.method!=='POST')return reply(405,{error:'not-allowed'});
-   sessions.delete(idFrom(request,name));
+   const id=idFrom(request,name);
+   try{if(id&&!sessions.has(id))await sessionStore?.delete(id)}catch{return reply(503,{error:'service-unavailable'})}
+   sessions.delete(id);
    return reply(204,undefined,{'Set-Cookie':name+cookieEnd});
   }
   if(onboarding&&onboarding.matches(url.pathname))return onboarding.handler(request);

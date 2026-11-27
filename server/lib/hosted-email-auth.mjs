@@ -1,6 +1,7 @@
 import {assembleAgencyOperations} from './agency-operations.mjs';
 import {ACCOUNT_ADMIN_ROLE,ACCOUNT_ADMIN_SIGNATURE,ACCOUNT_ADMIN_SQL,createAccountAdminHandler} from './account-admin.mjs';
 import {createFactorySetupHandler,createFactorySetupStore,FACTORY_SQL} from './factory-enrollment.server.mjs';
+import {SESSION_ROLE,SESSION_RPC,SESSION_SQL,createWebSessionStore} from './web-session-store.mjs';
 import {createScopedPgLane} from './scoped-pg.mjs';
 import {createWorkspaceReadStore,createWorkspaceReadHandler,WORKSPACE_SQL} from './workspace-read.server.mjs';
 import {WORKSPACE_ROLE,WORKSPACE_FUNCTIONS} from './workspace-read.contract.mjs';
@@ -35,6 +36,15 @@ export async function assembleHostedEmailAuth(config,{fetchImpl=globalThis.fetch
   signupIntent:signupHook.withRegistrationIntent},{fetchImpl,now});
  const pendingStore=await assembleScopedPendingStore(config,{laneFactory});
  const scoped=laneFactory??createScopedPgLane;
+ let sessionStore=null;
+ if(config.webSessions){
+  const {password,sha}=config.webSessions;
+  if([config.password,config.agencyOnboardingPassword,config.workspaceReadPassword,config.accountAdmin?.password,config.agencyProductions?.password,...Object.values(config.agencyOperations??{}).map(v=>v?.password)].includes(password))throw Error('Independent session credential required');
+  const lane=scoped({host:config.host,ca:config.ca,role:SESSION_ROLE,password,namespace:'timeax_api',
+   functions:[{signature:SESSION_RPC,owner:'postgres',sha256:sha}],statements:[SESSION_SQL]});
+  await lane.preflight();
+  sessionStore=createWebSessionStore(lane);
+ }
  let onboardingStore=null,workspaceFactory=null,accountAdminFactory=null,agencyProductionsFactory=null;
  if(config.accountAdmin&&![config.password,config.agencyOnboardingPassword,config.workspaceReadPassword].includes(config.accountAdmin.password)){
   const {keySha,password,functionSha}=config.accountAdmin;
@@ -73,5 +83,5 @@ export async function assembleHostedEmailAuth(config,{fetchImpl=globalThis.fetch
   workspaceFactory=resolveSession=>createWorkspaceReadHandler({origin:config.origin,store:createWorkspaceReadStore(workspaces),resolveSession,now});
  }
  const agencyOperationsFactory=await assembleAgencyOperations(config,scoped,{now});
- return createEmailIdentityRuntime({origin:config.origin,provider,pendingStore,otpLength:config.otpLength,admitSend,signupHook,now,onboardingStore,workspaceFactory,accountAdminFactory,agencyProductionsFactory,agencyOperationsFactory});
+ return createEmailIdentityRuntime({origin:config.origin,provider,pendingStore,otpLength:config.otpLength,admitSend,signupHook,now,onboardingStore,workspaceFactory,accountAdminFactory,agencyProductionsFactory,agencyOperationsFactory,sessionStore});
 }

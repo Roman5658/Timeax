@@ -1,4 +1,7 @@
 import {SelfServiceAgencyStep} from './SelfServiceAgencyStep';
+import {PublicWorkerEntry} from './PublicWorkerEntry';
+import {workerRegistrationCopy} from './worker-registration-copy';
+const publicWorkerPaths=['/register/worker','/worker/join','/worker/register'];
 import {TeamStandalone,AccountantInvitePage,type TeamSection} from './TeamWorkflow';
 import {HostedCabinetRoute} from './HostedCabinet';
 import {AccountAdminPage} from './AccountAdminPage';
@@ -124,7 +127,7 @@ function PublicAuthPanel({pathname,closing,onClosed}:{pathname:string;closing:bo
   onClick={e=>{if(e.target===e.currentTarget){const r=e.currentTarget.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)close()}}}>
   <button type="button" className="icon-button auth-book-close" aria-label={t("common.backHome")} aria-disabled={closing} onClick={close}><X size={20}/></button>
   <div inert={closing}><AuthPanelContext.Provider value><LegalSheetContext.Provider value={openLegal}>
-   {pathname==="/register"?<RegistrationChoices/>:<RegistrationFrame back={existing?"/":"/register"}
+   {pathname==="/register"?<RegistrationChoices/>:publicWorkerPaths.includes(pathname)?<PublicWorkerEntry key={pathname}/>:<RegistrationFrame back={existing?"/":"/register"}
      title={t(existing?"common.login":"closedHosted.registerTitle")} lead="">
      <CanonicalAgencyStep key={pathname} existing={existing}/>
    </RegistrationFrame>}
@@ -148,7 +151,8 @@ function PublicLanding({pathname}:{pathname:string}){
  </>;
 }
 export function HostedApp(){
- const {t}=useTranslation(),loc=useLocation(),tx=(k:string)=>t("closedHosted."+k);
+ const {t,i18n}=useTranslation(),loc=useLocation(),tx=(k:string)=>t("closedHosted."+k);
+ const workerCopy=workerRegistrationCopy(i18n.resolvedLanguage),canonical=isCanonicalEmailOrigin(location.origin);
  useEffect(()=>{document.title=`Timeax — ${t("home.eyebrow")}`;},[t]);
  const teamRoute=loc.pathname.match(/^\/workspace\/([0-9a-f-]+)\/(messages|schedule|templates|absence|accountants)$/);
  if(teamRoute)return <HostedCabinetRoute organizationId={teamRoute[1]} section={teamRoute[2] as TeamSection} fallback={<TeamStandalone organizationId={teamRoute[1]} section={teamRoute[2] as TeamSection}/>}/>;
@@ -166,10 +170,12 @@ export function HostedApp(){
  if(loc.pathname==="/super-admin/qa")return <OwnerQaPage/>;
  if(loc.pathname==="/terms"||loc.pathname==="/terms/2026-11-27")return <HostedTermsPage/>;
  if(loc.pathname==="/privacy"||loc.pathname==="/privacy/")return <HostedPrivacyPage/>;
- if(["/","/register","/register/agency","/login"].includes(loc.pathname))return <PublicLanding pathname={loc.pathname}/>;
+ if(["/","/register","/register/agency","/login"].includes(loc.pathname)||isEmailIdentityOrigin(location.origin)&&publicWorkerPaths.includes(loc.pathname))return <PublicLanding pathname={loc.pathname}/>;
  const role=loc.pathname==="/register/worker"||loc.pathname==="/worker/join"||loc.pathname==="/worker/register"?"worker":loc.pathname==="/register/factory"||loc.pathname==="/factory/register"?"factory":null;
  const admin=loc.pathname.match(/^\/workspace\/([0-9a-f-]+)\/workers$/);
- if(admin)return <HostedCabinetRoute key={admin[1]} organizationId={admin[1]} section="workers" fallback={<RegistrationFrame title={t('workerEnrollment.manage')} lead={t('workerEnrollment.adminScope')}><AgencyWorkerPanel organizationId={admin[1]}/></RegistrationFrame>}/>;
+ if(admin)return <HostedCabinetRoute key={admin[1]} organizationId={admin[1]} section="workers" fallback={canonical?<RegistrationFrame title={t('common.login')} lead={workerCopy.loginGate} back="/">
+  <Link className="button button--primary" to="/login" state={{returnTo:loc.pathname+(loc.search==='?tab=applications'?loc.search:'')}}>{t('common.login')}</Link>
+ </RegistrationFrame>:<RegistrationFrame title={t('workerEnrollment.manage')} lead={t('workerEnrollment.adminScope')}><AgencyWorkerPanel organizationId={admin[1]}/></RegistrationFrame>}/>;
  if(workspace)return <HostedCabinetRoute key={workspace[1]} organizationId={workspace[1]} section="home" fallback={<RegistrationFrame title={t('workerEnrollment.workspace')} lead={t('workspaceRead.readOnly')}><WorkerWorkspacePanel organizationId={workspace[1]}/></RegistrationFrame>}/>;
  const settings=loc.pathname.match(/^\/workspace\/([0-9a-f-]+)\/settings$/);
  if(settings)return <HostedCabinetRoute key={settings[1]} organizationId={settings[1]} section="settings" fallback={<RegistrationFrame title={t('agencySettings.title')} lead={t('workspaceRead.unavailable')}>{null}</RegistrationFrame>}/>;

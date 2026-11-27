@@ -31,7 +31,7 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,productions
  const [members,M]=useState<WorkersResponse>(),[applications,A]=useState<Application[]>();
  const [failed,RF]=useState(false),[queueFailed,QF]=useState(false);
  const [filter,G]=useState(siteId??''),[query,Search]=useState('');
- const [drawer,open]=useState<UiDrawer>(),[invite,I]=useState('');
+ const [drawer,open]=useState<UiDrawer>(),[invite,I]=useState<{code:string;link:string}>();
  const [target,T]=useState(''),[source,From]=useState(''),[day,D]=useState(localDay);
  const [name,N]=useState(''),[confirmedName,CN]=useState(false),[confirmedEnd,CE]=useState(false);
  const [busy,B]=useState(false),[notice,U]=useState<CopyKey|'nameSaved'|'approved'>(),[error,E]=useState(false);
@@ -108,7 +108,7 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,productions
  const rosterReady=Boolean(scopedMembers||scopedSetup||scopedNames);
  const rosterEnabled=productionsEnabled||lifecycleEnabled||namesEnabled;
  const loadFailed=failed||namesEnabled&&nameState==='unavailable';
- const reset=()=>{I('');T(siteId??'');From('');D(localDay());N('');CN(false);CE(false);U(undefined);E(false)};
+ const reset=()=>{I(undefined);T(siteId??'');From('');D(localDay());N('');CN(false);CE(false);U(undefined);E(false)};
  const dismiss=()=>{const id=drawer?.type==='worker'?drawer.id:'';open(undefined);reset();if(id)requestAnimationFrame(()=>{(panel.current?.querySelector<HTMLElement>('[data-worker-settings='+CSS.escape(id)+']')??panel.current?.querySelector<HTMLElement>('.agency-worker-tabs button'))?.focus()})};
  function selectWorker(id:string){
   if(busy)return;reset();N(scopedNames?.workers.find(w=>w.membershipId===id)?.name??'');open({type:'worker',id});
@@ -138,7 +138,7 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,productions
    const result=await workerCall(queuePath+'/invite',{minutes:60}) as {invitation?:{invite_code?:string}};
    const code=result?.invitation?.invite_code;
    if(typeof code!=='string'||!/^([0-9a-f]{64})$/.test(code))throw Error('invalid invite');
-   I(location.origin+'/register/worker#invite='+code);
+   I({code,link:location.origin+'/register/worker#invite='+code});
   });
  }
  const status=error?<p className="registration-error" role="alert">{copy('rejected')}</p>:notice?<p role="status">{notice==='approved'?t('workerEnrollment.approved'):notice==='nameSaved'?t('memberNames.saved'):copy(notice)}</p>:null;
@@ -183,8 +183,11 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,productions
    {drawer.type==='invite'?<>
     <p>{copy('inviteInfo')}</p>
     {!invite?<button type="button" className="button button--primary" disabled={busy} onClick={createInvite}>{t('workerEnrollment.createInvite')}</button>:
-    <div className="notice-box"><p>{t('workerEnrollment.inviteCreated')}</p><label className="field-label">{t('workerEnrollment.inviteLink')}<textarea rows={3} readOnly value={invite}/></label>
-     {navigator.clipboard&&<button type="button" className="button button--outline" disabled={busy} onClick={()=>void run(()=>navigator.clipboard.writeText(invite),'copied')}>{copy('copy')}</button>}</div>}
+    <div className="notice-box"><p>{t('workerEnrollment.inviteCreated')}</p><label className="field-label">{t('workerEnrollment.inviteLink')}<textarea rows={2} readOnly value={invite.link}/></label>
+     <label className="field-label">{t('workerEnrollment.inviteCode')}<textarea rows={2} readOnly value={invite.code}/></label>
+     <div className="form-actions">
+      <a className="button button--primary" href={'mailto:?subject='+encodeURIComponent(copy('emailSubject'))+'&body='+encodeURIComponent(copy('emailBody')+'\n\n'+invite.link+'\n\n'+t('workerEnrollment.inviteCode')+': '+invite.code)}>{copy('emailInvite')}</a>
+     {navigator.clipboard&&<button type="button" className="button button--outline" disabled={busy} onClick={()=>void run(()=>navigator.clipboard.writeText(invite.link),'copied')}>{copy('copy')}</button>}</div><p className="muted-copy">{copy('emailDraft')}</p></div>}
    </>:id&&<>
     <p className="agency-worker-person">{current?label(id):id.slice(0,8)}</p>
     {id&&workAssignments(id).length>0&&<ul className="agency-worker-placement-list">{workAssignments(id).map(a=>{

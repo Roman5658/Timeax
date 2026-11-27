@@ -13,3 +13,36 @@
 .agency-site-list .button { width:100%; justify-content:space-between; gap:1rem; text-align:start; }
 .agency-site-list .button span { font-size:.85em; font-weight:400; }
 .agency-site-panel details > summary { cursor:pointer; }
+
+.agency-site-list li { display:grid; grid-template-columns:minmax(0,1fr) max-content; gap:.5rem; align-items:stretch; }
+.agency-site-list .agency-site-open { overflow-wrap:anywhere; min-width:0; }
+.agency-site-list .agency-site-settings { justify-content:center; gap:.4rem; }
+.agency-site-description { white-space:pre-wrap; overflow-wrap:anywhere; }
+@media(max-width:420px){
+ .agency-site-list li { grid-template-columns:1fr; }
+ .agency-site-list .agency-site-settings { justify-self:start; width:auto; }
+}
+
+/* Navigation scrolls independently; sign-out stays inside the visible drawer. */
+.hosted-cabinet .portal-sidebar .portal-nav {
+ min-height:0;
+ flex:0 1 auto;
+ overflow-y:auto;
+ overscroll-behavior:contain;
+}
+.hosted-cabinet .hosted-cabinet-sign-out { flex:0 0 auto; padding-top:10px; }
+.hosted-cabinet .hosted-cabinet-sign-out .button { min-height:44px; width:100%; }
+.hosted-cabinet .hosted-cabinet-sign-out > [role="status"] { display:block; overflow-wrap:anywhere; }
+.hosted-cabinet .portal-sidebar .sidebar-user { flex:0 0 auto; }
+@media(max-width:850px){
+ .hosted-cabinet .portal-sidebar {
+  box-sizing:border-box;
+  max-height:100dvh;
+  padding-top:max(20px,env(safe-area-inset-top,0px));
+  padding-bottom:max(12px,env(safe-area-inset-bottom,0px));
+ }
+ .hosted-cabinet .portal-sidebar:not(.is-open) { visibility:hidden; }
+ .hosted-cabinet .portal-sidebar .portal-mobile-close {
+  top:max(17px,env(safe-area-inset-top,0px));
+ }
+}

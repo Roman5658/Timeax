@@ -17,7 +17,7 @@ const identityOf=s=>s&&s.issuer===ISSUER&&validId(s.subject)&&s.emailConfirmed==
 
 // Only compose this with a role-pinned store and after workspace routing is ready.
 // OTP setup credentials stay server-side; normal login OTPs cannot set a password.
-export function createAgencyOnboardingRoutes({origin,provider,store,readSession,issueSession,isActive,now=Date.now}){
+export function createAgencyOnboardingRoutes({origin,provider,store,readSession,issueSession,isActive,rotateOnComplete=false,now=Date.now}){
  if(![provider?.passwordLogin,provider?.setPassword,store?.get,store?.create,readSession,issueSession,isActive].every(f=>typeof f==='function'))
   throw Error('Incomplete agency onboarding configuration');
  const key=randomBytes(32),attempts=new Map(),windowMs=60_000;
@@ -49,18 +49,18 @@ export function createAgencyOnboardingRoutes({origin,provider,store,readSession,
     const organizationId=await store.get(identityOf(identity));
     if(organizationId!==null&&!validId(organizationId))throw Error('Invalid workspace response');
     if(request.signal.aborted)return respond(400,{error:'invalid-request'});
-    return respond(200,{state:organizationId?'ready':'details-required',organizationId},issueSession(identity,request));
+    return respond(200,{state:organizationId?'ready':'details-required',organizationId},await issueSession(identity,request,Boolean(organizationId)));
    }
    if(!['GET','POST'].includes(request.method))return respond(405,{error:'not-allowed'});
-   const session=readSession(request),identity=identityOf(session);
-   if(!identity||!isActive(request,session))return respond(401,{error:'valid-session-required'});
+   const session=await readSession(request),identity=identityOf(session);
+   if(!identity||!await isActive(request,session))return respond(401,{error:'valid-session-required'});
    const old=await store.get(identity);
-   if(!isActive(request,session))return respond(401,{error:'valid-session-required'});
+   if(!await isActive(request,session))return respond(401,{error:'valid-session-required'});
    if(old!==null){
     if(!validId(old))throw Error('Invalid workspace response');
     return respond(200,{state:'ready',organizationId:old});
    }
-   const passwordRequired=session.flow!=='password'&&session.passwordSet!==true;
+   const passwordRequired=!['password','password-setup'].includes(session.flow)&&session.passwordSet!==true;
    if(passwordRequired&&(session.flow!=='registration'||!session.credential))return respond(403,{error:'registration-required'});
    if(!post)return respond(200,{state:'details-required',passwordRequired});
    if(session.finishing)return respond(409,{error:'setup-in-progress'});
@@ -74,17 +74,17 @@ export function createAgencyOnboardingRoutes({origin,provider,store,readSession,
     if([...agencyName].length<2||[...agencyName].length>120||/[\p{Cc}\p{Cs}\u202a-\u202e\u2066-\u2069]/u.test(agencyName))
      return respond(400,{error:'invalid-name'});
     if(!goodNip(nip))return respond(400,{error:'invalid-nip'});
-    if(!isActive(request,session))return respond(401,{error:'valid-session-required'});
+    if(!await isActive(request,session))return respond(401,{error:'valid-session-required'});
     if(passwordRequired){
      if(!validNewPassword(body.password))return respond(400,{error:'invalid-password'});
      if(await provider.setPassword(session.credential,body.password)!==true)return respond(409,{error:'password-not-set'});
      session.passwordSet=true;session.credential=null;
     }
-    if(!isActive(request,session))return respond(401,{error:'valid-session-required'});
+    if(!await isActive(request,session))return respond(401,{error:'valid-session-required'});
     const organizationId=await store.create(identity,{agencyName,nip,termsVersion:registrationTermsVersion});
     if(!validId(organizationId))throw Error('Invalid workspace response');
-    if(!isActive(request,session))return respond(401,{error:'valid-session-required'});
-    return respond(200,{state:'ready',organizationId});
+    if(!await isActive(request,session))return respond(401,{error:'valid-session-required'});
+    return respond(200,{state:'ready',organizationId},rotateOnComplete?await issueSession(session,request):undefined);
    }finally{session.finishing=false}
   }catch{return respond(503,{error:'service-unavailable'})}
  }};

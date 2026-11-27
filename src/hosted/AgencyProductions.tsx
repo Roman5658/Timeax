@@ -1,20 +1,23 @@
 import {useEffect,useRef,useState} from 'react';
 import {Link,useSearchParams} from 'react-router-dom';
+import {Settings2} from 'lucide-react';
 import {useTranslation} from 'react-i18next';
 import {AgencyBookDrawer} from './AgencyBookDrawer';
 import {FactoryIndependencePanel} from './FactoryIndependencePanel';
 import {FactoryTimecardsPanel} from './FactoryTimecardsPage';
 import {useMemberNames} from './MemberNames';
 import {factoryCall,parseSetupContext,type SetupContext,type SetupConnection} from './factory-enrollment';
-import {productionCopy} from './agency-production-copy';
+import {getProductionCopy} from './agency-production-copy';
+import {AgencyProductionSettings} from './AgencyProductionSettings';
 
-export function AgencyProductions({organizationId,initialSites,enabled,factoryInvites=false,namesEnabled=false,placementsEnabled=false}:{organizationId:string;initialSites:{id:string;name:string}[];enabled:boolean;factoryInvites?:boolean;namesEnabled?:boolean;placementsEnabled?:boolean}){
+export function AgencyProductions({organizationId,initialSites,enabled,factoryInvites=false,namesEnabled=false,placementsEnabled=false,settingsEnabled=false}:{organizationId:string;initialSites:{id:string;name:string}[];enabled:boolean;factoryInvites?:boolean;namesEnabled?:boolean;placementsEnabled?:boolean;settingsEnabled?:boolean}){
  const {t,i18n}=useTranslation(),tx=(key:string)=>t('agencyProductions.'+key),ft=(key:string)=>t('factoryEnrollment.'+key);
- const copy=productionCopy[(i18n.resolvedLanguage??'en').split('-')[0] as keyof typeof productionCopy]??productionCopy.en;
+ const copy=getProductionCopy(i18n.resolvedLanguage);
  const [search,setSearch]=useSearchParams();
  const [tab,setTab]=useState<'internal'|'connections'>('internal'),[value,setValue]=useState<SetupContext>();
  const [name,setName]=useState(''),[rename,setRename]=useState(''),[busy,setBusy]=useState(false),[status,setStatus]=useState(''),[loadError,setLoadError]=useState(false),[attempt,setAttempt]=useState(0);
- const [createOpen,setCreateOpen]=useState(false),[connection,setConnection]=useState<SetupConnection>();
+ const [createOpen,setCreateOpen]=useState(false),[selectedConnection,setConnection]=useState<SetupConnection>();
+ const [settings,setSettings]=useState(false),[settingsBusy,setSettingsBusy]=useState(false),[confirmDisconnect,setConfirmDisconnect]=useState(false);
  const [worker,setWorker]=useState(''),[starts,setStarts]=useState(new Date().toISOString().slice(0,10));
  const [newSite,setNewSite]=useState<{id:string;name:string}>();
  const {label}=useMemberNames(namesEnabled?organizationId:undefined);
@@ -28,17 +31,28 @@ export function AgencyProductions({organizationId,initialSites,enabled,factoryIn
   }).catch(()=>{if(!request.signal.aborted)setLoadError(true)});
   return()=>request.abort();
  },[enabled,organizationId,attempt]);
- const sites=value?value.worksites.filter(w=>w.ownerId===organizationId&&w.organizationId===organizationId):initialSites;
+ const sites=value?value.worksites.filter(w=>w.ownerId===organizationId&&w.organizationId===organizationId):enabled?[]:initialSites;
  const siteId=search.get('site');
  const site=sites.find(w=>w.id===siteId)??(newSite?.id===siteId?newSite:undefined);
  const connections=value?.connections.filter(c=>c.agencyId===organizationId)??[];
+ const connection=selectedConnection??(!site?connections.find(c=>c.worksiteId===siteId&&c.state==='active'):undefined);
+ const showingConnections=tab==='connections'||!!connection;
+
  const current=new Date();
  const assignments=value?.assignments.filter(a=>a.organizationId===organizationId&&a.state==='active'&&(!a.endsAt||Date.parse(a.endsAt)>current.getTime()))??[];
  const here=assignments.filter(a=>a.worksiteId===siteId);
  const workers=value?.workers.filter(w=>w.organizationId===organizationId)??[];
  const available=workers.filter(w=>!here.some(a=>a.membershipId===w.id));
  const root='/workspace/'+organizationId;
- function show(id:string|null){setStatus('');setRename('');setWorker('');setSearch(id?{site:id}:{},{replace:true})}
+ function show(id:string|null,edit=false){setSettings(edit);setStatus('');setRename('');setWorker('');setSearch(id?{site:id}:{},{replace:true})}
+ function showConnection(c:SetupConnection|undefined,edit=false){
+  setSettings(edit);setConnection(c);setConfirmDisconnect(false);setStatus('');setSearch({},{replace:true});
+ }
+ function saveSiteName(id:string,updatedName:string){
+  setValue(v=>v&&({...v,worksites:v.worksites.map(w=>w.id===id?{...w,name:updatedName}:w)}));
+  setNewSite(v=>v?.id===id?{id,name:updatedName}:v);
+ }
+
  async function send(action:string,body:object){
   if(pending.current||!value)return;
   pending.current=true;setBusy(true);setStatus('');
@@ -49,6 +63,7 @@ export function AgencyProductions({organizationId,initialSites,enabled,factoryIn
     setNewSite({id:result.worksiteId,name:name.trim()});setCreateOpen(false);show(result.worksiteId);op.current=crypto.randomUUID();setName('');
    }
    if(action==='assign-internal')setWorker('');
+   if(action==='revoke-connection')setConfirmDisconnect(false);
    if(action==='rename-site'&&result.worksiteId&&result.name){
     setValue(v=>v&&({...v,worksites:v.worksites.map(w=>w.id===result.worksiteId?{...w,name:result.name!}:w)}));
     setRename('');
@@ -60,20 +75,24 @@ export function AgencyProductions({organizationId,initialSites,enabled,factoryIn
  const notice=status&&<p role={status==='saveError'?'alert':'status'}>{status==='renamed'?copy.renamed:tx(status)}</p>;
  return <section className="dashboard-panel worker-enrollment agency-site-panel" aria-busy={busy||enabled&&!value&&!loadError}>
   <div className="form-actions">
-   <button type="button" className={'button '+(tab==='internal'?'button--primary':'button--outline')} aria-pressed={tab==='internal'} onClick={()=>{setStatus('');setTab('internal')}}>{tx('internalList')}</button>
-   <button type="button" className={'button '+(tab==='connections'?'button--primary':'button--outline')} aria-pressed={tab==='connections'} onClick={()=>{setStatus('');setTab('connections')}}>{ft('connections')}</button>
+   <button type="button" className={'button '+(!showingConnections?'button--primary':'button--outline')} aria-pressed={!showingConnections} onClick={()=>{setStatus('');setTab('internal')}}>{tx('internalList')}</button>
+   <button type="button" className={'button '+(showingConnections?'button--primary':'button--outline')} aria-pressed={showingConnections} onClick={()=>{setStatus('');setTab('connections')}}>{ft('connections')}</button>
   </div>
   {!enabled&&<p className="notice-box" role="status">{tx('notEnabled')}</p>}
   {enabled&&!value&&!loadError&&<p role="status">{t('workspaceRead.checking')}</p>}
   {loadError&&<p role="alert">{tx('loadError')} <button type="button" className="button button--outline" onClick={()=>setAttempt(n=>n+1)}>{copy.retry}</button></p>}
-  <div key={tab} className="agency-production-leaf">
-  {tab==='internal'?<>
+  <div key={String(showingConnections)} className="agency-production-leaf">
+  {!showingConnections?<>
    <p>{tx('internalHint')}</p>
    <button type="button" className="button button--outline" disabled={!value||busy} onClick={()=>{setStatus('');setCreateOpen(true)}}>{tx('create')}</button>
-   {sites.length?<ul className="agency-site-list">{sites.map(w=><li key={w.id}><button type="button" className="button button--outline" onClick={()=>show(w.id)}>{w.name}<span>{copy.open}</span></button></li>)}</ul>:<p>{ft('noSites')}</p>}
+   {sites.length?<ul className="agency-site-list">{sites.map(w=><li key={w.id}><button type="button" className="button button--outline agency-site-open" onClick={()=>show(w.id)}>{w.name}<span>{copy.open}</span></button>
+   {value&&<button type="button" className="button button--outline agency-site-settings" aria-label={copy.settings+': '+w.name} onClick={()=>show(w.id,true)}><Settings2 size={16} aria-hidden="true"/>{copy.settings}</button>}</li>)}</ul>:<p>{ft('noSites')}</p>}
   </>:<>
    <p>{tx('connectionHint')}</p>
-   {value&&(connections.length?<ul className="agency-site-list">{connections.map(c=><li key={c.id}><button type="button" className="button button--outline" onClick={()=>{setStatus('');setConnection(c)}}>{c.factoryName} · {c.worksiteName}<span>{ft(c.state)}</span></button></li>)}</ul>:<p>{tx('noConnections')}</p>)}
+   {value&&(connections.length?<ul className="agency-site-list">{connections.map(c=><li key={c.id}>
+    <button type="button" className="button button--outline agency-site-open" onClick={()=>showConnection(c)}>{c.factoryName} &middot; {c.worksiteName}<span>{ft(c.state)}</span></button>
+    {c.state==='active'&&<button type="button" className="button button--outline agency-site-settings" aria-label={copy.settings+': '+c.worksiteName} onClick={()=>showConnection(c,true)}><Settings2 size={16} aria-hidden="true"/>{copy.settings}</button>}
+   </li>)}</ul>:<p>{tx('noConnections')}</p>)}
    {value&&factoryInvites&&<FactoryIndependencePanel organizationId={organizationId} agencyOnly/>}
   </>}
   </div>
@@ -84,14 +103,15 @@ export function AgencyProductions({organizationId,initialSites,enabled,factoryIn
     <button className="button button--primary" disabled={busy||!name.trim()}>{tx('create')}</button>
    </form>{notice}
   </AgencyBookDrawer>}
-  {site&&!createOpen&&<AgencyBookDrawer key={site.id} title={site.name} closeLabel={t('common.close')} busy={busy} onClose={()=>show(null)}>
+  {site&&!createOpen&&<AgencyBookDrawer key={site.id} title={site.name} closeLabel={t('common.close')} busy={busy||settingsBusy} onClose={()=>show(null)}>
    <p>{ft('internal')}</p>
-   <details className="notice-box"><summary>{copy.settings}</summary>
-    <form className="auth-form" onSubmit={e=>{e.preventDefault();if(rename.trim())void send('rename-site',{worksiteId:site.id,name:rename.trim()})}}>
-     <label className="field-label">{ft('siteName')}<input value={rename} placeholder={site.name} required maxLength={120} onChange={e=>setRename(e.target.value)} disabled={busy}/></label>
-     <button className="button button--primary" disabled={busy||!rename.trim()}>{copy.saveName}</button>
-    </form>
-   </details>
+   {value&&<div className="form-actions"><button className="button button--outline" type="button" aria-pressed={settings} disabled={busy||settingsBusy} onClick={()=>{setSettings(v=>!v);setStatus('')}}><Settings2 size={16} aria-hidden="true"/>{copy.settings}</button></div>}
+   {value&&settingsEnabled&&<AgencyProductionSettings organizationId={organizationId} worksiteId={site.id} connected={false} form={settings} suspended={busy} onBusy={setSettingsBusy} onSaved={name=>saveSiteName(site.id,name)}/>}
+   {value&&settings&&!settingsEnabled&&<form className="auth-form notice-box" onSubmit={e=>{e.preventDefault();if(rename.trim())void send('rename-site',{worksiteId:site.id,name:rename.trim()})}}>
+    <label className="field-label">{ft('siteName')}<input value={rename} placeholder={site.name} required maxLength={120} onChange={e=>setRename(e.target.value)} disabled={busy}/></label>
+    <button className="button button--primary" disabled={busy||!rename.trim()}>{copy.saveName}</button>
+   </form>}
+   {!settings&&<>
    <h3>{copy.team}</h3>
    {!here.length&&<p>{copy.empty}</p>}
    {here.length>0&&<ul className="hosted-site-list">{here.map(a=><li key={a.worksiteId+a.membershipId} className="notice-box">
@@ -104,9 +124,9 @@ export function AgencyProductions({organizationId,initialSites,enabled,factoryIn
     <label className="field-label">{ft('starts')}<input required type="date" value={starts} onChange={e=>setStarts(e.target.value)}/></label>
     <button className="button button--primary" disabled={busy||!worker||!starts}>{copy.addAssigned}</button>
    </form>:null}
-   <Link className="button button--outline" to={root+'/workers?site='+site.id}>{copy.openWorkers}</Link>{notice}
+   <Link className="button button--outline" to={root+'/workers?site='+site.id}>{copy.openWorkers}</Link></>}{notice}
   </AgencyBookDrawer>}
-  {connection&&<AgencyBookDrawer title={connection.factoryName+' · '+connection.worksiteName} closeLabel={t('common.close')} busy={busy} onClose={()=>{setConnection(undefined);setStatus('')}}>
+  {connection&&<AgencyBookDrawer key={connection.id} title={connection.factoryName+' '+connection.worksiteName} closeLabel={t('common.close')} busy={busy||settingsBusy} onClose={()=>showConnection(undefined)}>
    {(()=>{const c=connections.find(v=>v.id===connection.id)??connection;return <>
     <p>{ft(c.state)}</p>
     {c.state==='pending'&&<div className="form-actions">
@@ -114,8 +134,16 @@ export function AgencyProductions({organizationId,initialSites,enabled,factoryIn
      <button className="button button--outline" disabled={busy} onClick={()=>void send('decline-connection',{id:c.id})}>{ft('decline')}</button>
     </div>}
     {c.state==='active'&&<>
-     {placementsEnabled&&<FactoryTimecardsPanel organizationId={organizationId} placementOnly placementSiteId={c.worksiteId}/>}
-     <details><summary>{copy.settings}</summary><button className="button button--outline" disabled={busy} onClick={()=>void send('revoke-connection',{id:c.id})}>{ft('revokeConnection')}</button></details>
+     <div className="form-actions"><button className="button button--outline" type="button" aria-pressed={settings} disabled={busy||settingsBusy} onClick={()=>{setSettings(v=>!v);setConfirmDisconnect(false);setStatus('')}}><Settings2 size={16} aria-hidden="true"/>{copy.settings}</button></div>
+     {settingsEnabled&&<AgencyProductionSettings organizationId={organizationId} worksiteId={c.worksiteId} connected form={settings} suspended={busy||confirmDisconnect} onBusy={setSettingsBusy} onSaved={()=>{}}/>}
+     {!settings&&placementsEnabled&&<FactoryTimecardsPanel organizationId={organizationId} placementOnly placementSiteId={c.worksiteId}/>}
+     {settings&&<section className="notice-box">
+      {!confirmDisconnect?<button type="button" className="button button--outline" disabled={busy||settingsBusy} onClick={()=>setConfirmDisconnect(true)}>{ft('revokeConnection')}</button>
+       :<><p>{copy.disconnectHint}</p><div className="form-actions">
+        <button type="button" className="button button--outline" disabled={busy} onClick={()=>void send('revoke-connection',{id:c.id})}>{ft('revokeConnection')}</button>
+        <button type="button" className="button button--outline" disabled={busy} onClick={()=>setConfirmDisconnect(false)}>{t('common.cancel')}</button>
+       </div></>}
+     </section>}
     </>}
    </>})()}{notice}
   </AgencyBookDrawer>}

@@ -14,6 +14,7 @@ export function StagingSessionPanel({ onChanged, purpose = "enrollment", audienc
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [notice, setNotice] = useState("checking");
+  const pendingForPurpose=(value:AccessContext|undefined)=>Boolean(value?.capabilities.verify&&(!emailIdentity||!value.emailChallengeFlow||value.emailChallengeFlow===(purpose==='existing'?'login':'registration')));
   const operation = useRef<AbortController | null>(null);
   const mounted = useRef(false);
   useEffect(() => {
@@ -22,7 +23,7 @@ export function StagingSessionPanel({ onChanged, purpose = "enrollment", audienc
     const request = new AbortController(); operation.current = request;
     void client.context(request.signal).then(result => {
       if (!mounted.current || request.signal.aborted) return;
-      setScope(result); setNotice(result?.state === "verified" ? "verified" : result?.capabilities.verify ? "enterCode" : result?.capabilities.login ? "ready" : "closed");
+      setScope(result); setNotice(result?.state === "verified" ? "verified" : pendingForPurpose(result) ? "enterCode" : result?.capabilities.login ? "ready" : "closed");
     }).finally(() => {
       if (operation.current === request) operation.current = null;
       if (mounted.current && !request.signal.aborted) setBusy(false);
@@ -43,7 +44,7 @@ export function StagingSessionPanel({ onChanged, purpose = "enrollment", audienc
       const result = await client.context(request.signal);
       if (!mounted.current || request.signal.aborted) return;
       setScope(result);
-      if (action === "check" || action === "logout") message = result?.state === "verified" ? "verified" : result?.capabilities.verify ? "enterCode" : result?.capabilities.login ? "ready" : "closed";
+      if (action === "check" || action === "logout") message = result?.state === "verified" ? "verified" : pendingForPurpose(result) ? "enterCode" : result?.capabilities.login ? "ready" : "closed";
       setNotice(message); onChanged();
       if (action === "verify" || action === "logout") setCode("");
     } finally {
@@ -59,7 +60,8 @@ export function StagingSessionPanel({ onChanged, purpose = "enrollment", audienc
   }, [scope]);
   const verified = scope?.state === "verified";
   const otpLength = scope?.otpLength ?? 6;
-  const awaitingAgencyCode=Boolean(termsHref&&scope?.capabilities.verify);
+  const awaitingCode=pendingForPurpose(scope);
+  const awaitingAgencyCode=Boolean(termsHref&&awaitingCode);
   useEffect(()=>{
     setCanResendAgencyCode(false);
     if(!awaitingAgencyCode)return;
@@ -68,10 +70,10 @@ export function StagingSessionPanel({ onChanged, purpose = "enrollment", audienc
   },[awaitingAgencyCode,scope]);
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!busy && (emailIdentity || validEmail(email.trim())) && scope?.capabilities.verify && validOtp(code, otpLength)) void act("verify");
-    else if (!busy && !scope?.capabilities.verify && validEmail(email.trim()) && scope?.capabilities.login) void act("send");
+    if (!busy && (emailIdentity || validEmail(email.trim())) && awaitingCode && validOtp(code, otpLength)) void act("verify");
+    else if (!busy && !awaitingCode && validEmail(email.trim()) && scope?.capabilities.login) void act("send");
   }
-  if (signup && verified) return null;
+  if (simple && verified) return null;
   return <section aria-label={sessionText("title")} className="registration-session">
     {!simple && <h2>{sessionText("title")}</h2>}
     {(!simple || !["checking", "ready"].includes(notice)) && <p className="notice-box" role="status" data-testid="session-status">{sessionText(!simple && busy ? "checking" : notice)}</p>}
@@ -85,16 +87,16 @@ export function StagingSessionPanel({ onChanged, purpose = "enrollment", audienc
         <LegalLink kind="privacy" to={simple?"/privacy#privacy-access":"/privacy"}/>
       </div>
       <label className="field-label" htmlFor="enrollment-email"><span>{sessionText("email")}</span>
-        <input id="enrollment-email" aria-describedby={termsHref?"agency-email-use":"enrollment-privacy"} type="email" autoComplete="email" maxLength={254} value={email} disabled={busy} onChange={e => setEmail(e.target.value)} required={!emailIdentity || !scope?.capabilities.verify} />
+        <input id="enrollment-email" aria-describedby={termsHref?"agency-email-use":"enrollment-privacy"} type="email" autoComplete="email" maxLength={254} value={email} disabled={busy} onChange={e => setEmail(e.target.value)} required={!emailIdentity || !awaitingCode} />
       </label>
-      {scope?.capabilities.verify && <label className="field-label" htmlFor="enrollment-code"><span>{sessionText("code")}</span>
-        <input id="enrollment-code" inputMode="numeric" autoComplete="one-time-code" pattern={"[0-9]{" + otpLength + "}"} minLength={otpLength} maxLength={otpLength} value={code} disabled={busy} onChange={e => setCode(e.target.value)} required={!emailIdentity || !scope?.capabilities.verify} />
+      {awaitingCode && <label className="field-label" htmlFor="enrollment-code"><span>{sessionText("code")}</span>
+        <input id="enrollment-code" inputMode="numeric" autoComplete="one-time-code" pattern={"[0-9]{" + otpLength + "}"} minLength={otpLength} maxLength={otpLength} value={code} disabled={busy} onChange={e => setCode(e.target.value)} required={!emailIdentity || !awaitingCode} />
       </label>}
       <button className="button button--primary button--full" type="submit"
-        disabled={busy || (scope?.capabilities.verify ? !validOtp(code, otpLength) || !emailIdentity && !validEmail(email.trim()) : !scope?.capabilities.login || !validEmail(email.trim()))}>
-        {sessionText(scope?.capabilities.verify ? "verifyAction" : "sendAction")}
+        disabled={busy || (awaitingCode ? !validOtp(code, otpLength) || !emailIdentity && !validEmail(email.trim()) : !scope?.capabilities.login || !validEmail(email.trim()))}>
+        {sessionText(awaitingCode ? "verifyAction" : "sendAction")}
       </button>
-      {emailIdentity && scope?.capabilities.verify && (!termsHref||canResendAgencyCode) &&
+      {emailIdentity && awaitingCode && (!termsHref||canResendAgencyCode) &&
         <button type="button" className="button button--outline button--full" disabled={busy || !validEmail(email.trim())} onClick={() => void act("send")}>
           {termsHref?t("publicSignup.resendAgencyCode"):sessionText("sendAction")}
         </button>}

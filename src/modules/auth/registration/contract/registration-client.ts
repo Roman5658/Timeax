@@ -4,7 +4,7 @@ const registrationPath="/api/agency-registration";
 const logoutPath="/api/timeax/auth/logout";
 type Capabilities={login:boolean;verify:boolean;agencyRegistration:boolean;logout:boolean};
 export type AccessContext =({state:"anonymous"|"verification-required";capabilities:Capabilities}
-  |{state:"verified";capabilities:Capabilities;session:SessionProjection}) & {otpLength?:6|8};
+  |{state:"verified";capabilities:Capabilities;session:SessionProjection}) & {otpLength?:6|8;emailChallengeFlow?:'login'|'registration';workerSelfService?:boolean};
 export type PendingRegistration={requestId:string;status:"pending";requestedAt:string};
 export type RegistrationOutcome={state:"none"|"session"|"unavailable"}|{state:"pending";registration:PendingRegistration};
 export type ActionState="accepted"|"verified"|"invalid"|"unavailable";
@@ -28,13 +28,16 @@ export function parseAccessContext(raw:unknown):AccessContext|undefined{
     typeof caps.login!=="boolean"||typeof caps.verify!=="boolean"||typeof caps.agencyRegistration!=="boolean"||
     caps.logout!==undefined&&typeof caps.logout!=="boolean")return undefined;
   const capabilities={login:caps.login,verify:caps.verify,agencyRegistration:caps.agencyRegistration,logout:caps.logout===true};
+  const workerSelfService=value.workerSelfService===true;
   if(value.state==="verified"){
     const session=projection(value);
-    return session?{state:"verified",capabilities,session}:undefined;
+    return session?{state:"verified",capabilities,session,...(workerSelfService?{workerSelfService}:{})}:undefined;
   }
   if(value.state==="anonymous"||value.state==="verification-required"){
     if(capabilities.agencyRegistration||capabilities.logout)return undefined;
-    return {state:value.state,capabilities,...(value.otpLength===8?{otpLength:8 as const}:{})};
+    const flow=value.emailChallengeFlow;
+    const emailChallengeFlow=flow==='login'||flow==='registration'?flow:undefined;
+    return {state:value.state,capabilities,...(value.otpLength===8?{otpLength:8 as const}:{}),...(emailChallengeFlow?{emailChallengeFlow}:{}),...(workerSelfService?{workerSelfService}:{})};
   }
   return undefined;
 }
@@ -93,7 +96,8 @@ export function createWorkingRegistrationClient(origin:string,transport:typeof f
   async function verifyCode(email:string,code:string,signal:AbortSignal):Promise<ActionState>{
     if(!emailIdentity&&!validEmail(email)||!(validOtp(code,6)||validOtp(code,8)))return "invalid";
     const scope=await context(signal);
-    if(signal.aborted||!scope||scope.state==="verified"||!scope.capabilities.verify)return "unavailable";
+    if(signal.aborted||!scope||scope.state==="verified"||!scope.capabilities.verify||
+      emailIdentity&&scope.emailChallengeFlow!==undefined&&scope.emailChallengeFlow!==(purpose==='existing'?'login':'registration'))return "unavailable";
     if(!validOtp(code,scope.otpLength??6))return "invalid";
     try{
       const res=await request(verifyPath,signal,emailIdentity?{code}:{email,code});
