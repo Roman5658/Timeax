@@ -14,7 +14,10 @@ export function StartPage() {
       </div>
       <WorkspacePreview id="features" />
     </section>
-    <section className="public-section public-videos" id="how-it-works" aria-labelledby="timeax-videos-title">
+    <section className="public-section public-how" id="how-it-works" aria-labelledby="timeax-how-title">
+      <h2 id="timeax-how-title">{t("nav.howItWorks")}</h2>
+    </section>
+    <section className="public-section public-videos" id="video-guides" aria-labelledby="timeax-videos-title">
       <div className="public-video-placeholder">
         <span className="flow-icon"><PlayCircle size={22} aria-hidden="true" /></span>
         <h2 id="timeax-videos-title">{tx("videosTitle")}</h2>

@@ -46,6 +46,9 @@
 .public-footer-about { flex:1; }
 .public-footer-about p { margin:4px 0 0; }
 .public-footer-links { display:flex; gap:8px 20px; flex-wrap:wrap; }
+.public-section.public-how { padding-block:24px; }
+.public-how h2 { margin:0; }
+.public-section.public-videos { padding-top:24px; }
 .public-video-placeholder { display:flex; align-items:center; gap:16px; padding:24px; border:1px solid var(--line); border-radius:16px; background:var(--surface); }
 .public-video-placeholder h2 { margin:0; font-size:clamp(22px,3vw,28px); }
 .public-hero .preview-scene { min-width:0; scroll-margin-top:24px; }

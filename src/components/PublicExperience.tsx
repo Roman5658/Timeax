@@ -14,9 +14,9 @@ export function PublicHeader({ landing = false }: { landing?: boolean }) {
   useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: "instant" }); setOpen(false); }, [pathname]);
   return <header className="public-header"><div className="public-header-inner">
     <BrandMark />
-    <nav className="public-desktop-nav" aria-label={t("nav.product")}>
-      {landing ? <><a href="#features">{t("nav.product")}</a><a href="#how-it-works">{t("nav.howItWorks")}</a></> : <Link to="/">{t("common.backHome")}</Link>}
-    </nav>
+    {!landing&&<nav className="public-desktop-nav" aria-label={t("nav.product")}>
+      <Link to="/">{t("common.backHome")}</Link>
+    </nav>}
     <div className="public-controls"><LanguageSwitcher compact /><ThemeToggle />
       <Link className="button button--outline public-login" to="/login">{t("common.login")}</Link>
       <button className="icon-button public-menu-button" aria-label={t(open ? "common.closeMenu" : "common.menu")} aria-expanded={open} aria-controls="public-menu" onClick={() => setOpen(!open)}>{open ? <X size={20} /> : <Menu size={20} />}</button>
