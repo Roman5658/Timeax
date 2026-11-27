@@ -91,6 +91,17 @@ test('SQL queues a generic push for enrolled recipients, preserves time on norma
   assert.equal((await db.query('SELECT count(*)::int n FROM timeax_push.jobs')).rows[0].n,1);
   await run('finish',{lease:id(10),id:one[0].id,outcome:'delivered'});
   assert.equal((await db.query('SELECT count(*)::int n FROM timeax_push.jobs')).rows[0].n,0);
+  const agencySub={...sub,endpoint:'https://fcm.googleapis.com/fcm/send/fixture-agency-registration-token'};
+  await run('enable',{session:'b'.repeat(64),language:'pl',...agencySub},id(6));
+  for(const [i,source] of ['agency_worker_join_events','backdated_shift_notices','earlier_shift_requests'].entries()){
+   await db.exec(`INSERT INTO timeax_core.${source} VALUES('${id(2)}')`);
+   const lease=id(20+i),hits=await run('claim',{lease});
+   assert.equal(hits.length,1,source);
+   assert.equal(hits[0].organizationId,id(2),source);
+   assert.deepEqual(hits[0].subscription,agencySub,source);
+   await run('finish',{lease,id:hits[0].id,outcome:'delivered'});
+  }
+  await run('disable',{session:'b'.repeat(64),endpoint:agencySub.endpoint},id(6));
   await db.exec(`UPDATE timeax_core.web_sessions SET expires_at=now()-interval '1 minute' WHERE token_digest='${'a'.repeat(64)}';
    DELETE FROM timeax_core.web_sessions WHERE token_digest='${'a'.repeat(64)}';
    INSERT INTO timeax_team.deliveries VALUES('${id(7)}',NULL)`);
