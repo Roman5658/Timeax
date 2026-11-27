@@ -10,11 +10,12 @@ export function HostedPrivacyPage() {
   const text = (key: string) => t("hostedPrivacy." + key);
   return <div className="public-experience">
     <PublicHeader />
-    <main className="public-section">
-      <h1>{text("title")}</h1>
-      <p className="notice-box">{text("limit")}</p>
-      {["access", "responsibility", "records", "factory", "requests", "data", "storage"].map(key => <section key={key} id={"privacy-" + key}>
+    <main className="public-section public-policy">
+      <h1 id="privacy-access">{text("title")}</h1>
+      <p>{text("accessBody")}</p>
+      {["responsibility", "data", "recipients", "records", "factory", "storage", "requests"].map(key => <section key={key} id={"privacy-" + key}>
         <h2>{text(key + "Title")}</h2><p>{text(key + "Body")}</p>
+        {key==="requests" && <a href="mailto:no-reply@timeax.pl">no-reply@timeax.pl</a>}
       </section>)}
     </main>
     <PublicFooter />

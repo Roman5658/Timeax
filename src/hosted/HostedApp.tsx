@@ -2,6 +2,7 @@ import {SelfServiceAgencyStep} from './SelfServiceAgencyStep';
 import {TeamStandalone,AccountantInvitePage,type TeamSection} from './TeamWorkflow';
 import {HostedCabinetRoute} from './HostedCabinet';
 import {OwnerQaPage,OwnerQaLink} from './OwnerQaPage';
+import {HostedTermsPage} from "./HostedTermsPage";
 import {HostedPrivacyPage} from './HostedPrivacyPage';
 import {WorkerAccountPage} from './WorkerAccountPage';
 import {PayslipsPage} from './PayslipsPage';
@@ -9,7 +10,7 @@ import {FactoryTimecardsPage} from './FactoryTimecardsPage';
 import {TimecardsPage} from './TimecardsPage';
 import {FactoryEnrollmentPage} from './FactoryEnrollmentPage';
 import {PrivateAccess} from "./PrivateAccess";
-import {useCallback,useEffect,useMemo,useRef,useState} from "react";
+import {useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState} from "react";
 import {Link,useLocation,useNavigate} from "react-router-dom";
 import {useTranslation} from "react-i18next";
 import {X} from "lucide-react";
@@ -84,7 +85,7 @@ function CanonicalAgencyStep({existing}:{existing:boolean}){
  if(selfService===undefined)return null;
  return selfService?<SelfServiceAgencyStep existing={existing}/>:<AgencyStep existing={existing}/>;
 }
-function PublicAuthPanel({pathname}:{pathname:string}){
+function PublicAuthPanel({pathname,closing,onClosed}:{pathname:string;closing:boolean;onClosed:()=>void}){
  const dialog=useRef<HTMLDialogElement>(null), previous=useRef<HTMLElement|null>(null);
  const {t}=useTranslation(),navigate=useNavigate();
  useEffect(()=>{
@@ -103,18 +104,32 @@ function PublicAuthPanel({pathname}:{pathname:string}){
   const title=node.querySelector<HTMLElement>("#auth-book-title");
   if(title){title.tabIndex=-1;title.focus({preventScroll:true})}
  },[pathname]);
- const close=()=>navigate("/",{replace:true});
+ useEffect(()=>{
+  if(!closing)return;
+  if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){onClosed();return;}
+  const timeout=window.setTimeout(onClosed,460);
+  return()=>window.clearTimeout(timeout);
+ },[closing,onClosed]);
+ const close=()=>{if(!closing)navigate("/",{replace:true})};
  const existing=pathname==="/login";
- return <dialog ref={dialog} className="auth-book enrollment-card" aria-labelledby="auth-book-title" onCancel={e=>{e.preventDefault();close()}}
+ return <dialog ref={dialog} className={`auth-book enrollment-card${closing?" is-closing":""}`} aria-labelledby="auth-book-title" onCancel={e=>{e.preventDefault();close()}}
+  onAnimationEnd={e=>{if(closing&&e.target===e.currentTarget&&e.animationName==="auth-page-unturn")onClosed()}}
   onClick={e=>{if(e.target===e.currentTarget){const r=e.currentTarget.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)close()}}}>
-  <button type="button" className="icon-button auth-book-close" aria-label={t("common.backHome")} onClick={close}><X size={20}/></button>
-  <AuthPanelContext.Provider value>
+  <button type="button" className="icon-button auth-book-close" aria-label={t("common.backHome")} aria-disabled={closing} onClick={close}><X size={20}/></button>
+  <div inert={closing}><AuthPanelContext.Provider value>
    {pathname==="/register"?<RegistrationChoices/>:<RegistrationFrame back={existing?"/":"/register"}
      title={t(existing?"common.login":"closedHosted.registerTitle")} lead="">
      <CanonicalAgencyStep key={pathname} existing={existing}/>
    </RegistrationFrame>}
-  </AuthPanelContext.Provider>
+  </AuthPanelContext.Provider></div>
  </dialog>;
+}
+function PublicLanding({pathname}:{pathname:string}){
+ const [lastPanel,setLastPanel]=useState<string|null>(()=>pathname==="/"?null:pathname);
+ useLayoutEffect(()=>{if(pathname!=="/")setLastPanel(pathname)},[pathname]);
+ const finishClose=useCallback(()=>setLastPanel(null),[]);
+ const panel=pathname==="/"?lastPanel:pathname;
+ return <><StartPage/>{panel&&<PublicAuthPanel pathname={panel} closing={pathname==="/"} onClosed={finishClose}/>}</>;
 }
 export function HostedApp(){
  const {t}=useTranslation(),loc=useLocation(),tx=(k:string)=>t("closedHosted."+k);
@@ -132,11 +147,9 @@ export function HostedApp(){
  if(TimecardsPageRoute)return <HostedCabinetRoute key={TimecardsPageRoute[1]} organizationId={TimecardsPageRoute[1]} section="timecards" fallback={<TimecardsPage/>}/>;
  if(['/account','/account/settings','/account/recovery','/account/reauth'].includes(loc.pathname))return <WorkerAccountPage/>;
  if(loc.pathname==="/super-admin")return <OwnerQaPage/>;
+ if(loc.pathname==="/terms"||loc.pathname==="/terms/2026-11-27")return <HostedTermsPage/>;
  if(loc.pathname==="/privacy"||loc.pathname==="/privacy/")return <HostedPrivacyPage/>;
- if(["/","/register","/register/agency","/login"].includes(loc.pathname))return <>
-  <StartPage closedHosted/>
-  {loc.pathname!=="/"&&<PublicAuthPanel pathname={loc.pathname}/>}
- </>;
+ if(["/","/register","/register/agency","/login"].includes(loc.pathname))return <PublicLanding pathname={loc.pathname}/>;
  const role=loc.pathname==="/register/worker"||loc.pathname==="/worker/join"||loc.pathname==="/worker/register"?"worker":loc.pathname==="/register/factory"||loc.pathname==="/factory/register"?"factory":null;
  const admin=loc.pathname.match(/^\/workspace\/([0-9a-f-]+)\/workers$/);
  if(admin)return <HostedCabinetRoute key={admin[1]} organizationId={admin[1]} section="workers" fallback={<RegistrationFrame title={t('workerEnrollment.manage')} lead={t('workerEnrollment.adminScope')}><AgencyWorkerPanel organizationId={admin[1]}/></RegistrationFrame>}/>;

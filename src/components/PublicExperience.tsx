@@ -30,7 +30,13 @@ export function PublicHeader({ landing = false }: { landing?: boolean }) {
 
 export function PublicFooter() {
   const { t } = useTranslation();
-  return <footer className="public-footer"><span>© Timeax</span><span>{t("home.footerLine")}</span><Link to="/privacy">{t("hostedPrivacy.link")}</Link><Link to="/login">{t("common.login")}</Link></footer>;
+  return <footer className="public-footer">
+    <div className="public-footer-about"><strong>© Timeax</strong><p>{t("publicExperience.footerAbout")}</p></div>
+    <div className="public-footer-links">
+      <a href="mailto:no-reply@timeax.pl">{t("common.support")}: no-reply@timeax.pl</a>
+      <Link to="/terms">{t("hostedLegal.termsLink")}</Link><Link to="/privacy">{t("hostedPrivacy.link")}</Link>
+    </div>
+  </footer>;
 }
 export const AuthPanelContext = createContext(false);
 export function RegistrationFrame({ children, title, lead, back = "/register" }: { children: ReactNode; title: string; lead: string; back?: string }) {

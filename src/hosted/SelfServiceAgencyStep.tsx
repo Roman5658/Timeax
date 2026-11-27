@@ -7,6 +7,7 @@ import {createWorkingRegistrationClient,validEmail} from '../modules/auth/regist
 
 const organizationId=(v:unknown):v is string=>typeof v==='string'&&/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(v)&&v!=='00000000-0000-0000-0000-000000000000';
 const setup='/api/timeax/agency/setup';
+const termsVersion='2026-11-27';
 async function call(path:string,signal:AbortSignal,body?:object){
  const response=await fetch(path,{method:body?'POST':'GET',cache:'no-store',credentials:'same-origin',redirect:'error',
   signal,headers:body?{'Content-Type':'application/json',Accept:'application/json'}:{Accept:'application/json'},...(body?{body:JSON.stringify(body)}:{})});
@@ -16,12 +17,13 @@ async function call(path:string,signal:AbortSignal,body?:object){
  return v;
 }
 type Stage='check'|'code'|'password'|'details'|'unavailable';
-const errors=['invalid-credentials','invalid-nip','invalid-name','invalid-password','try-later','password-not-set','registration-required','service-unavailable'];
+const errors=['invalid-credentials','invalid-nip','invalid-name','invalid-password','terms-required','try-later','password-not-set','registration-required','service-unavailable'];
 
 export function SelfServiceAgencyStep({existing}:{existing:boolean}){
  const {t}=useTranslation(),navigate=useNavigate();
  const client=useMemo(()=>createWorkingRegistrationClient(location.origin,fetch.bind(window),existing?'existing':'enrollment'),[existing]);
  const [stage,setStage]=useState<Stage>('check'),[needsPassword,setNeedsPassword]=useState(true),[email,setEmail]=useState(''),[name,setName]=useState(''),[nip,setNip]=useState(''),[password,setPassword]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const [termsAccepted,setTermsAccepted]=useState(false);
  const controller=useRef<AbortController|null>(null);
  const accept=useCallback((v:{state?:unknown;organizationId?:unknown;passwordRequired?:unknown})=>{
   if(v?.state==='ready'&&organizationId(v.organizationId)){navigate('/workspace/'+v.organizationId,{replace:true});return;}
@@ -47,16 +49,17 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
   e.preventDefault();
   if(controller.current||busy||!['password','details'].includes(stage))return;
   if(stage==='password'&&!validEmail(email.trim()))return;
+  if(stage==='details'&&!termsAccepted){setError('terms-required');return;}
   const c=new AbortController();controller.current=c;setBusy(true);setError('');
   try{
    const path=stage==='password'?'/api/timeax/auth/public/password':setup;
-   const body=stage==='password'?{email:email.trim(),password}:{agencyName:name,nip,...(needsPassword?{password}:{})};
+   const body=stage==='password'?{email:email.trim(),password}:{agencyName:name,nip,termsVersion,...(needsPassword?{password}:{})};
    accept(await call(path,c.signal,body));
   }catch(e){
    if(!c.signal.aborted){
     const key=e instanceof Error?e.message:'unavailable';
     setError(key);
-    if(stage==='details'&&!['invalid-name','invalid-nip','invalid-password'].includes(key)){
+    if(stage==='details'&&!['invalid-name','invalid-nip','invalid-password','terms-required'].includes(key)){
      try{accept(await call(setup,c.signal))}catch{}
     }
    }
@@ -76,9 +79,14 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
   }catch{if(!c.signal.aborted)setError('service-unavailable');}
   finally{if(controller.current===c){controller.current=null;setBusy(false);}}
  }
+ const documents=<div className="public-legal-links">
+  <a href={'/terms/'+termsVersion} target="_blank" rel="noopener noreferrer">{t('hostedLegal.termsLink')}</a>
+  <a href="/privacy" target="_blank" rel="noopener noreferrer">{t('hostedPrivacy.link')}</a>
+ </div>;
  return <>
   {!existing&&<RegistrationProgress twoSteps current={stage==='details'?1:0}/>}
   {stage==='check'&&<p role="status">{t('closedHosted.checking')}</p>}
+  {stage==='code'&&!existing&&documents}
   {stage==='code'&&<StagingSessionPanel guided simple signup={!existing} purpose={existing?'existing':'enrollment'} onChanged={()=>void refresh()}/>}
   {stage==='unavailable'&&(error==='registration-required'?
    <button type="button" className="button button--primary" disabled={busy} onClick={()=>void restartRegistration()}>{t('publicExperience.create')}</button>:
@@ -89,6 +97,8 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
    {stage==='details'&&<>
     <label className="field-label">{t('agencyRegistration.nameLabel')}<input autoComplete="organization" value={name} onChange={e=>setName(e.target.value)} disabled={busy} required minLength={2} maxLength={120}/></label>
     <label className="field-label">{t('agencyRegistration.nipLabel')}<input inputMode="numeric" value={nip} onChange={e=>setNip(e.target.value)} disabled={busy} maxLength={24}/></label>
+    {documents}
+    <label className="public-agreement"><input type="checkbox" required checked={termsAccepted} disabled={busy} onChange={e=>setTermsAccepted(e.target.checked)}/>{t('hostedLegal.accept')}</label>
    </>}
    <button className="button button--primary button--full" disabled={busy}>{t(stage==='password'?'common.login':'selfService.open')}</button>
   </form>}

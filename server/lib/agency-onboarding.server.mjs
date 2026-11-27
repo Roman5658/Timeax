@@ -4,6 +4,7 @@ import {normalizePublicEmail,validPasswordInput,validNewPassword} from './public
 import {readBody} from './session-router.mjs';
 
 const login='/api/timeax/auth/public/password',setup='/api/timeax/agency/setup';
+const registrationTermsVersion='2026-11-27';
 const uuid=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/;
 const validId=id=>typeof id==='string'&&uuid.test(id)&&id!=='00000000-0000-0000-0000-000000000000';
 const weights=[6,5,7,2,3,4,5,6,7];
@@ -66,7 +67,8 @@ export function createAgencyOnboardingRoutes({origin,provider,store,readSession,
    session.finishing=true;
    try{
     let body;try{body=JSON.parse(await readBody(request,2048))}catch{}
-    if(!exact(body,passwordRequired?['agencyName','nip','password']:['agencyName','nip'])||typeof body.agencyName!=='string'||typeof body.nip!=='string')
+    if(body?.termsVersion!==registrationTermsVersion)return respond(400,{error:'terms-required'});
+    if(!exact(body,passwordRequired?['agencyName','nip','password','termsVersion']:['agencyName','nip','termsVersion'])||typeof body.agencyName!=='string'||typeof body.nip!=='string')
      return respond(400,{error:'invalid-request'});
     const agencyName=body.agencyName.trim(),nip=body.nip.trim().replace(/[ -]/g,'');
     if([...agencyName].length<2||[...agencyName].length>120||/[\p{Cc}\p{Cs}\u202a-\u202e\u2066-\u2069]/u.test(agencyName))
