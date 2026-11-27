@@ -1,21 +1,13 @@
 import {SelfServiceAgencyStep} from './SelfServiceAgencyStep';
-import {PublicWorkerEntry} from './PublicWorkerEntry';
 import {workerRegistrationCopy} from './worker-registration-copy';
 const publicWorkerPaths=['/register/worker','/worker/join','/worker/register'];
-import {TeamStandalone,AccountantInvitePage,type TeamSection} from './TeamWorkflow';
-import {HostedCabinetRoute} from './HostedCabinet';
-import {AccountAdminPage} from './AccountAdminPage';
+import type {TeamSection} from './TeamWorkflow';
 import {OwnerQaPage,OwnerQaLink} from './OwnerQaPage';
-import {HostedLegalSheet} from "./HostedLegalSheet";
-import {HostedTermsPage} from "./HostedTermsPage";
+import {HostedTermsPage} from './HostedTermsPage';
 import {HostedPrivacyPage} from './HostedPrivacyPage';
-import {WorkerAccountPage} from './WorkerAccountPage';
-import {PayslipsPage} from './PayslipsPage';
-import {FactoryTimecardsPage} from './FactoryTimecardsPage';
-import {TimecardsPage} from './TimecardsPage';
-import {FactoryEnrollmentPage} from './FactoryEnrollmentPage';
+import {HostedLegalSheet} from "./HostedLegalSheet";
 import {PrivateAccess} from "./PrivateAccess";
-import {useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState} from "react";
+import {lazy,Suspense,useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState} from "react";
 import {Link,useLocation,useNavigate} from "react-router-dom";
 import {useTranslation} from "react-i18next";
 import {X} from "lucide-react";
@@ -24,8 +16,22 @@ import {StartPage} from "../modules/auth/pages/HostedStartPage";
 import {StagingSessionPanel} from "../modules/auth/pages/StagingSessionPanel";
 import {createRegistrationTransport,validateAgencyDraft,type RegistrationState} from "../modules/auth/registration/agency-registration";
 import {createWorkingRegistrationClient,isCanonicalEmailOrigin,isEmailIdentityOrigin} from "../modules/auth/registration/contract/registration-client";
-import {WorkerEnrollmentEntry,AgencyWorkerPanel,WorkerWorkspacePanel,EnrollmentDestinations} from './WorkerEnrollmentPage';
-import {WorkspaceReadPage} from "./WorkspaceReadPage";
+const PublicWorkerEntry=lazy(()=>import('./PublicWorkerEntry').then(m=>({default:m.PublicWorkerEntry})));
+const WorkerEnrollmentEntry=lazy(()=>import('./WorkerEnrollmentPage').then(m=>({default:m.WorkerEnrollmentEntry})));
+const AgencyWorkerPanel=lazy(()=>import('./WorkerEnrollmentPage').then(m=>({default:m.AgencyWorkerPanel})));
+const WorkerWorkspacePanel=lazy(()=>import('./WorkerEnrollmentPage').then(m=>({default:m.WorkerWorkspacePanel})));
+const EnrollmentDestinations=lazy(()=>import('./WorkerEnrollmentPage').then(m=>({default:m.EnrollmentDestinations})));
+const HostedCabinetRoute=lazy(()=>import('./HostedCabinet').then(m=>({default:m.HostedCabinetRoute})));
+const AccountAdminPage=lazy(()=>import('./AccountAdminPage').then(m=>({default:m.AccountAdminPage})));
+const WorkerAccountPage=lazy(()=>import('./WorkerAccountPage').then(m=>({default:m.WorkerAccountPage})));
+const PayslipsPage=lazy(()=>import('./PayslipsPage').then(m=>({default:m.PayslipsPage})));
+const FactoryTimecardsPage=lazy(()=>import('./FactoryTimecardsPage').then(m=>({default:m.FactoryTimecardsPage})));
+const TimecardsPage=lazy(()=>import('./TimecardsPage').then(m=>({default:m.TimecardsPage})));
+const FactoryEnrollmentPage=lazy(()=>import('./FactoryEnrollmentPage').then(m=>({default:m.FactoryEnrollmentPage})));
+const WorkspaceReadPage=lazy(()=>import('./WorkspaceReadPage').then(m=>({default:m.WorkspaceReadPage})));
+const TeamStandalone=lazy(()=>import('./TeamWorkflow').then(m=>({default:m.TeamStandalone})));
+const AccountantInvitePage=lazy(()=>import('./TeamWorkflow').then(m=>({default:m.AccountantInvitePage})));
+
 function AgencyStep({existing}:{existing:boolean}){
  const {t,i18n}=useTranslation(),tx=(k:string)=>t("closedHosted."+k);
  const [accessRevision,setAccessRevision]=useState(0),[revision,setRevision]=useState(0),[state,setState]=useState<RegistrationState>({state:"unavailable"}),[busy,setBusy]=useState(true);
@@ -65,7 +71,7 @@ function AgencyStep({existing}:{existing:boolean}){
     {existing&&state.state==="none"&&<Link to="/register/agency">{t("existingSession.registrationLink")}</Link>}
    </div>}
   {((receipt&&!publicSignup)||state.state==="uncertain")&&<button data-testid="hosted-refresh" className="button button--outline button--full" disabled={busy} onClick={refresh}>{t("agencyRegistration.recheck")}</button>}
-  {existing&&<><EnrollmentDestinations revision={revision}/><OwnerQaLink revision={revision}/><Link to="/account/recovery">{t("workerAccount.recoveryTitle")}</Link></>}
+  {existing&&<><Suspense fallback={null}><EnrollmentDestinations revision={revision}/></Suspense><OwnerQaLink revision={revision}/><Link to="/account/recovery">{t("workerAccount.recoveryTitle")}</Link></>}
   {!publicAuth&&<details className="enrollment-disclosure"><summary>{t("publicExperience.statusDetails")}</summary><p>{tx("scope")}</p><p>{tx("noModules")}</p></details>}
   <p className="muted-copy"><Link to={existing?"/register/agency":"/login"}>{publicAuth?t(existing?"publicExperience.create":"common.login"):tx(existing?"registerTitle":"loginTitle")}</Link></p>
  </>;
@@ -127,7 +133,7 @@ function PublicAuthPanel({pathname,closing,onClosed}:{pathname:string;closing:bo
   onClick={e=>{if(e.target===e.currentTarget){const r=e.currentTarget.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)close()}}}>
   <button type="button" className="icon-button auth-book-close" aria-label={t("common.backHome")} aria-disabled={closing} onClick={close}><X size={20}/></button>
   <div inert={closing}><AuthPanelContext.Provider value><LegalSheetContext.Provider value={openLegal}>
-   {pathname==="/register"?<RegistrationChoices/>:publicWorkerPaths.includes(pathname)?<PublicWorkerEntry key={pathname}/>:<RegistrationFrame back={existing?"/":"/register"}
+   {pathname==="/register"?<RegistrationChoices/>:publicWorkerPaths.includes(pathname)?<Suspense fallback={<p role="status">{t('workspaceRead.checking')}</p>}><PublicWorkerEntry key={pathname}/></Suspense>:<RegistrationFrame back={existing?"/":"/register"}
      title={t(existing?"common.login":"closedHosted.registerTitle")} lead="">
      <CanonicalAgencyStep key={pathname} existing={existing}/>
    </RegistrationFrame>}
@@ -151,6 +157,10 @@ function PublicLanding({pathname}:{pathname:string}){
  </>;
 }
 export function HostedApp(){
+ const {t}=useTranslation();
+ return <Suspense fallback={<main className="portal-content"><p role="status">{t("workspaceRead.checking")}</p></main>}><HostedRoutes/></Suspense>;
+}
+function HostedRoutes(){
  const {t,i18n}=useTranslation(),loc=useLocation(),tx=(k:string)=>t("closedHosted."+k);
  const workerCopy=workerRegistrationCopy(i18n.resolvedLanguage),canonical=isCanonicalEmailOrigin(location.origin);
  useEffect(()=>{document.title=`Timeax — ${t("home.eyebrow")}`;},[t]);

@@ -2694,6 +2694,9 @@
     "sent": "Przekazano do archiwum agencji"
   },
   "canonicalPayslips": {
+    "downloadPdf": "Pobierz PDF",
+    "pdfPeriod": "Okres rozliczenia",
+    "pdfFailed": "Nie udało się utworzyć pliku PDF. Spróbuj ponownie.",
     "simple": {
       "title": "Wyślij rozliczenia",
       "intro": "Wybierz zestawienie i pracowników. Godziny i zapisane stawki zostaną uzupełnione automatycznie. Dodaj potrącenia i sprawdź kwotę do wypłaty.",

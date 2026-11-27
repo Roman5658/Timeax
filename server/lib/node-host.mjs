@@ -7,6 +7,7 @@ import {brotliCompress,gzip,constants} from 'node:zlib';
 const zipped=promisify(gzip);
 const brotli=promisify(brotliCompress);
 const hashedText=/^\/assets\/[A-Za-z0-9_.-]+-[A-Za-z0-9_-]{8,32}\.(?:js|css)$/;
+const hashedWebImage=/^\/assets\/[A-Za-z0-9_.-]+-[A-Za-z0-9_-]{8,32}\.webp$/;
 const immutable='public, max-age=31536000, immutable';
 const brotliOptions={params:{[constants.BROTLI_PARAM_QUALITY]:5}};
 
@@ -27,7 +28,7 @@ function preferredEncoding(header) {
  choices.push(['identity',identity??Number.EPSILON]);
  return choices.filter(([,q])=>q>0).sort((a,b)=>b[1]-a[1])[0]?.[0];
 }
-const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.ico':'image/x-icon','.webmanifest':'application/manifest+json'};
+const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.webp':'image/webp','.ico':'image/x-icon','.webmanifest':'application/manifest+json'};
 export async function createRuntimeServer({runtime,origin,publicDir,localReload=false}){
  let assets=new Map(),compressed=new Map(),revision=0;
  const base=new URL(origin);
@@ -96,6 +97,7 @@ export async function createRuntimeServer({runtime,origin,publicDir,localReload=
   const responseHeaders={'Content-Type':types[path.extname(key)]??'application/octet-stream'};
   const variants=compressed.get(key);
   let body=value;
+  if(!localReload&&hashedWebImage.test(key))responseHeaders['Cache-Control']=immutable;
   if(variants){
    const encoding=preferredEncoding(req.headers['accept-encoding']);
    if(!encoding)return send(406,'No acceptable asset encoding',{'Vary':'Accept-Encoding'});

@@ -2694,6 +2694,9 @@
     "sent": "Sent to agency archive"
   },
   "canonicalPayslips": {
+    "downloadPdf": "Download PDF",
+    "pdfPeriod": "Pay period",
+    "pdfFailed": "Could not create the PDF. Try again.",
     "simple": {
       "title": "Send payslips",
       "intro": "Choose a timesheet and employees. Hours and saved rates fill in automatically. Add deductions and check the take-home amount.",

@@ -1,4 +1,5 @@
 import {PayslipAmounts} from './PayslipAmounts';
+import {PayslipPdfButton} from './PayslipPdfButton';
 import {useMemberNames} from './MemberNames';
 import {useCallback,useEffect,useState} from 'react';
 import {Link,useLocation} from 'react-router-dom';import {useTranslation} from 'react-i18next';
@@ -34,7 +35,7 @@ export function WorkerAccountPage(){
  {value.memberships.map(m=><article className="notice-box" key={m.membershipId}><h3>{m.name}</h3><p>{tx(m.state)}{m.endedAt?' · '+new Date(m.endedAt).toLocaleDateString():''}</p>{m.state==='active'&&<Link to={'/workspace/'+m.organizationId}>{tx('workspace')}</Link>}</article>)}
  <h2>{tx('history')}</h2><p>{tx('historyLead')}</p>{!value.timecards.length&&!value.payslips.length&&<p>{tx('emptyHistory')}</p>}
  {value.timecards.map(s=><details className="notice-box" key={s.kind+s.sourceId+s.workerKey}><summary>{tx('timecard')} · {s.agencyName} · {s.siteName} · {s.dateFrom} — {s.dateTo}</summary><p>{tx(s.kind)} · {s.paidMinutes} {tx('minutes')}</p><ul>{s.rows.map(r=><li key={r.id}>{r.data.localDate}: {r.data.paidMinutes} {tx('minutes')}</li>)}</ul></details>)}
- {value.payslips.map(p=><details className="notice-box" key={p.id}><summary>{tx('payslip')} · {p.document.source.agencyName} · {p.document.source.dateFrom} — {p.document.source.dateTo}</summary><p>{p.document.source.siteName}</p><PayslipAmounts value={p.document.calculation}/><p>{tx('issued')}: {new Date(p.issued_at).toLocaleString()}</p></details>)}
+ {value.payslips.map(p=><details className="notice-box" key={p.id}><summary>{tx('payslip')} · {p.document.source.agencyName} · {p.document.source.dateFrom} — {p.document.source.dateTo}</summary><p>{p.document.source.siteName}</p><PayslipAmounts value={p.document.calculation}/><p>{tx('issued')}: {new Date(p.issued_at).toLocaleString()}</p><PayslipPdfButton publication={p} disabled={busy}/></details>)}
  <button className="button button--outline button--full" disabled={busy} onClick={()=>void run(async()=>{const r=await accountCall('export');parsePersonal({...r as object,deletionState:'none'});savePersonalExport(r)})}>{tx('export')}</button>
  {loc.pathname==='/account/settings'&&<section className="personal-deletion"><h2>{tx('deleteTitle')}</h2><p>{tx('deleteLead')}</p><p>{tx('retention')}</p>
  {value.deletionState==='none'?<button className="button button--outline button--full" disabled={busy} onClick={()=>void run(prepare)}>{tx('prepareDelete')}</button>:

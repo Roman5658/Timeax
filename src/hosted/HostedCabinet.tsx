@@ -8,16 +8,11 @@ import {useInbox} from './inbox';
 import {useBackdatedCards} from './BackdatedNoticeCard';
 import {AgencyBackdatedShifts,agencyShiftPreviews,useBackdatedShifts} from './AgencyBackdatedShifts';
 import {agencyJoinPreviews,useAgencyJoinCards,useAgencyJoinNotifications} from './AgencyJoinNotifications';
-import {WorkerCalendar} from './WorkerCalendar';
-import {WorkerShiftHistory} from './WorkerShiftHistory';
-import {FactoryRolePanel,type FactoryRoleSection} from './FactoryRolePanel';
-import {AgencyWorkersPanel} from './AgencyWorkersPanel';
-import {AgencyTimecardsPanel} from './AgencyTimecardsPanel';
-import {AgencyProductions} from './AgencyProductions';
+import type {FactoryRoleSection} from './FactoryRolePanel';
 import {TeamBell,TeamPanel,type TeamSection} from './TeamWorkflow';
 
 import { Building2, CalendarDays, ClipboardList, LayoutDashboard, Menu, MessageCircle, Settings2, UsersRound, X } from 'lucide-react';
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { BrandMark } from '../components/BrandMark';
@@ -27,12 +22,19 @@ import { createWorkingRegistrationClient } from '../modules/auth/registration/co
 import { useMemberNames } from './MemberNames';
 import { PageHeading } from '../components/PageHeading';
 import { AgencyWorkerPanel } from './WorkerEnrollmentPage';
-import { TimecardsPanel } from './TimecardsPage';
-import { FactoryTimecardsPanel } from './FactoryTimecardsPage';
-import { FactorySetupPanel } from './FactoryEnrollmentPage';
-import { PayslipsPanel } from './PayslipsPage';
 import { loadWorkspaceAccess, type WorkspaceAccess, type WorkspaceResult } from './workspace-access';
 import '../styles/hosted-cabinet.css';
+
+const AgencyProductions=lazy(()=>import('./AgencyProductions').then(m=>({default:m.AgencyProductions})));
+const AgencyTimecardsPanel=lazy(()=>import('./AgencyTimecardsPanel').then(m=>({default:m.AgencyTimecardsPanel})));
+const AgencyWorkersPanel=lazy(()=>import('./AgencyWorkersPanel').then(m=>({default:m.AgencyWorkersPanel})));
+const TimecardsPanel=lazy(()=>import('./TimecardsPage').then(m=>({default:m.TimecardsPanel})));
+const FactoryTimecardsPanel=lazy(()=>import('./FactoryTimecardsPage').then(m=>({default:m.FactoryTimecardsPanel})));
+const FactorySetupPanel=lazy(()=>import('./FactoryEnrollmentPage').then(m=>({default:m.FactorySetupPanel})));
+const PayslipsPanel=lazy(()=>import('./PayslipsPage').then(m=>({default:m.PayslipsPanel})));
+const WorkerShiftHistory=lazy(()=>import('./WorkerShiftHistory').then(m=>({default:m.WorkerShiftHistory})));
+const WorkerCalendar=lazy(()=>import('./WorkerCalendar').then(m=>({default:m.WorkerCalendar})));
+const FactoryRolePanel=lazy(()=>import('./FactoryRolePanel').then(m=>({default:m.FactoryRolePanel})));
 
 const sectionLane:Record<string,string>={settings:'profile',workers:'worker',timecards:'timecards','factory-timecards':'factoryTimecards',payslips:'payroll',messages:'team',schedule:'team',accountants:'team'};
 type Section = TeamSection | FactoryRoleSection | 'timecards' | 'payslips';
@@ -181,6 +183,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
    </header>
    <main className="portal-content">
     <PageHeading eyebrow={worker?organizationLabel(access.membership.id):undefined} title={t(unifiedHours?'nav.timekeeping':heading)} />
+    <Suspense fallback={<p role="status">{t("workspaceRead.checking")}</p>}>
     {production&&section!=='messages'&&(section!=='schedule'||factoryAdmin)&&!(factoryAdmin&&['factory-timecards','timesheets'].includes(section))&&<FactoryRolePanel key={org+section} access={access} section={section as FactoryRoleSection}/>}
     {factoryAdmin&&(section==='factory-timecards'||section==='timesheets')&&<FactoryTimecardsPanel key={org+section} organizationId={org} expectedRole='factory_admin' expectedMembershipId={access.membership.id} archiveOnly={section==='timesheets'} leaderSection={section==='timesheets'?'timesheets':'hours'}/>}
     {publicAgency&&section!=='home'&&section!=='setup'&&!directory&&!unifiedHours&&!sectionReady&&<p className="notice-box" role="status">{t('agencyProductions.moduleNotEnabled')}</p>}
@@ -207,6 +210,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
     {!worker&&!unifiedHours&&uses('timecards')&&section==='timecards'&&<TimecardsPanel organizationId={org} includeFactoryArchive={uses('factoryTimecards')}/>}
     {!production&&!unifiedHours&&uses('factoryTimecards')&&section==='factory-timecards'&&<FactoryTimecardsPanel organizationId={org} readOnlyWorker={worker}/>}
     {uses('payroll')&&section==='payslips'&&<PayslipsPanel organizationId={org} showTitle={false} onPublicationOpened={agencyWorker?id=>setOpenedPay({org,membershipId:access.membership.id,id}):undefined}/>}
+    </Suspense>
    </main>
   </div>
 

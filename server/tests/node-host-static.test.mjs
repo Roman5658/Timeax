@@ -9,6 +9,8 @@ import {createRuntimeServer} from '../lib/node-host.mjs';
 
 const asset='/assets/hosted-TKpUPfXU.js';
 const css='/assets/hosted-BF83a317.css';
+const image='/assets/timeax-brand-CYBis2dH.webp';
+const imageBody=Buffer.from('synthetic WebP variant');
 const body=Buffer.from('console.log("repeated synthetic script content");\n'.repeat(100));
 const sheet=Buffer.from('.synthetic { color: plum; }\n'.repeat(100));
 const origin='https://timeax.pl';
@@ -24,6 +26,8 @@ async function fixture(t,localReload=false) {
   writeFile(join(publicDir,'index.html'),html),
   writeFile(join(publicDir,asset.slice(1)),body),
   writeFile(join(publicDir,css.slice(1)),sheet),
+  writeFile(join(publicDir,image.slice(1)),imageBody),
+  writeFile(join(publicDir,'logo.webp'),imageBody),
   writeFile(join(publicDir,'assets','helper.js'),body),
   writeFile(join(publicDir,'assets','ticket-Aa1Bb2Cc.svg'),'<svg xmlns="http://www.w3.org/2000/svg"/>'),
  ]);
@@ -85,6 +89,19 @@ test('HTML, auth, SVG and unhashed JS preserve existing uncached and uncompresse
   if(['/','/login','/index.html'].includes(path))assert.equal(value.body.toString(),html);
   if(path.startsWith('/api/')||path.startsWith('/v1/'))assert.equal(value.h.vary,'Cookie');
  }
+});
+
+test('fingerprinted WebP is delivered as an immutable image without recompression',async t=>{
+ const {get}=await fixture(t);
+ const value=await get(image,'br,gzip');
+ assert.equal(value.status,200);
+ assert.equal(value.h['content-type'],'image/webp');
+ assert.equal(value.h['cache-control'],'public, max-age=31536000, immutable');
+ assert.equal(value.h['content-encoding'],undefined);
+ assert.deepEqual(value.body,imageBody);
+ assert.equal((await get('/logo.webp')).h['cache-control'],'no-store');
+ const local=await fixture(t,true);
+ assert.equal((await local.get(image)).h['cache-control'],'no-store');
 });
 
 test('local live reload continues to serve raw uncached assets',async t=>{
