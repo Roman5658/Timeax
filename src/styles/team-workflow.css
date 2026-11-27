@@ -14,3 +14,5 @@
 .team-inbox__bubble.is-outgoing{justify-self:end;background:var(--surface-soft,var(--surface))}
 .team-inbox__bubble p{margin:.25rem 0 0}
 @media(max-width:480px){.team-inbox__open{grid-template-columns:minmax(0,1fr)}.team-inbox__bubble{max-width:100%}}
+
+.team-template-tools{flex-wrap:wrap}

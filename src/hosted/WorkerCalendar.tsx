@@ -11,6 +11,7 @@ import {resolveWorkerShiftAssignment} from './worker-shift-assignment';
 import {WorkerQuickShift,type WorkerShiftSource,type QuickTemplate} from './WorkerQuickShift';
 import {workerShiftCopy} from './worker-shift-copy';
 import {TeamPanel} from './TeamWorkflow';
+import {WorkerTemplateDrawer} from './WorkerTemplateDrawer';
 import {RightDrawer} from '../modules/workflows/components/RightDrawer';
 import '../styles/worker-hosted-calendar.css';
 
@@ -25,7 +26,7 @@ export function WorkerCalendar({organizationId,membershipId,enableInternal=true,
  const [selected,setSelected]=useState(wardate),[month,setMonth]=useState(()=>monthOf(wardate()));
  const [internal,setInternal]=useState<TimecardContext>(),[factory,setFactory]=useState<FactoryHoursContext>(),[team,setTeam]=useState<TeamContext>();
  const [revision,refresh]=useState(0),[loading,setLoading]=useState(true),[partial,setPartial]=useState(false);
- const heading=useId(),detail=useId();
+ const heading=useId(),detail=useId(),[templateOpen,setTemplateOpen]=useState(false);
  const absenceHeading=useId(),[absenceDay,setAbsenceDay]=useState<string>();
  const [collapsed,setCollapsed]=useState(false),[saved,setSaved]=useState(false),[entry,setEntry]=useState<{source:WorkerShiftSource;day:string;template?:QuickTemplate}>();
  useEffect(()=>{
@@ -106,7 +107,7 @@ export function WorkerCalendar({organizationId,membershipId,enableInternal=true,
   <p className="worker-hosted-calendar__legend"><span><i className="worker-hosted-calendar__mark worker-hosted-calendar__mark--shift" aria-hidden="true"/>{c.work}</span><span><i className="worker-hosted-calendar__mark worker-hosted-calendar__mark--absence" aria-hidden="true"/>{c.absence}</span><span><i className="worker-hosted-calendar__mark worker-hosted-calendar__mark--planned" aria-hidden="true"/>{planLabel}</span></p></>}
  </section>
  {enableTeam&&<section className="dashboard-panel quick-template-panel">
-  <div className="panel-heading"><div><span className="eyebrow">{t('workflow.templates.eyebrow')}</span><h2>{t('workflow.templates.title')}</h2></div><Link className="icon-button" aria-label={t('workflow.templates.add')} to={root+'/templates'}><Plus size={17} aria-hidden="true"/></Link></div>
+  <div className="panel-heading"><div><span className="eyebrow">{t('workflow.templates.eyebrow')}</span><h2>{t('workflow.templates.title')}</h2></div><button className="icon-button" type="button" aria-label={t('workflow.templates.add')} onClick={()=>setTemplateOpen(true)}><Plus size={17} aria-hidden="true"/></button></div>
   <div className="quick-template-list">{templates.map(v=><div className="quick-template-card" key={v.id}>
    <button className="template-apply" type="button" disabled={loading||assignment.state!=='ready'} onClick={()=>openShift(v.data)}><span className="template-icon"><Zap size={17} aria-hidden="true"/></span><span className="template-main"><strong>{v.name}</strong><small>{v.data.startTime}–{v.data.endTime}</small></span><span className="template-go">{t('workflow.templates.apply')}</span></button>
   </div>)}{!templates.length&&!loading&&team&&<p className="muted-copy">{t('workflow.templates.empty')}</p>}</div>
@@ -130,6 +131,7 @@ export function WorkerCalendar({organizationId,membershipId,enableInternal=true,
   {partial&&<p role="status">{c.partial}</p>}
   <button type="button" className="button button--outline" disabled={loading} onClick={()=>refresh(n=>n+1)}>{t('timecards.refresh')}</button>
  </section>
+ {templateOpen&&<WorkerTemplateDrawer organizationId={organizationId} onClose={()=>setTemplateOpen(false)}/>}
  {entry&&<WorkerQuickShift organizationId={organizationId} {...entry} onClose={()=>setEntry(undefined)} onSaved={day=>{setSelected(day);setMonth(monthOf(day));setSaved(true);setEntry(undefined)}}/>}
  {absenceDay&&<RightDrawer eyebrow={t('workflow.absence.eyebrow')} title={t('workflow.absence.reportTitle')} titleId={absenceHeading} onClose={()=>setAbsenceDay(undefined)}>
   <TeamPanel organizationId={organizationId} section="absence" initialDay={absenceDay} compact/>

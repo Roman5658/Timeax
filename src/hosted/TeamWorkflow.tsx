@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {Link,useLocation} from 'react-router-dom';
 import {useTranslation} from 'react-i18next';
-import {Bell,Send} from 'lucide-react';
+import {Bell,Plus,Send,X} from 'lucide-react';
 import {RegistrationFrame} from '../components/PublicExperience';
 import {useMemberNames} from './MemberNames';
 import {teamCall,useTeam,changed,type ShiftTemplate,type TeamEntry} from './team-workflow';
@@ -10,6 +10,7 @@ import {cleanTeamDay,eligibleTeamRecipients,warsawTeamDay,type TeamAudience} fro
 import {groupInboxConversations,indexMessageThreads,unreadInboxMessageIds} from './team-message-threads';
 import {teamCommunicationCopy} from './team-communication-copy';
 import {AgencySchedule} from './AgencySchedule';
+import {WorkerTemplateDrawer} from './WorkerTemplateDrawer';
 import '../styles/team-workflow.css';
 export type TeamSection='messages'|'schedule'|'templates'|'absence'|'accountants';
 const workerHelp={
@@ -49,17 +50,17 @@ export function TeamPanel({organizationId,section,initialDay,compact=false}:{org
  const [replyTo,ReplyTo]=useState<TeamEntry>(),[subject,Subject]=useState('');
  const [busy,B]=useState(false),[notice,N]=useState(''),[site,S]=useState(''),[selected,C]=useState<string[]>([]),[body,T]=useState(''),[opened,O]=useState<string[]>([]),[conversation,Conversation]=useState<string>();
  const [date,D]=useState(()=>absenceDay||warsawTeamDay()),[until,U]=useState(date),[start,A]=useState('08:00'),[end,Z]=useState('16:00');
- const [edit,E]=useState<TeamEntry>(),[template,ET]=useState<ShiftTemplate>(),[name,NM]=useState(''),[minutes,M]=useState(0),[paid,P]=useState(false),[email,EM]=useState(''),[invite,I]=useState('');
+ const [edit,E]=useState<TeamEntry>(),[template,ET]=useState<ShiftTemplate>(),[templateOpen,setTemplateOpen]=useState(false),[email,EM]=useState(''),[invite,I]=useState('');
  const sending=useRef(false);
  const op=useRef(crypto.randomUUID());const dirty=()=>{op.current=crypto.randomUUID();N('')};
- useEffect(()=>{E(undefined);ET(undefined);C([]);T('');O([]);Conversation(undefined);I('');N('');S('');ReplyTo(undefined);Subject('');Compose(false);Folder('inbox');dirty()},[organizationId,section]);
+ useEffect(()=>{E(undefined);ET(undefined);setTemplateOpen(false);C([]);T('');O([]);Conversation(undefined);I('');N('');S('');ReplyTo(undefined);Subject('');Compose(false);Folder('inbox');dirty()},[organizationId,section]);
  useEffect(()=>{if(section==='absence'){const next=absenceDay||warsawTeamDay();D(next);U(next);E(undefined);dirty()}},[section,organizationId,absenceDay]);
  async function run(action:string,data:Record<string,unknown>){if(sending.current)return;sending.current=true;B(true);N('');try{
   const r=await teamCall(organizationId,action,{...data,...(action==='read'?{}:{operationId:op.current})});
   if(action==='invite-accountant')I(location.origin+'/accountant/invitation#invite='+r.code);
   if(action==='read'){O(a=>[...a,String(data.id)]);if(folder==='unread')Folder('inbox');}
   if(action==='message'){Compose(false);ReplyTo(undefined);Subject('');C([]);if(!replyTo){Conversation(undefined);Folder('sent');}}
-  else {T('');E(undefined);ET(undefined);NM('');N('saved');op.current=crypto.randomUUID()}
+  else {T('');E(undefined);N('saved');op.current=crypto.randomUUID()}
   changed();
  }catch(e){N((e as Error).message);refresh()}finally{sending.current=false;B(false)}}
  function editPlan(e:TeamEntry){E(e);S(e.siteId??'');C(e.recipients??[]);D(String(e.payload.localDate??e.payload.dateFrom));U(String(e.payload.dateTo??e.payload.localDate));A(String(e.payload.startTime??'08:00'));Z(String(e.payload.endTime??'16:00'));dirty()}
@@ -176,9 +177,15 @@ export function TeamPanel({organizationId,section,initialDay,compact=false}:{org
  {section==='schedule'&&value.role==='agency_admin'&&<AgencySchedule key={organizationId} context={value} workerLabel={label}/>}
  {section==='schedule'&&value.role!=='agency_admin'&&<><p className="notice-box">{tx('plannedOnly')}</p>{value.role==='team_leader'&&<form className="auth-form dashboard-panel" onSubmit={e=>{e.preventDefault();void run(edit?'update-plan':'schedule',{...(edit?{id:edit.id,revision:edit.revision}:{siteId:site,recipients:selected}),payload:{localDate:date,startTime:start,endTime:end}})}}>
  {siteInput(true)}{choices(true)}<label className="field-label">{t('timecards.date')}<input type="date" required value={date} onChange={e=>{D(e.target.value);dirty()}}/></label>{times}<p>{t('timecards.overnight')} · Europe/Warsaw</p><button className="button button--primary" disabled={busy||!site||!selected.length}>{tx(edit?'save':'plan')}</button></form>}</>}
- {section==='templates'&&value.role==='worker'&&<><form className="auth-form dashboard-panel" onSubmit={e=>{e.preventDefault();void run('save-template',{id:template?.id??null,revision:template?.revision??null,name,data:{startTime:start,endTime:end,breakMinutes:minutes,breakTreatment:paid?'paid':'unpaid'}})}}>
- <h2>{tx(template?'editTemplate':'newTemplate')}</h2><label className="field-label">{tx('name')}<input required maxLength={80} value={name} onChange={e=>{NM(e.target.value);dirty()}}/></label>{times}<label className="field-label">{t('timecards.break')}<input type="number" min="0" max="720" value={minutes} onChange={e=>{M(Number(e.target.value));dirty()}}/></label><label><input type="checkbox" checked={paid} onChange={e=>{P(e.target.checked);dirty()}}/>{t('timecards.paidBreak')}</label><button className="button button--primary" disabled={busy}>{tx('save')}</button></form>
- {value.templates.map(v=><article className="notice-box" key={v.id}><h3>{v.name}</h3><p>{v.data.startTime}–{v.data.endTime} · {v.data.breakMinutes} {t('workerAccount.minutes')}</p><button className="button button--outline" disabled={busy} onClick={()=>{ET(v);NM(v.name);A(v.data.startTime);Z(v.data.endTime);M(v.data.breakMinutes);P(v.data.breakTreatment==='paid');dirty()}}>{tx('edit')}</button> <button className="button button--outline" disabled={busy} onClick={()=>{if(window.confirm(tx('deleteConfirm'))){dirty();void run('delete-template',{id:v.id,revision:v.revision})}}}>{tx('delete')}</button></article>)}<Link to={'/workspace/'+organizationId+'/timecards'}>{tx('useTemplate')}</Link></>}
+ {section==='templates'&&value.role==='worker'&&<>
+  <div className="form-actions team-template-tools">
+   <button className="button button--primary" type="button" disabled={busy} onClick={()=>{ET(undefined);setTemplateOpen(true)}}><Plus size={16} aria-hidden="true"/>{t('workflow.templates.add')}</button>
+   <Link className="button button--outline" to={'/workspace/'+organizationId} aria-label={t('common.close')+' · '+tx('back')}><X size={16} aria-hidden="true"/>{tx('back')}</Link>
+  </div>
+  {value.templates.map(v=><article className="notice-box" key={v.id}><h3>{v.name}</h3><p>{v.data.startTime}-{v.data.endTime} · {v.data.breakMinutes} {t('workerAccount.minutes')}</p><button type="button" className="button button--outline" disabled={busy} onClick={()=>{ET(v);setTemplateOpen(true)}}>{tx('edit')}</button> <button type="button" className="button button--outline" disabled={busy} onClick={()=>{if(window.confirm(tx('deleteConfirm'))){dirty();void run('delete-template',{id:v.id,revision:v.revision})}}}>{tx('delete')}</button></article>)}
+  {templateOpen&&<WorkerTemplateDrawer organizationId={organizationId} template={template} onClose={()=>setTemplateOpen(false)}/>}
+  <Link to={'/workspace/'+organizationId+'/timecards'}>{tx('useTemplate')}</Link>
+ </>}
  {section==='accountants'&&value.role==='agency_admin'&&<><p>{tx('accountantHint')}</p><form className="auth-form dashboard-panel" onSubmit={e=>{e.preventDefault();void run('invite-accountant',{email})}}><label className="field-label">{tx('email')}<input type="email" required maxLength={254} value={email} onChange={e=>{EM(e.target.value);I('');dirty()}}/></label><button className="button button--primary" disabled={busy}>{tx('invite')}</button></form>
  {invite&&<div className="notice-box"><label className="field-label">{tx('inviteLink')}<input readOnly value={invite} onFocus={e=>e.target.select()}/></label><p>{tx('noMail')}</p><button className="button button--outline" onClick={()=>{void navigator.clipboard.writeText(invite).then(()=>N('copied')).catch(()=>N('copyManually'))}}>{tx('copy')}</button></div>}
  {value.invitations.map(v=><article className="notice-box" key={v.id}><strong>{v.email}</strong><p>{tx(v.state)} · {new Date(v.expiresAt).toLocaleString()}</p>{!['revoked','expired'].includes(v.state)&&<button className="button button--outline" disabled={busy} onClick={()=>{if(window.confirm(tx('revokeConfirm'))){dirty();void run('revoke-accountant',{id:v.id})}}}>{tx('revoke')}</button>}</article>)}</>}
