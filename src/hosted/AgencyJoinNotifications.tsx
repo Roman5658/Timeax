@@ -1,5 +1,6 @@
 import {useCallback,useEffect,useState} from 'react';
 import {useTranslation} from 'react-i18next';
+import type {BellPreview} from './notification-navigation';
 import {workerCall} from './worker-enrollment';
 
 type JoinEvent={id:string;joinedAt:string;name:string|null;reference:string|null;read:boolean};
@@ -39,6 +40,12 @@ export function useAgencyJoinNotifications(organizationId:string|undefined){
  return {value:state?.org===organizationId?state?.value:undefined,refresh,mark};
 }
 
+export function agencyJoinPreviews(feed:JoinFeed|undefined,language:string|undefined):BellPreview[]{
+ const lang=language?.split('-')[0] as keyof typeof copy;
+ const c=copy[lang]??copy.en;
+ return feed?.entries.map(e=>({anchor:'agency-join-'+e.id,title:c[0],summary:e.name??(c[1]+(e.reference?' #'+e.reference:'')),at:e.joinedAt,unread:!e.read}))??[];
+}
+
 export function AgencyJoinNotifications({value,mark}:{value?:JoinFeed;mark:(id:string)=>Promise<void>}){
  const {i18n}=useTranslation(),language=i18n.resolvedLanguage?.split('-')[0];
  const c=copy[language==='ru'||language==='pl'||language==='uk'?language:'en'];
@@ -47,7 +54,7 @@ export function AgencyJoinNotifications({value,mark}:{value?:JoinFeed;mark:(id:s
  async function read(id:string){if(busy)return;B(id);E(false);try{await mark(id)}catch{E(true)}finally{B(undefined)}}
  if(!value?.entries.length)return null;
  return <section className="dashboard-panel agency-worker-group"><h2>{c[0]}</h2><ul>
-  {value.entries.map(e=><li key={e.id}>
+  {value.entries.map(e=><li key={e.id} id={'agency-join-'+e.id} tabIndex={-1}>
    <div><strong>{e.name??(c[1]+(e.reference?' #'+e.reference:''))}</strong><p>{c[2]} · {date.format(new Date(e.joinedAt))}</p></div>
    {!e.read&&<button type="button" className="button button--outline button--small" disabled={!!busy} onClick={()=>void read(e.id)}>{c[3]}</button>}
   </li>)}

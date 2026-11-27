@@ -2922,6 +2922,7 @@
     "storageBody": "The service uses session mechanisms to operate and secure sign-in. Your chosen language or theme may be remembered in this browser."
   },
   "team": {
+    "workNotifications": "Work notifications",
     "messages": "Messages",
     "schedule": "Schedule",
     "templates": "My shift templates",

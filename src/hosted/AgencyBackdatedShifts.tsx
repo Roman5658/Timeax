@@ -1,5 +1,6 @@
 import {useCallback,useEffect,useState} from 'react';
 import {useTranslation} from 'react-i18next';
+import type {BellPreview} from './notification-navigation';
 import {timecardCall} from './timecards';
 import {useMemberNames} from './MemberNames';
 
@@ -40,6 +41,12 @@ export function useBackdatedShifts(organizationId:string|undefined){
  },[organizationId,refresh]);
  return {feed:data?.org===organizationId?data?.feed:undefined,refresh};
 }
+export function agencyShiftPreviews(feed:Feed|undefined,language:string|undefined):BellPreview[]{
+ if(!feed)return [];
+ const c=copy[(language??'en').split('-')[0] as keyof typeof copy]??copy.en;
+ return [...feed.requests.map(e=>({anchor:'earlier-shift-'+e.id,title:c[2],summary:e.site+' · '+e.day+' · '+e.startTime+'–'+e.endTime,at:e.submittedAt,unread:e.state==='pending'})),
+  ...feed.notices.map(e=>({anchor:'backdated-'+e.source+'-'+e.id,title:c[0],summary:c[1]+' · '+e.day,at:e.submittedAt,unread:!e.read}))];
+}
 export function AgencyBackdatedShifts({organizationId,feed,refresh}:{organizationId:string;feed:Feed;refresh:()=>void}){
  const {t,i18n}=useTranslation(),c=copy[(i18n.resolvedLanguage??'en').split('-')[0] as keyof typeof copy]??copy.en;
  const {label}=useMemberNames(organizationId),[busy,B]=useState(false),[error,E]=useState(false);
@@ -54,14 +61,14 @@ export function AgencyBackdatedShifts({organizationId,feed,refresh}:{organizatio
  }
  if(!feed.notices.length&&!feed.requests.length)return null;
  return <section className="dashboard-panel agency-worker-group">
-  {!!feed.requests.length&&<><h2>{c[2]}</h2><ul>{feed.requests.map(e=><li key={e.id}>
+  {!!feed.requests.length&&<><h2>{c[2]}</h2><ul>{feed.requests.map(e=><li key={e.id} id={'earlier-shift-'+e.id} tabIndex={-1}>
    <div><strong>{label(e.workerId)}</strong><p>{e.site} · {e.day} · {e.startTime}–{e.endTime}</p><p>{c[8]}: {when.format(new Date(e.submittedAt))}</p></div>
    {e.state==='pending'?<div className="form-actions team-template-tools">
     <button type="button" className="button button--primary button--small" disabled={busy} onClick={()=>{if(window.confirm(c[9]))void action('earlier-approve',{id:e.id},'approved')}}>{c[3]}</button>
     <button type="button" className="button button--outline button--small" disabled={busy} onClick={()=>{if(window.confirm(c[10]))void action('earlier-reject',{id:e.id},'rejected')}}>{c[4]}</button>
    </div>:<span>{c[e.state==='approved'?5:6]}</span>}
   </li>)}</ul></>}
-  {!!feed.notices.length&&<><h2>{c[0]}</h2><ul>{feed.notices.map(e=><li key={e.source+e.id}>
+  {!!feed.notices.length&&<><h2>{c[0]}</h2><ul>{feed.notices.map(e=><li key={e.source+e.id} id={'backdated-'+e.source+'-'+e.id} tabIndex={-1}>
    <div><strong>{label(e.workerId)}</strong><p>{c[1]} · {e.day}</p><p>{c[8]}: {when.format(new Date(e.submittedAt))}</p></div>
    {!e.read&&<button type="button" className="button button--outline button--small" disabled={busy} onClick={()=>void action('backdated-read',{id:e.id,source:e.source},'read')}>{t('workflow.notifications.markRead')}</button>}
   </li>)}</ul></>}

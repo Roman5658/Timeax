@@ -2922,6 +2922,7 @@
     "storageBody": "Serwis używa mechanizmów sesji do obsługi i ochrony logowania. Wybrany przez Ciebie język lub motyw może zostać zapamiętany w tej przeglądarce."
   },
   "team": {
+    "workNotifications": "Powiadomienia służbowe",
     "messages": "Wiadomości",
     "schedule": "Grafik",
     "templates": "Moje szablony zmian",

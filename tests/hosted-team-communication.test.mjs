@@ -66,3 +66,15 @@ test('inbox shows a reply chain once, newest conversations first, and only reads
  assert.deepEqual(unreadInboxMessageIds(groups[0].messages,['ack']),['incoming']);
  assert.deepEqual(unreadInboxMessageIds([notice,sent,first],[]),[]);
 });
+
+test('bell previews prioritize unread events and accept only known exact anchor types',async()=>{
+ const {bellTarget,latestBellPreviews,previewText}=await import('../src/hosted/notification-navigation.ts');
+ const dates='2026-11-',base={title:'Notification',summary:'Summary'};
+ const sample=(type,uuid,day,unread)=>({...base,anchor:type+'-'+uuid,at:dates+day+'T12:00:00Z',unread});
+ const entries=[sample('team-message',own,27,false),sample('agency-join',other,26,true),sample('backdated-factory',admin,25,true),sample('team-notice',leader,24,false),sample('wrong',foreign,27,true)];
+ assert.deepEqual(latestBellPreviews(entries,3).map(e=>e.anchor),entries.slice(1,3).map(e=>e.anchor).concat(entries[0].anchor));
+ assert.equal(bellTarget('#'+entries[1].anchor),entries[1].anchor);
+ assert.equal(bellTarget('#'+entries[1].anchor+'%20'),undefined);
+ assert.equal(previewText(' First  paragraph\n Next ').length,'First paragraph Next'.length);
+ assert.equal(previewText('a'.repeat(240)).length,130);
+});

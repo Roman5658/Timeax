@@ -3,8 +3,8 @@ import {WorkerPasswordPanel} from './WorkerPasswordPanel';
 import {AgencyProfile} from './AgencyProfile';
 import {AgencyNipVisibility} from './AgencyWorkerCards';
 import {PhonePushSettings} from './PhonePushSettings';
-import {AgencyBackdatedShifts,useBackdatedShifts} from './AgencyBackdatedShifts';
-import {AgencyJoinNotifications,useAgencyJoinNotifications} from './AgencyJoinNotifications';
+import {AgencyBackdatedShifts,agencyShiftPreviews,useBackdatedShifts} from './AgencyBackdatedShifts';
+import {AgencyJoinNotifications,agencyJoinPreviews,useAgencyJoinNotifications} from './AgencyJoinNotifications';
 import {WorkerCalendar} from './WorkerCalendar';
 import {WorkerShiftHistory} from './WorkerShiftHistory';
 import {FactoryRolePanel,type FactoryRoleSection} from './FactoryRolePanel';
@@ -110,6 +110,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
  const home=t(menu[0].label);
  const heading=menu.find(entry=>entry.section===section)?.label??(section==='templates'?'team.templates':section==='absence'?'team.absence':menu[0].label);
  const org=access.organization.id;
+ const {i18n}=useTranslation();
  const joins=useAgencyJoinNotifications(publicAgency&&uses('workerProvisioning')?org:undefined);
  const backdated=useBackdatedShifts(publicAgency&&uses('timecards')&&uses('team')?org:undefined);
  const [agencySearch]=useSearchParams();
@@ -146,7 +147,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
      <button className="portal-mobile-menu" type="button" aria-controls="hosted-cabinet-menu" aria-label={t('common.openMenu')} aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}><Menu size={19}/></button>
      <div className="portal-breadcrumb"><span className="breadcrumb-dot"/>{agencyName||home}</div>
     </div>
-    <div className="portal-top-actions">{uses('team')&&<TeamBell organizationId={org} additionalUnread={(joins.value?.unread??0)+(backdated.feed?.unread??0)+(backdated.feed?.pending??0)}/>}
+    <div className="portal-top-actions">{uses('team')&&<TeamBell organizationId={org} additionalUnread={(joins.value?.unread??0)+(backdated.feed?.unread??0)+(backdated.feed?.pending??0)} additional={[...agencyJoinPreviews(joins.value,i18n.resolvedLanguage),...agencyShiftPreviews(backdated.feed,i18n.resolvedLanguage)]}/>}
     <LanguageSwitcher compact/><ThemeToggle/></div>
    </header>
    <main className="portal-content">
@@ -154,10 +155,11 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
     {production&&section!=='messages'&&(section!=='schedule'||factoryAdmin)&&!(factoryAdmin&&['factory-timecards','timesheets'].includes(section))&&<FactoryRolePanel key={org+section} access={access} section={section as FactoryRoleSection}/>}
     {factoryAdmin&&(section==='factory-timecards'||section==='timesheets')&&<FactoryTimecardsPanel key={org+section} organizationId={org} expectedRole='factory_admin' expectedMembershipId={access.membership.id} archiveOnly={section==='timesheets'} leaderSection={section==='timesheets'?'timesheets':'hours'}/>}
     {publicAgency&&section!=='home'&&section!=='setup'&&!directory&&!unifiedHours&&!sectionReady&&<p className="notice-box" role="status">{t('agencyProductions.moduleNotEnabled')}</p>}
-    {section==='messages'&&uses('team')&&<PhonePushSettings/>}
-    {publicAgency&&section==='messages'&&backdated.feed&&<AgencyBackdatedShifts organizationId={org} feed={backdated.feed} refresh={backdated.refresh}/>}
-    {publicAgency&&section==='messages'&&<AgencyJoinNotifications value={joins.value} mark={joins.mark}/>}
-    {uses('team')&&!(factoryAdmin&&section==='schedule')&&(['messages','schedule','templates','absence','accountants'] as string[]).includes(section)&&<TeamPanel organizationId={org} section={section as TeamSection}/>}
+
+    {uses('team')&&!(factoryAdmin&&section==='schedule')&&(['messages','schedule','templates','absence','accountants'] as string[]).includes(section)&&<TeamPanel organizationId={org} section={section as TeamSection} notificationExtras={section==='messages'?<>
+     {publicAgency&&backdated.feed&&<AgencyBackdatedShifts organizationId={org} feed={backdated.feed} refresh={backdated.refresh}/>}
+     {publicAgency&&<AgencyJoinNotifications value={joins.value} mark={joins.mark}/>}<PhonePushSettings/>
+    </>:undefined}/>}
     {section==='settings'&&agencyProfile?.ops.includes('profile')&&<AgencyProfile key={org} organizationId={org} onSaved={setAgencyName}/>}
     {section==='settings'&&publicAgency&&uses('workerProvisioning')&&<AgencyNipVisibility key={org} organizationId={org}/>}
     {!production&&section==='home'&&<>
