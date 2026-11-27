@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Building2, Factory, LockKeyhole, Menu, ShieldCheck, UserRound, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Building2, Factory, Menu, ShieldCheck, UserRound, X } from "lucide-react";
 import { createContext, useContext, useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -82,6 +82,6 @@ export function RegistrationChoices() {
     <div className="registration-options">
       {[{role:"agency", icon:Building2}, {role:"factory", icon:Factory}, {role:"worker", icon:UserRound}].map(({role,icon:Icon}) =>
         <Link key={role} className="registration-option" to={"/register/" + role}><span className="registration-option-icon"><Icon size={23} /></span><span><strong>{t("publicExperience." + role)}</strong><small>{t("publicExperience." + role + "Hint")}</small></span><ArrowRight size={18} /></Link>)}
-    </div><p className="enrollment-note"><LockKeyhole size={17} />{t("publicExperience.access")}</p>
+    </div>
   </RegistrationFrame>;
 }
