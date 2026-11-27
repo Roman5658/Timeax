@@ -40,7 +40,7 @@ test('invalid input never calls the provider',async()=>{
 });
 test('receipt is identity only and must match the provider-confirmed address',async()=>{
  const {provider,requests}=fixture();
- assert.deepEqual(await provider.verifyCode(email,'12345678'),{issuer:ISSUER,subject,emailConfirmed:true,isAnonymous:false});
+ assert.deepEqual(await provider.verifyCode(email,'12345678'),{issuer:ISSUER,subject,email,emailConfirmed:true,isAnonymous:false});
  assert.deepEqual(JSON.parse(requests[0].init.body),{email,token:'12345678',type:'email'});
  assert.equal(requests[1].init.headers.authorization,'Bearer '+syntheticToken);
  assert.equal(await provider.verifyCode('other@example.test','12345678'),null);

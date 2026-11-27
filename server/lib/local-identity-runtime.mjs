@@ -23,7 +23,7 @@ export function createLocalIdentityRuntime({origin,...options}){
  if(!loopback.test(origin))throw Error('The local listener must use a loopback origin');
  return createEmailIdentityRuntime({origin,...options,localLoopback:true,admitSend:()=>true,signupHook:null});
 }
-export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLength,admitSend,signupHook,onboardingStore=null,workspaceFactory=null,accountAdminFactory=null,agencyProductionsFactory=null,localLoopback=false,now=Date.now}){
+export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLength,admitSend,signupHook,onboardingStore=null,workspaceFactory=null,accountAdminFactory=null,agencyProductionsFactory=null,agencyOperationsFactory=null,localLoopback=false,now=Date.now}){
  if(!localLoopback && (!['https://timeax.pl','https://www.timeax.pl'].includes(origin)||typeof signupHook?.handler!=='function'))
   throw Error('HTTPS Timeax signup must use the verified provider hook');
  const name=localLoopback?'timeax-loopback-email-identity':'__Host-timeax-email-identity';
@@ -36,7 +36,7 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
  }
  const resolve=async request=>{
   purge();const id=idFrom(request,name),s=sessions.get(id);
-  return s?{issuer:s.issuer,subject:s.subject,emailConfirmed:true,isAnonymous:false,expiresAt:s.expiresAt,
+  return s?{issuer:s.issuer,subject:s.subject,email:s.email,emailConfirmed:true,isAnonymous:false,expiresAt:s.expiresAt,
    state:'verified',registrationAllowed:true,isActive:async()=>sessions.get(id)===s&&s.expiresAt>now()}
    :{state:'anonymous'};
  };
@@ -60,6 +60,7 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
  });
  const workspace=onboarding&&workspaceFactory?.(resolve);
  const productions=onboarding&&agencyProductionsFactory?.(resolve);
+ const ops=onboarding&&agencyOperationsFactory?.(resolve);
  const admin=accountAdminFactory?.(subject=>{
   removedSubjects.set(subject,now()+ttl*1000);
   for(const [id,s] of sessions)if(s.issuer===ISSUER&&s.subject===subject)sessions.delete(id);
@@ -70,7 +71,7 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
   if(!localLoopback&&url.pathname==='/hooks/before-user-created')return signupHook.handler(request);
   if(url.origin!==origin||url.search||url.hash||site!==null&&site!=='same-origin'||(request.method==='POST'?from!==origin:from!==null&&from!==origin))
    return reply(403,{error:'not-permitted'});
-  const service=onboarding?{selfService:true,agencyProductions:Boolean(productions)}:{};
+  const service=onboarding?{selfService:true,agencyProductions:Boolean(productions),...(ops?{agencyOperations:ops.enabled}:{})}:{};
   if(url.pathname===endpoint){
    if(request.method!=='GET')return reply(405,{error:'not-allowed'});
    const s=await resolve(request);
@@ -87,6 +88,8 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
   if(onboarding&&onboarding.matches(url.pathname))return onboarding.handler(request);
   if(workspace&&url.pathname.startsWith('/api/workspace-access/'))return workspace(request);
   if(productions&&url.pathname.startsWith('/api/factory-setup/'))return productions(request);
+  const operational=ops?.find(url.pathname);
+  if(operational)return operational(request);
   if(url.pathname===ACCOUNT_ADMIN_ROUTE)return admin?admin(request):reply(503,{error:'admin-not-configured'});
   if(url.pathname==='/api/agency-registration')return agency(request);
   if(url.pathname.startsWith('/api/timeax/auth/public/'))return auth(request);

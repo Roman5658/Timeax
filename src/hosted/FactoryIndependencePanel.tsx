@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';import {Link} from 'react-router-dom';import {useTranslation} from 'react-i18next';
 import {factoryCall,parseSetupContext,type SetupContext} from './factory-enrollment';
 import {independenceCall,parseIndependence,type FactoryIndependenceContext} from './factory-independence';
-export function FactoryIndependencePanel({organizationId,revision=0,review=false,worker=false}:{organizationId?:string;revision?:number;review?:boolean;worker?:boolean}){
+export function FactoryIndependencePanel({organizationId,revision=0,review=false,worker=false,agencyOnly=false}:{organizationId?:string;revision?:number;review?:boolean;worker?:boolean;agencyOnly?:boolean}){
  const {t}=useTranslation(),tx=(k:string)=>t('factoryIndependent.'+k);
  const [context,setContext]=useState<FactoryIndependenceContext>(),[setup,setSetup]=useState<SetupContext>(),[refresh,setRefresh]=useState(0),[status,setStatus]=useState('checking'),[busy,setBusy]=useState(false),[notice,setNotice]=useState('');
  const [name,setName]=useState(''),[nip,setNip]=useState(''),[siteName,setSiteName]=useState(''),[confirmed,setConfirmed]=useState(false),[reference,setReference]=useState(''),[reviewed,setReviewed]=useState(false);
@@ -20,7 +20,7 @@ export function FactoryIndependencePanel({organizationId,revision=0,review=false
  }catch(e){setNotice(e instanceof Error&&e.message==='invalid'?'invalid':'uncertain')}finally{setRefresh(n=>n+1);setBusy(false);pending.current=false}}
  const chooseSite=<label className="field-label">{tx('site')}<select value={site} disabled={busy} onChange={e=>{setSite(e.target.value);setInvite(undefined)}} required><option value="">{tx('choose')}</option>{sites.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>;
  return <section className="worker-enrollment" aria-busy={busy}>
- {!context||!setup?<><p className="notice-box" role="status">{tx(status)}</p><Link to="/login">{t('common.login')}</Link></>:<>
+ {!context||!setup?<><p className="notice-box" role="status">{tx(status)}</p>{!agencyOnly&&<Link to="/login">{t('common.login')}</Link>}</>:<>
  {review?<><h2>{tx('reviewTitle')}</h2><p>{tx('reviewHint')}</p>{context.reviewer?<><label className="field-label">{tx('reference')}<input value={reference} maxLength={200} disabled={busy} onChange={e=>setReference(e.target.value)}/></label><label className="factory-confirm"><input type="checkbox" checked={reviewed} disabled={busy} onChange={e=>setReviewed(e.target.checked)}/><span>{tx('reviewConfirmed')}</span></label></>:<p role="status">{tx('reviewDenied')}</p>}</>:
  worker?<><h2>{tx('ownWorkerTitle')}</h2><p>{tx('workerCodeHint')}</p><form className="auth-form" onSubmit={e=>{e.preventDefault();void act('claim-worker',{code:code.trim()})}}>
  <label className="field-label">{tx('code')}<input value={code} autoComplete="off" maxLength={64} required disabled={busy} onChange={e=>setCode(e.target.value)}/></label><button className="button button--primary button--full" disabled={busy||!/^[0-9a-f]{64}$/.test(code.trim())}>{tx('claimWorker')}</button></form></>:

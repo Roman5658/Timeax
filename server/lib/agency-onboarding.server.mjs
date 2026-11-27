@@ -81,7 +81,7 @@ export function createAgencyOnboardingRoutes({origin,provider,store,readSession,
      session.passwordSet=true;session.credential=null;
     }
     if(!isActive(request,session))return respond(401,{error:'valid-session-required'});
-    const organizationId=await store.create(identity,{agencyName,nip});
+    const organizationId=await store.create(identity,{agencyName,nip,termsVersion:registrationTermsVersion});
     if(!validId(organizationId))throw Error('Invalid workspace response');
     if(!isActive(request,session))return respond(401,{error:'valid-session-required'});
     return respond(200,{state:'ready',organizationId});

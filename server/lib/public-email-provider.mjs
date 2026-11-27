@@ -46,7 +46,7 @@ export function createPublicEmailProvider({publishableKey,otpLength,signupIntent
   }});
   const result=await verifier.verify({headers:new Headers({authorization:'Bearer '+accessToken})});
   if(!result.ok||verifiedEmail!==email)return null;
-  const identity=Object.freeze({issuer:result.identity.issuer,subject:result.identity.subject,emailConfirmed:true,isAnonymous:false});
+  const identity=Object.freeze({issuer:result.identity.issuer,subject:result.identity.subject,email:verifiedEmail,emailConfirmed:true,isAnonymous:false});
   if(retain)secrets.set(identity,{accessToken,busy:false});
   return identity;
  }

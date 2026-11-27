@@ -1,3 +1,4 @@
+import {AgencyProfile} from './AgencyProfile';
 import {AgencyProductions} from './AgencyProductions';
 import {TeamBell,TeamPanel,type TeamSection} from './TeamWorkflow';
 
@@ -19,11 +20,13 @@ import { PayslipsPanel } from './PayslipsPage';
 import { loadWorkspaceAccess, type WorkspaceAccess, type WorkspaceResult } from './workspace-access';
 import '../styles/hosted-cabinet.css';
 
-type Section = TeamSection | 'home' | 'workers' | 'setup' | 'timecards' | 'factory-timecards' | 'payslips';
+const sectionLane:Record<string,string>={settings:'profile',workers:'worker',timecards:'timecards','factory-timecards':'factoryTimecards',payslips:'payroll',messages:'team',schedule:'team',accountants:'team'};
+type Section = TeamSection | 'home' | 'workers' | 'setup' | 'timecards' | 'factory-timecards' | 'payslips' | 'settings';
 type Item = {section: Section; label: string; group: 'workspace'|'people'|'operations'|'reports'; Icon: typeof LayoutDashboard};
 const item = (section: Section, label: string, group: Item['group'], Icon: Item['Icon']): Item => ({section, label, group, Icon});
 const agencyMenu = [
  item('home','nav.agencyHome','workspace',LayoutDashboard),
+ item('settings','agencySettings.title','workspace',Settings2),
  item('setup','nav.productions','people',Building2),
  item('workers','nav.workers','people',UsersRound),
  item('timecards','nav.timekeeping','operations',CalendarDays),
@@ -63,17 +66,20 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
  const {t}=useTranslation();
  const [menuOpen,setMenuOpen]=useState(false);
  const agency=access.membership.role==='agency_admin';
- const [agencyProfile,setAgencyProfile]=useState<{public:boolean;productions:boolean}>();
+ const [agencyProfile,setAgencyProfile]=useState<{public:boolean;productions:boolean;ops:string[]}>();
  useEffect(()=>{
   if(!agency)return;
   const c=new AbortController();
   void fetch('/v1/session/timeax-email',{credentials:'same-origin',cache:'no-store',signal:c.signal}).then(async r=>r.ok?await r.json():null).then(v=>{
-   if(!c.signal.aborted)setAgencyProfile({public:v?.selfService===true,productions:v?.agencyProductions===true});
-  }).catch(()=>{if(!c.signal.aborted)setAgencyProfile({public:true,productions:false})});
+   if(!c.signal.aborted)setAgencyProfile({public:v?.selfService===true,productions:v?.agencyProductions===true,ops:Array.isArray(v?.agencyOperations)?v.agencyOperations:[]});
+  }).catch(()=>{if(!c.signal.aborted)setAgencyProfile({public:true,productions:false,ops:[]})});
   return()=>c.abort();
  },[agency,access.organization.id]);
+ const [agencyName,setAgencyName]=useState('');
  const publicAgency=agency&&agencyProfile?.public===true;
  const loadModules=!agency||agencyProfile?.public===false;
+ const uses=(lane:string)=>loadModules||agencyProfile?.ops.includes(lane)===true;
+ const sectionReady=uses(sectionLane[section]);
  const root='/workspace/'+access.organization.id;
  const route=(id:Section)=>root+(id==='home'?'':'/'+id);
  const home=t(agency?'nav.agencyHome':'nav.workerHome');
@@ -93,7 +99,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
    <button className="portal-mobile-close" type="button" aria-label={t('common.closeMenu')} onClick={()=>setMenuOpen(false)}><X size={18}/></button>
    <div className="sidebar-divider"/>
    <nav className="portal-nav" aria-label={home}>
-    {menu.map(({section:id,label,group,Icon},index)=><Fragment key={id}>
+    {menu.filter(entry=>entry.section!=='settings'||publicAgency).map(({section:id,label,group,Icon},index)=><Fragment key={id}>
      {group!==menu[index-1]?.group&&<div className="portal-nav-group-label">{t('nav.groups.'+group)}</div>}
      <Link className={'portal-nav-link'+(id===section?' is-active':'')} aria-current={id===section?'page':undefined} to={route(id)} onClick={()=>setMenuOpen(false)}><Icon size={17} aria-hidden="true"/><span>{t(label)}</span></Link>
     </Fragment>)}
@@ -107,15 +113,16 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
    <header className="portal-topline">
     <div className="portal-topline-left">
      <button className="portal-mobile-menu" type="button" aria-controls="hosted-cabinet-menu" aria-label={t('common.openMenu')} aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}><Menu size={19}/></button>
-     <div className="portal-breadcrumb"><span className="breadcrumb-dot"/>{home}</div>
+     <div className="portal-breadcrumb"><span className="breadcrumb-dot"/>{agencyName||home}</div>
     </div>
-    <div className="portal-top-actions">{loadModules&&<TeamBell organizationId={org}/>}
+    <div className="portal-top-actions">{uses('team')&&<TeamBell organizationId={org}/>}
     {!agency&&<CabinetSignOut/>}<LanguageSwitcher compact/><ThemeToggle/></div>
    </header>
    <main className="portal-content">
     <PageHeading eyebrow={!agency?organizationLabel(access.membership.id):undefined} title={t(heading)} />
-    {publicAgency&&section!=='home'&&section!=='setup'&&<p className="notice-box" role="status">{t('agencyProductions.moduleNotEnabled')}</p>}
-    {loadModules&&(['messages','schedule','templates','absence','accountants'] as string[]).includes(section)&&<TeamPanel organizationId={org} section={section as TeamSection}/>}
+    {publicAgency&&section!=='home'&&section!=='setup'&&!sectionReady&&<p className="notice-box" role="status">{t('agencyProductions.moduleNotEnabled')}</p>}
+    {uses('team')&&(['messages','schedule','templates','absence','accountants'] as string[]).includes(section)&&<TeamPanel organizationId={org} section={section as TeamSection}/>}
+    {section==='settings'&&agencyProfile?.ops.includes('profile')&&<AgencyProfile key={org} organizationId={org} onSaved={setAgencyName}/>}
     {section==='home'&&<>
      <section className="dashboard-panel">
       <div className="panel-heading"><h2>{t('workspaceRead.worksites')}</h2></div>
@@ -123,11 +130,11 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
      </section>
      <div className="form-actions agency-overview-actions">{menu.filter(x=>x.section==='timecards'||x.section==='payslips'||x.section==='workers').map(x=><Link key={x.section} className="button button--outline button--small" to={route(x.section)}>{t(x.label)}</Link>)}</div>
     </>}
-    {loadModules&&section==='workers'&&<AgencyWorkerPanel organizationId={org}/>}
-    {section==='setup'&&(publicAgency?<AgencyProductions key={org} organizationId={org} initialSites={access.worksites} enabled={agencyProfile?.productions===true}/>:loadModules?<FactorySetupPanel organizationId={org}/>:null)}
-    {loadModules&&section==='timecards'&&<TimecardsPanel organizationId={org}/>}
-    {loadModules&&section==='factory-timecards'&&<FactoryTimecardsPanel organizationId={org}/>}
-    {loadModules&&section==='payslips'&&<PayslipsPanel organizationId={org}/>}
+    {uses('worker')&&section==='workers'&&<AgencyWorkerPanel organizationId={org} verifiedAgency={publicAgency} namesEnabled={uses('names')} lifecycleEnabled={uses('account')}/> }
+    {section==='setup'&&(publicAgency?<AgencyProductions key={org} organizationId={org} initialSites={access.worksites} enabled={agencyProfile?.productions===true} factoryInvites={uses('registration')} namesEnabled={uses('names')}/>:loadModules?<FactorySetupPanel organizationId={org}/>:null)}
+    {uses('timecards')&&section==='timecards'&&<TimecardsPanel organizationId={org} includeFactoryArchive={uses('factoryTimecards')}/> }
+    {uses('factoryTimecards')&&section==='factory-timecards'&&<FactoryTimecardsPanel organizationId={org}/>}
+    {uses('payroll')&&section==='payslips'&&<PayslipsPanel organizationId={org}/>}
    </main>
   </div>
 

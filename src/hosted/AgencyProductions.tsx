@@ -1,11 +1,15 @@
 import {useEffect,useRef,useState} from "react";
+import {FactoryIndependencePanel} from './FactoryIndependencePanel';
+import {useMemberNames} from './MemberNames';
 import {useTranslation} from "react-i18next";
 import {factoryCall,parseSetupContext,type SetupContext,type SetupConnection,type SetupSite} from "./factory-enrollment";
 
-export function AgencyProductions({organizationId,initialSites,enabled}:{organizationId:string;initialSites:{id:string;name:string}[];enabled:boolean}){
+export function AgencyProductions({organizationId,initialSites,enabled,factoryInvites=false,namesEnabled=false}:{organizationId:string;initialSites:{id:string;name:string}[];enabled:boolean;factoryInvites?:boolean;namesEnabled?:boolean}){
  const {t}=useTranslation(),tx=(key:string)=>t("agencyProductions."+key),ft=(key:string)=>t("factoryEnrollment."+key);
  const [tab,setTab]=useState<"internal"|"connections">("internal"),[value,setValue]=useState<SetupContext>();
  const [name,setName]=useState(""),[busy,setBusy]=useState(false),[status,setStatus]=useState(""),[attempt,setAttempt]=useState(0);
+ const [internalSite,setInternalSite]=useState(""),[worker,setWorker]=useState(""),[starts,setStarts]=useState(new Date().toISOString().slice(0,10));
+ const {label}=useMemberNames(namesEnabled?organizationId:undefined);
  const op=useRef(crypto.randomUUID()),pending=useRef(false);
  useEffect(()=>{
   if(!enabled)return;
@@ -24,7 +28,7 @@ export function AgencyProductions({organizationId,initialSites,enabled}:{organiz
   try{
    await factoryCall(action,body);
    if(action==="create-site"){op.current=crypto.randomUUID();setName("");}
-   setStatus(action==="create-site"?"siteCreated":"connectionChanged");setAttempt(n=>n+1);
+   setStatus(action==="create-site"?"siteCreated":action==="assign-internal"||action==="revoke-assignment"?"assignmentChanged":"connectionChanged");setAttempt(n=>n+1);
   }catch{setStatus("saveError");setAttempt(n=>n+1)}
   finally{pending.current=false;setBusy(false)}
  }
@@ -35,6 +39,7 @@ export function AgencyProductions({organizationId,initialSites,enabled}:{organiz
     <button className="button button--primary" disabled={busy} onClick={()=>void send("approve-connection",{id:c.id,confirmed:true})}>{ft("approve")}</button>
     <button className="button button--outline" disabled={busy} onClick={()=>void send("decline-connection",{id:c.id})}>{ft("decline")}</button>
    </div>}
+   {c.state==="active"&&<button className="button button--outline" disabled={busy} onClick={()=>void send("revoke-connection",{id:c.id})}>{ft("revokeConnection")}</button>}
   </article>;
  }
  return <section className="dashboard-panel worker-enrollment" aria-busy={busy||enabled&&!value&&!status}>
@@ -52,9 +57,20 @@ export function AgencyProductions({organizationId,initialSites,enabled}:{organiz
     <button className="button button--primary" disabled={busy||!name.trim()}>{tx("create")}</button>
    </form>}
    <h3>{tx("internalList")}</h3>{displaySites.length?<ul>{displaySites.map(w=><li key={w.id}>{w.name}</li>)}</ul>:<p>{ft("noSites")}</p>}
+   {value&&displaySites.length>0&&<section className="notice-box">
+    <h3>{ft("assignWorker")}</h3>
+    {value.workers.some(w=>w.organizationId===organizationId)?<form className="auth-form" onSubmit={e=>{e.preventDefault();if(internalSite&&worker&&starts)void send("assign-internal",{worksiteId:internalSite,membershipId:worker,startsAt:starts+"T00:00:00.000Z"})}}>
+      <label className="field-label">{ft("site")}<select required value={internalSite} onChange={e=>setInternalSite(e.target.value)}><option value="">{ft("select")}</option>{displaySites.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+      <label className="field-label">{ft("worker")}<select required value={worker} onChange={e=>setWorker(e.target.value)}><option value="">{ft("select")}</option>{value.workers.filter(w=>w.organizationId===organizationId).map(w=><option key={w.id} value={w.id}>{label(w.id)}</option>)}</select></label>
+      <label className="field-label">{ft("starts")}<input required type="date" value={starts} onChange={e=>setStarts(e.target.value)}/></label>
+      <button className="button button--primary" disabled={busy||!internalSite||!worker||!starts}>{ft("assign")}</button>
+    </form>:<p>{tx("noWorkers")}</p>}
+    {value.assignments.filter(a=>a.organizationId===organizationId&&a.state==="active").map(a=><p key={a.worksiteId+a.membershipId}>{displaySites.find(w=>w.id===a.worksiteId)?.name}: {label(a.membershipId)} <button type="button" className="button button--outline" disabled={busy} onClick={()=>void send("revoke-assignment",{worksiteId:a.worksiteId,membershipId:a.membershipId})}>{ft("revokeAssignment")}</button></p>)}
+   </section>}
   </>:<>
    <p>{tx("connectionHint")}</p>
    {value&&(connections.length?connections.map(connection):<p>{tx("noConnections")}</p>)}
+   {value&&factoryInvites&&<FactoryIndependencePanel organizationId={organizationId} agencyOnly/>}
   </>}
   </div>
   {status&&<p role={status.endsWith("Error")?"alert":"status"}>{tx(status)}</p>}

@@ -15,19 +15,50 @@ DECLARE
   v_issuer constant text := 'https://rohgpgogsdtiltbocdao.supabase.co/auth/v1';
 BEGIN
   IF session_user <> 'timeax_account_admin_login'
-     OR p_action IS NULL OR p_action NOT IN ('list','preview','delete')
+     OR p_action IS NULL OR p_action NOT IN ('list','summary','organizations','preview','delete')
   THEN RAISE EXCEPTION 'admin denied' USING ERRCODE='42501'; END IF;
   IF p_action='list' THEN
-    IF p_email IS NOT NULL THEN RAISE EXCEPTION 'invalid admin request' USING ERRCODE='22023'; END IF;
+    IF p_email IS NOT NULL AND (length(p_email) NOT BETWEEN 1 AND 254 OR p_email ~ '[[:cntrl:]]') THEN RAISE EXCEPTION 'invalid admin request' USING ERRCODE='22023'; END IF;
     RETURN jsonb_build_object('accounts',coalesce((
       SELECT jsonb_agg(to_jsonb(u) ORDER BY u.id) FROM (
-        SELECT a.id,a.email,a.created_at AS "createdAt",a.email_confirmed_at IS NOT NULL AS verified
+        SELECT a.id,a.email,a.created_at AS "createdAt",a.email_confirmed_at IS NOT NULL AS verified,
+          CASE WHEN s.terms_version IS NOT NULL AND s.terms_accepted_at IS NOT NULL
+            THEN jsonb_build_object('version',s.terms_version,'acceptedAt',s.terms_accepted_at,'method','registration-checkbox')
+          END AS "termsReceipt"
         FROM auth.users a
+        LEFT JOIN timeax_core.identities i ON i.issuer=v_issuer AND i.subject=a.id::text
+        LEFT JOIN timeax_core.self_service_agencies s ON s.identity_id=i.id
         WHERE a.deleted_at IS NULL AND (p_id IS NULL OR a.id>p_id)
+          AND (p_email IS NULL OR strpos(lower(a.email),lower(p_email))>0)
         ORDER BY a.id LIMIT 51
       ) u
     ),'[]'::jsonb));
   END IF;
+  IF p_action='summary' THEN
+    IF p_id IS NOT NULL OR p_email IS NOT NULL THEN RAISE EXCEPTION 'invalid admin request' USING ERRCODE='22023'; END IF;
+    RETURN jsonb_build_object(
+      'accounts',(SELECT count(*) FROM auth.users a WHERE a.deleted_at IS NULL),
+      'verifiedAccounts',(SELECT count(*) FROM auth.users a WHERE a.deleted_at IS NULL AND a.email_confirmed_at IS NOT NULL),
+      'agencies',(SELECT count(*) FROM timeax_core.organizations o WHERE o.kind='agency' AND o.state='active'),
+      'factories',(SELECT count(*) FROM timeax_core.organizations o WHERE o.kind='factory' AND o.state='active'),
+      'newAgencies30d',(SELECT count(*) FROM timeax_core.self_service_agencies a WHERE a.created_at >= CURRENT_TIMESTAMP - INTERVAL '30 days')
+    );
+  END IF;
+
+  IF p_action='organizations' THEN
+    IF p_email IS NOT NULL THEN RAISE EXCEPTION 'invalid admin request' USING ERRCODE='22023'; END IF;
+    RETURN jsonb_build_object('organizations',coalesce((
+      SELECT jsonb_agg(jsonb_build_object('id',o.id,'name',o.name,'kind',o.kind,'state',o.state,
+        'activeMembers',(SELECT count(*) FROM timeax_core.memberships m WHERE m.organization_id=o.id AND m.state='active'))
+        ORDER BY o.id)
+      FROM (
+        SELECT id,name,kind,state FROM timeax_core.organizations
+        WHERE kind IN ('agency','factory') AND (p_id IS NULL OR id>p_id)
+        ORDER BY id LIMIT 51
+      ) o
+    ),'[]'::jsonb));
+  END IF;
+
   IF p_id IS NULL OR (p_action='preview' AND p_email IS NOT NULL) THEN
     RAISE EXCEPTION 'invalid admin request' USING ERRCODE='22023';
   END IF;

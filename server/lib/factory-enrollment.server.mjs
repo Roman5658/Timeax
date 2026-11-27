@@ -29,7 +29,7 @@ export function createFactorySetupHandler({origin,resolveSession,store=null,agen
    const url=new URL(request.url),match=url.pathname.match(/^\/api\/factory-setup\/([a-z-]+)$/);
    if(url.origin!==origin||url.search||url.hash||!match)return reply(404,{error:'not-found'});
    const action=match[1],write=action!=='context';
-   if(agencyOnly&&!['context','create-site','approve-connection','decline-connection','revoke-connection'].includes(action))return reply(404,{error:'not-found'});
+   if(agencyOnly&&!['context','create-site','approve-connection','decline-connection','revoke-connection','assign-internal','revoke-assignment'].includes(action))return reply(404,{error:'not-found'});
    if(request.method!==(write?'POST':'GET'))return reply(405,{error:'not-allowed'});
    const from=request.headers.get('origin'),site=request.headers.get('sec-fetch-site');
    if((write?from!==origin:from!==null&&from!==origin)||(site!==null&&site!=='same-origin')||[...request.headers.keys()].some(k=>/^(authorization|forwarded|x-forwarded-.*|x-role|x-subject|x-issuer|x-tenant.*|x-timeax-.*)$/.test(k)))return reply(403,{error:'not-permitted'});
@@ -53,9 +53,14 @@ export function createFactorySetupHandler({origin,resolveSession,store=null,agen
     const memberships=c.memberships.filter(m=>m.role==='agency_admin'&&m.kind==='agency');
     const scopes=new Set(memberships.map(m=>m.organizationId));
     const connections=c.connections.filter(v=>scopes.has(v.agencyId));
-    if(action==='context')value={memberships,connections,worksites:c.worksites.filter(w=>scopes.has(w.organizationId)),workers:[],invitations:[],assignments:[]};
+    const worksites=c.worksites.filter(w=>scopes.has(w.organizationId));
+    const workers=c.workers.filter(w=>scopes.has(w.organizationId));
+    const owned=worksites.filter(w=>w.ownerId===w.organizationId);
+    const assignments=c.assignments.filter(a=>a.role==='worker'&&owned.some(w=>w.id===a.worksiteId&&w.organizationId===a.organizationId));
+    if(action==='context')value={memberships,connections,worksites,workers,invitations:[],assignments};
     else{
-     const allowed=action==='create-site'?scopes.has(input.organizationId):connections.some(v=>v.id===input.id);
+     const site=owned.find(w=>w.id===input.worksiteId);
+     const allowed=action==='create-site'?scopes.has(input.organizationId):action==='assign-internal'?!!site&&workers.some(w=>w.id===input.membershipId&&w.organizationId===site.organizationId):action==='revoke-assignment'?!!site&&assignments.some(a=>a.membershipId===input.membershipId&&a.worksiteId===site.id):connections.some(v=>v.id===input.id);
      if(!allowed||!await active())return reply(403,{error:'not-permitted'});
      value=await store.invoke(actor,action,input);
     }

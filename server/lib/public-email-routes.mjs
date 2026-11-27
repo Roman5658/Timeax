@@ -88,7 +88,7 @@ export function createPublicEmailRoutes({origin,provider,admitSend,issueIdentity
      ||challenges.get(id)!==challenge||challenge.expires<=now()||request.signal.aborted)return denied();
     challenges.delete(id);
     const session=await issueIdentitySession({issuer:identity.issuer,subject:identity.subject,
-     emailConfirmed:true,isAnonymous:false,flow:challenge.flow},setup?identity:null,readSessionId(request));
+     email:challenge.email,emailConfirmed:true,isAnonymous:false,flow:challenge.flow},setup?identity:null,readSessionId(request));
     if(!token.test(session?.id??'')||!Number.isInteger(session?.maxAge)||session.maxAge<1||session.maxAge>900)
      return respond(503,{error:'service-unavailable'});
     return respond(200,{status:'email-verified'},[issueCookie(sessionName,session.id,session.maxAge),issueCookie(challengeName)]);

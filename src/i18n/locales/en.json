@@ -12,7 +12,10 @@
     "registration-required": "To create a workspace, register and verify your email.",
     "service-unavailable": "Could not continue. Try again."
   },
+  "agencySettings": {"title": "Agency settings", "name": "Agency name", "nipVerified": "Verified", "nipClaimed": "Provided at registration, not verified", "email": "Sign-in email", "save": "Save", "saved": "Settings saved.", "error": "Could not load or save the settings."},
   "agencyProductions": {
+    "assignmentChanged": "Assignment updated.",
+    "noWorkers": "No workers yet. Add them from the Workers section first.",
     "create": "Create a worksite",
     "connect": "Connect a factory",
     "internalHint": "Create an internal worksite for tracking shifts. This does not give the factory access to Timeax.",

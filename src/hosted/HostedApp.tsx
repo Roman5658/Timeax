@@ -171,6 +171,8 @@ export function HostedApp(){
  const admin=loc.pathname.match(/^\/workspace\/([0-9a-f-]+)\/workers$/);
  if(admin)return <HostedCabinetRoute key={admin[1]} organizationId={admin[1]} section="workers" fallback={<RegistrationFrame title={t('workerEnrollment.manage')} lead={t('workerEnrollment.adminScope')}><AgencyWorkerPanel organizationId={admin[1]}/></RegistrationFrame>}/>;
  if(workspace)return <HostedCabinetRoute key={workspace[1]} organizationId={workspace[1]} section="home" fallback={<RegistrationFrame title={t('workerEnrollment.workspace')} lead={t('workspaceRead.readOnly')}><WorkerWorkspacePanel organizationId={workspace[1]}/></RegistrationFrame>}/>;
+ const settings=loc.pathname.match(/^\/workspace\/([0-9a-f-]+)\/settings$/);
+ if(settings)return <HostedCabinetRoute key={settings[1]} organizationId={settings[1]} section="settings" fallback={<RegistrationFrame title={t('agencySettings.title')} lead={t('workspaceRead.unavailable')}>{null}</RegistrationFrame>}/>;
  const setup=loc.pathname.match(/^\/workspace\/([0-9a-f-]+)\/setup$/);
  if(setup)return <HostedCabinetRoute key={setup[1]} organizationId={setup[1]} section="setup" fallback={<FactoryEnrollmentPage/>}/>;
  if(role==='factory'||['/factory/review','/factory/team/join'].includes(loc.pathname)||loc.pathname==='/leader/access')return <FactoryEnrollmentPage/>;

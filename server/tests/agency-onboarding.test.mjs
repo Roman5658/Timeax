@@ -24,7 +24,7 @@ function fixture(){
  };
  const onboardingStore={
   get:async subject=>owners.get(subject.subject)??null,
-  create:async(subject,draft)=>{assert.equal(subject.issuer,ISSUER);assert.deepEqual(draft,{agencyName:'Test agency',nip});
+  create:async(subject,draft)=>{assert.equal(subject.issuer,ISSUER);assert.deepEqual(draft,{agencyName:'Test agency',nip,termsVersion});
    if(failed){failed=false;throw Error('fixture interruption')}
    creates++;owners.set(subject.subject,orgId);return orgId;},
  };

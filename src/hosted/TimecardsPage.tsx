@@ -8,7 +8,7 @@ import {timecardCall,parseTimecards,parseSnapshot,snapshotCsv,minutesLabel,type 
 import {WorkerShiftCalendar} from './WorkerShiftCalendar';
 import '../styles/worker-enrollment.css';import '../styles/timecards.css';
 const yesterday=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Warsaw',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(Date.now()-86400000));
-export function TimecardsPanel({organizationId,revision=0}:{organizationId:string;revision?:number}){
+export function TimecardsPanel({organizationId,revision=0,includeFactoryArchive=true}:{organizationId:string;revision?:number;includeFactoryArchive?:boolean}){
  const {t}=useTranslation(),tx=(k:string)=>t('timecards.'+k);
  const [context,setContext]=useState<TimecardContext>(),[status,setStatus]=useState('checking'),[refresh,setRefresh]=useState(0),[busy,setBusy]=useState(false),[notice,setNotice]=useState('');
  const {label}=useMemberNames(organizationId,revision+refresh);
@@ -66,7 +66,7 @@ export function TimecardsPanel({organizationId,revision=0}:{organizationId:strin
  {context&&history&&<section className="notice-box"><h2>{tx('history')}</h2>{history.map(h=><p key={h.revision}>{tx('version')} {h.revision}: {h.data.localDate} {h.data.startTime}–{h.data.endTime}; {h.reason==='created'?tx('created'):h.reason}</p>)}<button className="button button--outline" onClick={()=>setHistory(undefined)}>{tx('close')}</button></section>}
  {context?.role==='agency_admin'&&snapshot?.organizationId===organizationId&&snapshot&&<section className="notice-box timecards-snapshot"><h2>{tx('document')}: {snapshot.worksiteName}</h2><p>{snapshot.dateFrom} – {snapshot.dateTo} · Europe/Warsaw · {tx('archived')}</p><p>{tx('counted')}: {minutesLabel(snapshot.paidMinutes)}</p>{snapshot.rows.map(r=><p key={r.id}>{r.data.localDate} {r.data.startTime}–{r.data.endTime} · {minutesLabel(r.data.paidMinutes)}<br/><small>{tx('workerRef')}: {workerLabelText(r.workerLabel,t('memberNames.historicalMissing'),t('memberNames.reference'))}</small></p>)}<a className="button button--primary button--full" href={csvUrl} download={'Timeax-'+snapshot.dateFrom+'-'+snapshot.dateTo+'.csv'}>{tx('download')}</a><button className="button button--outline button--full" onClick={()=>setSnapshot(undefined)}>{tx('close')}</button></section>}
  {notice&&<p role={['saved','archivedNotice'].includes(notice)?'status':'alert'}>{tx(notice)}</p>}
- {context?.role==='agency_admin'&&<FactoryTimecardsPanel organizationId={organizationId} revision={revision} archiveOnly/>}<button className="button button--outline button--full" disabled={busy||status==='checking'} onClick={reload}>{tx('refresh')}</button>
+ {includeFactoryArchive&&context?.role==='agency_admin'&&<FactoryTimecardsPanel organizationId={organizationId} revision={revision} archiveOnly/>}<button className="button button--outline button--full" disabled={busy||status==='checking'} onClick={reload}>{tx('refresh')}</button>
  <Link to={'/workspace/'+organizationId}>{tx('back')}</Link>
  </section>;
 }

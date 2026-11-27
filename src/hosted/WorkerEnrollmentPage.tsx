@@ -10,12 +10,12 @@ import {StagingSessionPanel} from '../modules/auth/pages/StagingSessionPanel';
 import {workerCall,enrollmentContext,isWorkerLocal,type EnrollmentContext} from './worker-enrollment';
 import {parseWorkspaceAccess,loadWorkspaceAccess,type WorkspaceAccess} from './workspace-access';
 import '../styles/worker-enrollment.css';
-function useContext(revision=0){
+function useContext(revision=0,enabled=true){
  const [value,setValue]=useState<EnrollmentContext>(),[status,setStatus]=useState('checking'),[refresh,setRefresh]=useState(0);
  const reload=useCallback(()=>{setValue(undefined);setRefresh(n=>n+1)},[]);
- useEffect(()=>{const c=new AbortController();setValue(undefined);setStatus('checking');
+ useEffect(()=>{if(!enabled)return;const c=new AbortController();setValue(undefined);setStatus('checking');
  void workerCall('context',undefined,c.signal).then(enrollmentContext).then(v=>{if(!c.signal.aborted){setValue(v);setStatus('verified')}}).catch(e=>{if(!c.signal.aborted)setStatus(['login','denied'].includes(e.message)?e.message:'unavailable')});
- return()=>c.abort()},[revision,refresh]);
+ return()=>c.abort()},[revision,refresh,enabled]);
  return {value,status,reload};
 }
 export function EnrollmentDestinations({revision=0}:{revision?:number}){
@@ -55,10 +55,10 @@ export function WorkerEnrollmentPanel({revision=0}:{revision?:number}){
  {!value&&<Link to="/login">{tx('loginAction')}</Link>}
  </section>;
 }
-export function AgencyWorkerPanel({organizationId}:{organizationId:string}){
- const {t}=useTranslation(),tx=(k:string)=>t('workerEnrollment.'+k),{value,status,reload}=useContext();
+export function AgencyWorkerPanel({organizationId,verifiedAgency=false,namesEnabled=true,lifecycleEnabled=true}:{organizationId:string;verifiedAgency?:boolean;namesEnabled?:boolean;lifecycleEnabled?:boolean}){
+ const {t}=useTranslation(),tx=(k:string)=>t('workerEnrollment.'+k),{value,status,reload}=useContext(0,!verifiedAgency);
  const [queue,setQueue]=useState<{application_id:string;claimed_at:string}[]>(),[code,setCode]=useState(''),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[queueRevision,setQueueRevision]=useState(0);
- const allowed=value?.memberships.some(m=>m.organizationId===organizationId&&m.role==='agency_admin');
+ const allowed=verifiedAgency||value?.memberships.some(m=>m.organizationId===organizationId&&m.role==='agency_admin');
  useEffect(()=>{setQueue(undefined);if(!allowed)return;const c=new AbortController();
  void workerCall('agency/'+organizationId,undefined,c.signal).then(v=>{if(!c.signal.aborted){const rows=(v as {applications:typeof queue}).applications;if(!Array.isArray(rows))throw Error();setQueue(rows)}}).catch(()=>{if(!c.signal.aborted)setNotice('unavailable')});return()=>c.abort()
  },[allowed,organizationId,queueRevision]);
@@ -67,14 +67,14 @@ export function AgencyWorkerPanel({organizationId}:{organizationId:string}){
  }catch{setQueue(undefined);setNotice('uncertain');reload()}finally{setBusy(false)}}
  const name=value?.memberships.find(m=>m.organizationId===organizationId)?.name;
  return <section className="worker-enrollment"><p className="notice-box" role="status">{tx(allowed?'adminScope':value?'denied':status)}</p>
- {allowed&&<><h2>{name}</h2><button className="button button--primary button--full" disabled={busy} onClick={()=>void act('invite',{minutes:60})}>{tx('createInvite')}</button>
+ {allowed&&<>{name&&<h2>{name}</h2>}<button className="button button--primary button--full" disabled={busy} onClick={()=>void act('invite',{minutes:60})}>{tx('createInvite')}</button>
  {code&&<div className="notice-box"><p>{tx('inviteCreated')}</p><label className="field-label">{tx('inviteCode')}<textarea readOnly rows={3} value={code}/></label><label className="field-label">{tx('inviteLink')}<textarea readOnly rows={4} value={location.origin+'/register/worker#invite='+code}/></label></div>}
  <h2>{tx('queue')}</h2><p>{tx('reviewHint')}</p>
  {queue?.length===0&&<p>{tx('emptyQueue')}</p>}
  {queue?.map(a=><article className="notice-box" key={a.application_id}><p>{tx('reference')}: <code>{a.application_id}</code></p><p>{new Date(a.claimed_at).toLocaleString()}</p><button className="button button--primary button--full" disabled={busy} onClick={()=>void act('approve',{applicationId:a.application_id})}>{tx('approve')}</button></article>)}</>}
- {allowed&&<><MemberNamesPanel organizationId={organizationId} revision={queueRevision} onChanged={()=>setQueueRevision(n=>n+1)}/><AgencyLifecyclePanel organizationId={organizationId} refreshKey={queueRevision}/></>}
+ {allowed&&namesEnabled&&<MemberNamesPanel organizationId={organizationId} revision={queueRevision} onChanged={()=>setQueueRevision(n=>n+1)}/>}{allowed&&lifecycleEnabled&&<AgencyLifecyclePanel organizationId={organizationId} refreshKey={queueRevision}/>}
  {notice&&<p role="alert">{tx(notice)}</p>}<button className="button button--outline button--full" disabled={busy} onClick={()=>{reload();setQueueRevision(n=>n+1)}}>{tx('refresh')}</button>
- <Link to="/register/worker">{tx('join')}</Link></section>;
+ {!verifiedAgency&&<Link to="/register/worker">{tx('join')}</Link>}</section>;
 }
 export function WorkerWorkspacePanel({organizationId}:{organizationId:string}){
  const {t}=useTranslation(),tx=(k:string)=>t('workerEnrollment.'+k),[value,setValue]=useState<WorkspaceAccess>(),[status,setStatus]=useState('checking'),[revision,setRevision]=useState(0);

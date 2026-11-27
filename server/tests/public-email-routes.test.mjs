@@ -31,7 +31,7 @@ test('code verification is tied to the same browser challenge and creates only a
  assert.equal(verified.status,200);assert.deepEqual(await verified.json(),{status:'email-verified'});
  assert.equal(verified.headers.getSetCookie().length,2);
  assert.equal((await call('verify',{code:'12345678'},{cookie})).status,401);
- assert.deepEqual(checks,['owner@example.test']);assert.deepEqual(sessions,[{issuer:ISSUER,subject:id,emailConfirmed:true,isAnonymous:false,flow:'registration'}]);
+ assert.deepEqual(checks,['owner@example.test']);assert.deepEqual(sessions,[{issuer:ISSUER,subject:id,email:'owner@example.test',emailConfirmed:true,isAnonymous:false,flow:'registration'}]);
 });
 test('only same-origin valid requests passing send admission may reach the provider',async()=>{
  const {call,sends}=setup({admit:false});

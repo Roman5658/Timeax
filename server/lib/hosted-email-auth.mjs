@@ -1,3 +1,4 @@
+import {assembleAgencyOperations} from './agency-operations.mjs';
 import {ACCOUNT_ADMIN_ROLE,ACCOUNT_ADMIN_SIGNATURE,ACCOUNT_ADMIN_SQL,createAccountAdminHandler} from './account-admin.mjs';
 import {createFactorySetupHandler,createFactorySetupStore,FACTORY_SQL} from './factory-enrollment.server.mjs';
 import {createScopedPgLane} from './scoped-pg.mjs';
@@ -56,18 +57,21 @@ export async function assembleHostedEmailAuth(config,{fetchImpl=globalThis.fetch
    throw Error('Independent onboarding credentials required');
   const signature='timeax_api.self_service_agency(text,text,text,text)';
   const statement='SELECT timeax_api.self_service_agency($1::text,$2::text,$3::text,$4::text) AS organization_id';
+  const createStatement="WITH receipt AS MATERIALIZED (SELECT set_config('timeax.registration_terms_version',$5::text,true) AS version) SELECT timeax_api.self_service_agency($1::text,$2::text,$3::text,$4::text) AS organization_id FROM receipt WHERE receipt.version=$5::text";
   const lane=scoped({host:config.host,ca:config.ca,role:'timeax_agency_onboarding_login',
-   password:config.agencyOnboardingPassword,namespace:'timeax_api',functions:[{signature,owner:'postgres',sha256:config.selfService.functionSha}],statements:[statement]});
+   password:config.agencyOnboardingPassword,namespace:'timeax_api',functions:[{signature,owner:'postgres',sha256:config.selfService.functionSha}],statements:[statement,createStatement]});
   const workspaces=scoped({host:config.host,ca:config.ca,role:WORKSPACE_ROLE,password:config.workspaceReadPassword,
    namespace:'timeax_api',functions:WORKSPACE_FUNCTIONS,statements:[WORKSPACE_SQL]});
   await Promise.all([lane.preflight(),workspaces.preflight()]);
-  async function read(identity,name=null,nip=null){
-   const result=await lane.query(statement,[identity.issuer,identity.subject,name,nip]);
+  async function read(identity,name=null,nip=null,termsVersion=null){
+   const args=[identity.issuer,identity.subject,name,nip];
+   const result=await (termsVersion?lane.query(createStatement,[...args,termsVersion]):lane.query(statement,args));
    if(result?.rows?.length!==1||!Object.hasOwn(result.rows[0],'organization_id'))throw Error('Workspace result unavailable');
    return result.rows[0].organization_id;
   }
-  onboardingStore={get:identity=>read(identity),create:(identity,draft)=>read(identity,draft.agencyName,draft.nip)};
+  onboardingStore={get:identity=>read(identity),create:(identity,draft)=>read(identity,draft.agencyName,draft.nip,draft.termsVersion)};
   workspaceFactory=resolveSession=>createWorkspaceReadHandler({origin:config.origin,store:createWorkspaceReadStore(workspaces),resolveSession,now});
  }
- return createEmailIdentityRuntime({origin:config.origin,provider,pendingStore,otpLength:config.otpLength,admitSend,signupHook,now,onboardingStore,workspaceFactory,accountAdminFactory,agencyProductionsFactory});
+ const agencyOperationsFactory=await assembleAgencyOperations(config,scoped,{now});
+ return createEmailIdentityRuntime({origin:config.origin,provider,pendingStore,otpLength:config.otpLength,admitSend,signupHook,now,onboardingStore,workspaceFactory,accountAdminFactory,agencyProductionsFactory,agencyOperationsFactory});
 }

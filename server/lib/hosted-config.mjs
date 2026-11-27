@@ -2,6 +2,7 @@ import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {INTEGRATED_PROFILE,INTEGRATED_LANES,integratedEnabled} from './integrated.contract.mjs';
+import {managedAgencyOperations} from './agency-operations.mjs';
 import {managedAccountAdmin} from './account-admin.mjs';
 import {WORKSPACE_PROFILE} from './workspace-read.contract.mjs';
 export const targetNode=version=>{if(typeof version!=='string'||!/^24\.\d+\.\d+$/.test(version))return false;const [major,minor,patch]=version.split('.').map(Number);return major===24&&(minor>22||minor===22&&patch>=3)};
@@ -53,7 +54,7 @@ export async function loadHostedConfiguration({root,configPath,version=process.v
    names.push('agencyOnboardingPassword','workspaceReadPassword');
   }
   for(const name of names)secrets[name]=(await readFile(c.secretFiles[name],'utf8')).trim();
-  return {...c,...secrets,...(managed??{}),accountAdmin:managedAccountAdmin(env),agencyProductions:managedAgencyProductions(env)};
+  return {...c,...secrets,...(managed??{}),accountAdmin:managedAccountAdmin(env),agencyProductions:managedAgencyProductions(env),agencyOperations:managedAgencyOperations(env)};
  }
  if(c.mode!=='configured')throw Error('Unknown runtime mode');
  requireTargetNode(version);

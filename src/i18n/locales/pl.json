@@ -12,7 +12,10 @@
     "registration-required": "Aby utworzyć panel, rozpocznij rejestrację i potwierdź adres e-mail.",
     "service-unavailable": "Nie udało się kontynuować. Spróbuj ponownie."
   },
+  "agencySettings": {"title": "Ustawienia agencji", "name": "Nazwa agencji", "nipVerified": "Zweryfikowany", "nipClaimed": "Podany przy rejestracji, bez weryfikacji", "email": "E-mail do logowania", "save": "Zapisz", "saved": "Ustawienia zapisane.", "error": "Nie udało się wczytać lub zapisać ustawień."},
   "agencyProductions": {
+    "assignmentChanged": "Przydział zaktualizowany.",
+    "noWorkers": "Brak pracowników. Dodaj ich najpierw w sekcji „Pracownicy”.",
     "create": "Utwórz zakład",
     "connect": "Połącz zakład",
     "internalHint": "Utwórz wewnętrzne miejsce pracy do ewidencji zmian. Sam zakład nie uzyska dostępu do Timeax.",

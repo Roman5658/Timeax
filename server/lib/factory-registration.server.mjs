@@ -22,7 +22,7 @@ const valid=(action,b)=>{
  }return true;
 };
 const reply=(status,body)=>Response.json(body,{status,headers:{'Cache-Control':'no-store, private',Vary:'Cookie','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});
-export function createFactoryRegistrationHandler({origin,resolveSession,store=null,now=Date.now}){
+export function createFactoryRegistrationHandler({origin,resolveSession,store=null,agencyOnly=false,now=Date.now}){
  const base=new URL(origin);if(base.origin!==origin||base.protocol!=='https:'||typeof resolveSession!=='function')throw Error('Guarded factory dependencies required');
  return async request=>{
   try{
@@ -45,7 +45,8 @@ export function createFactoryRegistrationHandler({origin,resolveSession,store=nu
     try{for(;;){const r=await Promise.race([reader.read(),timeout]);if(r.done)break;size+=r.value.length;if(size>2048)return reply(400,{error:'invalid-request'});parts.push(r.value)}input=JSON.parse(new TextDecoder('utf8',{fatal:true}).decode(Buffer.concat(parts)))}finally{clearTimeout(timer);void reader.cancel().catch(()=>{})}
     if(!valid(action,input))return reply(400,{error:'invalid-request'});
    }
-   const value=await store.invoke({issuer:s.issuer,subject:s.subject},action,input);
+   const result=await store.invoke({issuer:s.issuer,subject:s.subject},action,input);
+   const value=agencyOnly&&action==='context'?{reviewer:false,requests:[],workerInvitations:[],agencyInvitations:result.agencyInvitations}:result;
    if(!await active())return reply(401,{error:'valid-session-required'});
    return reply(200,value);
   }catch(e){return reply(e?.code==='42501'?403:e?.code==='22023'?400:503,{error:e?.code==='42501'?'not-permitted':'factory-unavailable'})}
