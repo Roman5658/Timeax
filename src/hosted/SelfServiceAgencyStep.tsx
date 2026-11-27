@@ -17,7 +17,7 @@ async function call(path:string,signal:AbortSignal,body?:object){
  if(!response.ok)throw Error(typeof v.error==='string'?v.error:'unavailable');
  return v;
 }
-type Stage='check'|'code'|'password'|'details'|'unavailable';
+type Stage='check'|'code'|'password'|'details'|'resume'|'unavailable';
 const errors=['invalid-credentials','invalid-nip','invalid-name','invalid-password','terms-required','try-later','password-not-set','registration-required','service-unavailable'];
 
 export function SelfServiceAgencyStep({existing}:{existing:boolean}){
@@ -26,14 +26,14 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
  const [stage,setStage]=useState<Stage>('check'),[needsPassword,setNeedsPassword]=useState(true),[email,setEmail]=useState(''),[name,setName]=useState(''),[nip,setNip]=useState(''),[password,setPassword]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [termsAccepted,setTermsAccepted]=useState(false),[showPassword,setShowPassword]=useState(false);
  const controller=useRef<AbortController|null>(null);
- const accept=useCallback((v:{state?:unknown;organizationId?:unknown;passwordRequired?:unknown})=>{
+ const accept=useCallback((v:{state?:unknown;organizationId?:unknown;passwordRequired?:unknown},reopening=false)=>{
   if(v?.state==='ready'&&organizationId(v.organizationId)){navigate('/workspace/'+v.organizationId,{replace:true});return;}
   if(v?.state==='details-required'){
-   setNeedsPassword(v.passwordRequired===true);setStage('details');return;
+   setNeedsPassword(v.passwordRequired===true);setStage(reopening?'resume':'details');return;
   }
   throw Error('service-unavailable');
  },[navigate]);
- const refresh=useCallback(async()=>{
+ const refresh=useCallback(async(reopening=false)=>{
   if(controller.current)return;
   const c=new AbortController();controller.current=c;
   try{
@@ -41,11 +41,12 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
    if(c.signal.aborted)return;
    if(!context){setStage('unavailable');return;}
    if(context.state!=='verified'){setStage(old=>old==='code'?'code':existing?'password':'code');return;}
-   accept(await call(setup,c.signal));
+   const state=await call(setup,c.signal);
+   if(!c.signal.aborted)accept(state,reopening);
   }catch(e){if(!c.signal.aborted){setError(e instanceof Error?e.message:'unavailable');setStage('unavailable');}}
   finally{if(controller.current===c)controller.current=null;}
  },[accept,client,existing]);
- useEffect(()=>{void refresh();return()=>{controller.current?.abort();controller.current=null;}},[refresh]);
+ useEffect(()=>{void refresh(true);return()=>{controller.current?.abort();controller.current=null;}},[refresh]);
  async function submit(e:FormEvent){
   e.preventDefault();
   if(controller.current||busy||!['password','details'].includes(stage))return;
@@ -74,7 +75,10 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
   if(controller.current)return;
   const c=new AbortController();controller.current=c;setBusy(true);
   try{
-   if(!await client.logout(c.signal))throw Error('service-unavailable');
+   const context=await client.context(c.signal);
+   if(!context||context.state==='verified'&&!await client.logout(c.signal))throw Error('service-unavailable');
+   if(c.signal.aborted)return;
+   setEmail('');setPassword('');setShowPassword(false);setName('');setNip('');setTermsAccepted(false);
    navigate('/register/agency',{replace:true});
    setError('');setStage('code');
   }catch{if(!c.signal.aborted)setError('service-unavailable');}
@@ -82,12 +86,17 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
  }
  const termsHref='/terms/'+termsVersion;
  return <>
-  {!existing&&<RegistrationProgress twoSteps current={stage==='details'?1:0}/>}
+  {!existing&&<RegistrationProgress twoSteps current={stage==='details'||stage==='resume'?1:0}/>}
   {stage==='check'&&<p role="status">{t('closedHosted.checking')}</p>}
+  {stage==='resume'&&<div className="auth-form">
+   <p role="status">{t('publicSignup.unfinishedAgency')}</p>
+   <button type="button" className="button button--primary button--full" disabled={busy} onClick={()=>{setError('');setStage('details')}}>{t('publicSignup.continueAgency')}</button>
+   <button type="button" className="button button--outline button--full" disabled={busy} onClick={()=>void restartRegistration()}>{t('publicSignup.restartAgency')}</button>
+  </div>}
   {stage==='code'&&<StagingSessionPanel guided simple signup={!existing} termsHref={existing?undefined:termsHref} purpose={existing?'existing':'enrollment'} onChanged={()=>void refresh()}/>}
   {stage==='unavailable'&&(error==='registration-required'?
    <button type="button" className="button button--primary" disabled={busy} onClick={()=>void restartRegistration()}>{t('publicExperience.create')}</button>:
-   <button type="button" className="button button--outline" onClick={()=>void refresh()}>{t('publicSignup.retry')}</button>)}
+   <button type="button" className="button button--outline" onClick={()=>void refresh(true)}>{t('publicSignup.retry')}</button>)}
   {(stage==='password'||stage==='details')&&<form className="auth-form" onSubmit={submit} aria-busy={busy}>
    {stage==='password'&&<label className="field-label">{t('stagingSession.email')}<input type="email" autoComplete="username" value={email} onChange={e=>setEmail(e.target.value)} disabled={busy} required maxLength={254}/></label>}
    {(stage==='password'||needsPassword)&&<div className="field-label">

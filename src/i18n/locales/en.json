@@ -13,6 +13,9 @@
     "service-unavailable": "Could not continue. Try again."
   },
   "publicSignup": {
+    "unfinishedAgency": "Your email is verified, but your agency workspace hasn’t been created yet. You can continue or start over with email verification.",
+    "continueAgency": "Continue registration",
+    "restartAgency": "Start over",
     "requiredNip": "Agency NIP",
     "agencyNipLookup": "Once the NIP is verified, it can be used to find the agency.",
     "resendAgencyCode": "Resend code",

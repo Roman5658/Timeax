@@ -13,6 +13,9 @@
     "service-unavailable": "Nie udało się kontynuować. Spróbuj ponownie."
   },
   "publicSignup": {
+    "unfinishedAgency": "Adres e-mail jest potwierdzony, ale panel agencji nie został jeszcze utworzony. Możesz kontynuować lub zacząć od potwierdzenia adresu.",
+    "continueAgency": "Kontynuuj rejestrację",
+    "restartAgency": "Zacznij od nowa",
     "requiredNip": "NIP agencji",
     "agencyNipLookup": "Po zweryfikowaniu NIP będzie można znaleźć agencję po tym numerze.",
     "resendAgencyCode": "Wyślij kod ponownie",
