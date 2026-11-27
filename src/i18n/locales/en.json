@@ -4,7 +4,7 @@
     "password": "Password",
     "open": "Create agency workspace",
     "invalid-credentials": "Sign-in failed. Check your email and password.",
-    "invalid-nip": "Check the NIP or leave it blank.",
+    "invalid-nip": "Enter the agency’s valid 10-digit NIP.",
     "invalid-name": "Enter an agency name between 2 and 120 characters.",
     "invalid-password": "Use a password of at least 12 characters.",
     "try-later": "Too many attempts. Try again later.",
@@ -13,6 +13,11 @@
     "service-unavailable": "Could not continue. Try again."
   },
   "publicSignup": {
+    "requiredNip": "Agency NIP",
+    "agencyNipLookup": "Once the NIP is verified, it can be used to find the agency.",
+    "resendAgencyCode": "Resend code",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
     "agencyEmailUse": "We’ll send a verification code to this address. If we issue invoices, we’ll send them to the same address.",
     "retry": "Try again",
     "saved": "Agency details were saved. An agency account has not been created yet.",
@@ -2891,7 +2896,7 @@
     "accessTitle": "Access and email",
     "accessBody": "We use your email address to send a one-time verification code during registration and your password to let you sign in. Verification emails are not marketing messages.",
     "dataTitle": "Organization data",
-    "dataBody": "To set up an agency workspace we use the organization name and, if provided, its Polish tax ID (NIP). Entering a NIP does not verify authority or give access to an existing workspace.",
+    "dataBody": "To set up an agency workspace we use the organization name and its Polish tax ID (NIP). Entering a NIP does not verify authority or give access to an existing workspace.",
     "storageTitle": "Browser data",
     "storageBody": "The service uses session mechanisms to operate and secure sign-in. Your chosen language or theme may be remembered in this browser."
   },

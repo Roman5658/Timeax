@@ -10,6 +10,7 @@ export function StagingSessionPanel({ onChanged, purpose = "enrollment", audienc
   const sessionText = (key: string) => t(simple && ["accepted","enterCode","verified","logout"].includes(key) ? "publicSignup."+key : audience === "workspace" && key === "verified" ? "localWorkspace.sessionVerified" : audience === "workspace" && key === "scope" ? "localWorkspace.sessionScope" : audience === "worker" && key === "verified" ? "workerJoin.sessionVerified" : audience === "worker" && key === "scope" ? "workerJoin.sessionScope" : (purpose === "existing" ? "existingSession." : "stagingSession.") + (otpLength === 8 && (key === "code" || key === "enterCode") ? key + "8" : key));
   const [scope, setScope] = useState<AccessContext>();
   const [busy, setBusy] = useState(true);
+  const [canResendAgencyCode,setCanResendAgencyCode] = useState(false);
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [notice, setNotice] = useState("checking");
@@ -58,6 +59,13 @@ export function StagingSessionPanel({ onChanged, purpose = "enrollment", audienc
   }, [scope]);
   const verified = scope?.state === "verified";
   const otpLength = scope?.otpLength ?? 6;
+  const awaitingAgencyCode=Boolean(termsHref&&scope?.capabilities.verify);
+  useEffect(()=>{
+    setCanResendAgencyCode(false);
+    if(!awaitingAgencyCode)return;
+    const timer=window.setTimeout(()=>setCanResendAgencyCode(true),60_000);
+    return()=>window.clearTimeout(timer);
+  },[awaitingAgencyCode,scope]);
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!busy && (emailIdentity || validEmail(email.trim())) && scope?.capabilities.verify && validOtp(code, otpLength)) void act("verify");
@@ -86,7 +94,10 @@ export function StagingSessionPanel({ onChanged, purpose = "enrollment", audienc
         disabled={busy || (scope?.capabilities.verify ? !validOtp(code, otpLength) || !emailIdentity && !validEmail(email.trim()) : !scope?.capabilities.login || !validEmail(email.trim()))}>
         {sessionText(scope?.capabilities.verify ? "verifyAction" : "sendAction")}
       </button>
-      {emailIdentity && scope?.capabilities.verify && <button type="button" className="button button--outline button--full" disabled={busy || !validEmail(email.trim())} onClick={() => void act("send")}>{sessionText("sendAction")}</button>}
+      {emailIdentity && scope?.capabilities.verify && (!termsHref||canResendAgencyCode) &&
+        <button type="button" className="button button--outline button--full" disabled={busy || !validEmail(email.trim())} onClick={() => void act("send")}>
+          {termsHref?t("publicSignup.resendAgencyCode"):sessionText("sendAction")}
+        </button>}
     </form>}
     {guided&&!simple&&!verified&&<details className="enrollment-code-help"><summary>{t("publicExperience.codesHelp")}</summary><p>{t("publicExperience.codePurpose")}</p></details>}
     {(!simple || (!scope && !busy)) && <button className="button button--outline button--full" type="button" disabled={busy} onClick={() => void act("check")}>{simple?t("publicSignup.retry"):sessionText("recheck")}</button>}

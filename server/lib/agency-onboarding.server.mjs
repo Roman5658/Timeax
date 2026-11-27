@@ -73,7 +73,7 @@ export function createAgencyOnboardingRoutes({origin,provider,store,readSession,
     const agencyName=body.agencyName.trim(),nip=body.nip.trim().replace(/[ -]/g,'');
     if([...agencyName].length<2||[...agencyName].length>120||/[\p{Cc}\p{Cs}\u202a-\u202e\u2066-\u2069]/u.test(agencyName))
      return respond(400,{error:'invalid-name'});
-    if(nip&&!goodNip(nip))return respond(400,{error:'invalid-nip'});
+    if(!goodNip(nip))return respond(400,{error:'invalid-nip'});
     if(!isActive(request,session))return respond(401,{error:'valid-session-required'});
     if(passwordRequired){
      if(!validNewPassword(body.password))return respond(400,{error:'invalid-password'});
@@ -81,7 +81,7 @@ export function createAgencyOnboardingRoutes({origin,provider,store,readSession,
      session.passwordSet=true;session.credential=null;
     }
     if(!isActive(request,session))return respond(401,{error:'valid-session-required'});
-    const organizationId=await store.create(identity,{agencyName,nip:nip||null});
+    const organizationId=await store.create(identity,{agencyName,nip});
     if(!validId(organizationId))throw Error('Invalid workspace response');
     if(!isActive(request,session))return respond(401,{error:'valid-session-required'});
     return respond(200,{state:'ready',organizationId});

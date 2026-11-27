@@ -4,7 +4,7 @@
     "password": "Hasło",
     "open": "Utwórz panel agencji",
     "invalid-credentials": "Nie udało się zalogować. Sprawdź adres e-mail i hasło.",
-    "invalid-nip": "Sprawdź NIP lub zostaw pole puste.",
+    "invalid-nip": "Podaj prawidłowy 10-cyfrowy NIP agencji.",
     "invalid-name": "Wpisz nazwę agencji (od 2 do 120 znaków).",
     "invalid-password": "Hasło musi mieć co najmniej 12 znaków.",
     "try-later": "Zbyt wiele prób. Spróbuj później.",
@@ -13,6 +13,11 @@
     "service-unavailable": "Nie udało się kontynuować. Spróbuj ponownie."
   },
   "publicSignup": {
+    "requiredNip": "NIP agencji",
+    "agencyNipLookup": "Po zweryfikowaniu NIP będzie można znaleźć agencję po tym numerze.",
+    "resendAgencyCode": "Wyślij kod ponownie",
+    "showPassword": "Pokaż hasło",
+    "hidePassword": "Ukryj hasło",
     "agencyEmailUse": "Na ten adres wyślemy kod potwierdzający. Jeśli wystawimy faktury, wyślemy je na ten sam adres.",
     "retry": "Spróbuj ponownie",
     "saved": "Dane agencji zapisano. Konto agencji nie zostało jeszcze utworzone.",
@@ -2891,7 +2896,7 @@
     "accessTitle": "Dostęp i poczta",
     "accessBody": "Przy rejestracji wykorzystujemy adres e-mail, aby wysłać jednorazowy kod i potwierdzić adres, oraz hasło, aby umożliwić logowanie. Wiadomości z kodem nie są reklamą.",
     "dataTitle": "Dane organizacji",
-    "dataBody": "Do utworzenia panelu agencji używamy nazwy organizacji oraz NIP, jeśli został podany. Wpisanie NIP nie potwierdza uprawnień ani nie otwiera dostępu do istniejącego panelu.",
+    "dataBody": "Do utworzenia panelu agencji używamy nazwy organizacji oraz NIP. Wpisanie NIP nie potwierdza uprawnień ani nie otwiera dostępu do istniejącego panelu.",
     "storageTitle": "Dane w przeglądarce",
     "storageBody": "Serwis używa mechanizmów sesji do obsługi i ochrony logowania. Wybrany przez Ciebie język lub motyw może zostać zapamiętany w tej przeglądarce."
   },

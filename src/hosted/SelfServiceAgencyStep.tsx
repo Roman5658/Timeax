@@ -1,3 +1,4 @@
+import {Eye,EyeOff} from 'lucide-react';
 import {useCallback,useEffect,useMemo,useRef,useState,type FormEvent} from 'react';
 import {Link,useNavigate} from 'react-router-dom';
 import {useTranslation} from 'react-i18next';
@@ -23,7 +24,7 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
  const {t}=useTranslation(),navigate=useNavigate();
  const client=useMemo(()=>createWorkingRegistrationClient(location.origin,fetch.bind(window),existing?'existing':'enrollment'),[existing]);
  const [stage,setStage]=useState<Stage>('check'),[needsPassword,setNeedsPassword]=useState(true),[email,setEmail]=useState(''),[name,setName]=useState(''),[nip,setNip]=useState(''),[password,setPassword]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
- const [termsAccepted,setTermsAccepted]=useState(false);
+ const [termsAccepted,setTermsAccepted]=useState(false),[showPassword,setShowPassword]=useState(false);
  const controller=useRef<AbortController|null>(null);
  const accept=useCallback((v:{state?:unknown;organizationId?:unknown;passwordRequired?:unknown})=>{
   if(v?.state==='ready'&&organizationId(v.organizationId)){navigate('/workspace/'+v.organizationId,{replace:true});return;}
@@ -65,7 +66,7 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
    }
   }
   finally{
-   if(!c.signal.aborted){setBusy(false);setPassword('')}
+   if(!c.signal.aborted){setBusy(false);setPassword('');setShowPassword(false)}
    if(controller.current===c)controller.current=null;
   }
  }
@@ -89,10 +90,20 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
    <button type="button" className="button button--outline" onClick={()=>void refresh()}>{t('publicSignup.retry')}</button>)}
   {(stage==='password'||stage==='details')&&<form className="auth-form" onSubmit={submit} aria-busy={busy}>
    {stage==='password'&&<label className="field-label">{t('stagingSession.email')}<input type="email" autoComplete="username" value={email} onChange={e=>setEmail(e.target.value)} disabled={busy} required maxLength={254}/></label>}
-   {(stage==='password'||needsPassword)&&<label className="field-label">{t('selfService.password')}<input type="password" autoComplete={stage==='password'?'current-password':'new-password'} minLength={stage==='details'?12:undefined} maxLength={72} value={password} onChange={e=>setPassword(e.target.value)} disabled={busy} required/></label>}
+   {(stage==='password'||needsPassword)&&<div className="field-label">
+    <label htmlFor="agency-password">{t('selfService.password')}</label>
+    <div className="public-password-field">
+     <input id="agency-password" type={stage==='details'&&showPassword?'text':'password'} autoComplete={stage==='password'?'current-password':'new-password'} minLength={stage==='details'?12:undefined} maxLength={72} value={password} onChange={e=>setPassword(e.target.value)} disabled={busy} required/>
+     {stage==='details'&&<button type="button" className="icon-button public-password-toggle" aria-controls="agency-password"
+      aria-label={t(showPassword?'publicSignup.hidePassword':'publicSignup.showPassword')} disabled={busy} onClick={()=>setShowPassword(v=>!v)}>
+      {showPassword?<EyeOff size={18} aria-hidden="true"/>:<Eye size={18} aria-hidden="true"/>}
+     </button>}
+    </div>
+   </div>}
    {stage==='details'&&<>
     <label className="field-label">{t('agencyRegistration.nameLabel')}<input autoComplete="organization" value={name} onChange={e=>setName(e.target.value)} disabled={busy} required minLength={2} maxLength={120}/></label>
-    <label className="field-label">{t('agencyRegistration.nipLabel')}<input inputMode="numeric" value={nip} onChange={e=>setNip(e.target.value)} disabled={busy} maxLength={24}/></label>
+    <label className="field-label">{t('publicSignup.requiredNip')}<input inputMode="numeric" value={nip} onChange={e=>setNip(e.target.value)} disabled={busy} maxLength={24} required aria-describedby="agency-nip-lookup"/></label>
+    <p id="agency-nip-lookup" className="muted-copy">{t('publicSignup.agencyNipLookup')}</p>
     <div className="public-legal-links">
      <LegalLink kind="terms" to={termsHref}/>
      <LegalLink kind="privacy" to="/privacy#privacy-access"/>
