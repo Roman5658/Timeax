@@ -195,7 +195,7 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisionin
   </div>
   {!drawer&&status}
   {activityId&&<AgencyBookDrawer key={'activity/'+activityId} centered title={roster.find(worker=>worker.id===activityId)?.display??label(activityId)} closeLabel={copy('close')} onClose={dismiss}>
-   {active.has(activityId)?<AgencyWorkerActivity scope={{organizationId,membershipId:activityId,siteId}} timecardsEnabled={timecardsEnabled} factoryHoursEnabled={factoryHoursEnabled} absencesEnabled={absencesEnabled}/>
+   {active.has(activityId)?<AgencyWorkerActivity scope={{organizationId,membershipId:activityId,siteId}} timecardsEnabled={timecardsEnabled} factoryHoursEnabled={factoryHoursEnabled} absencesEnabled={absencesEnabled} estimatesEnabled={estimatesEnabled}/>
     :<p role="status">{copy('rosterUnavailable')}</p>}
   </AgencyBookDrawer>}
   {drawer&&drawer.type!=='activity'&&<AgencyBookDrawer title={drawer.type==='email'?provision.createAccount:drawer.type==='invite'?copy('add'):copy('settings')} closeLabel={copy('close')} busy={busy||estimateBusy} onClose={dismiss}>

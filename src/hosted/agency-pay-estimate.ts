@@ -1,5 +1,5 @@
 import type {PayEstimateSetting} from './pay-estimate-settings.ts';
-import type {LiveTimekeepingReport,ReportRow} from './timecard-document.ts';
+import type {ReportRow} from './timecard-document.ts';
 
 export type EstimateStatus='direct-net'|'gross-with-deductions'|'partial-scope'|'missing-deductions'|'missing-rate'|'deductions-exceed-gross';
 export type PayEstimateMonth={month:string;paidMinutes:number;basis?:'gross'|'net';rateCents?:number;hourlyBaseCents?:number;netCents?:number;
@@ -18,7 +18,7 @@ function hourlyCents(paidMinutes:number,rateCents:number):number|undefined{
  const cents=Number((BigInt(paidMinutes)*BigInt(rateCents)+30n)/60n);
  return Number.isSafeInteger(cents)?cents:undefined;
 }
-export function agencyPayEstimates(report:LiveTimekeepingReport,settings:readonly PayEstimateSetting[],fullMonth?:string):PayEstimates{
+export function agencyPayEstimates(report:{rows:readonly Pick<ReportRow,'membershipId'|'data'>[]},settings:readonly PayEstimateSetting[],fullMonth?:string):PayEstimates{
  const byWorker=new Map<string,PayEstimateSetting[]>(),paid=new Map<string,Map<string,number>>();
  for(const setting of settings){
   if(!monthPattern.test(setting.effectiveMonth))continue;

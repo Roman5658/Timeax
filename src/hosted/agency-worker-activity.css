@@ -40,3 +40,6 @@
 @media (prefers-reduced-motion:reduce) {
  .agency-book.agency-book--center[open],.agency-book.agency-book--center.agency-book--closing[open] { animation:none }
 }
+
+.agency-worker-activity__wages .field-label{max-width:21rem}
+.agency-worker-activity__wages .agency-worker-activity__summary{column-gap:2.5rem}

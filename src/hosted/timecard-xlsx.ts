@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import {estimatesForRows,type PayEstimates} from './agency-pay-estimate.ts';
+import {estimatesForRows,type PayEstimate,type PayEstimates} from './agency-pay-estimate.ts';
 import type {PayEstimateCopy} from './pay-estimate-copy.ts';
 import {snapshotExportRows,timecardBreakLabel,timecardTotals,timecardWorkerGroups,type TimecardReport} from './timecard-document.ts';
 export {snapshotExportRows,type AgencyTimecardSnapshot,type TimecardReport} from './timecard-document.ts';
@@ -43,16 +43,39 @@ function banner(sheet:ExcelJS.Worksheet,value:string,width:number,kind:'title'|'
  row.alignment={vertical:'middle',wrapText:true};
  return row;
 }
-function headers(sheet:ExcelJS.Worksheet,copy:string[]){
+function headers(sheet:ExcelJS.Worksheet,copy:string[],freeze=true){
  const row=sheet.addRow(copy);fill(row,xp.head,copy.length);row.font={bold:true,color:{argb:'FFFFFFFF'}};
  row.height=32;row.alignment={horizontal:'center',vertical:'middle',wrapText:true};
- sheet.views=[{state:'frozen',ySplit:row.number,zoomScale:90,activeCell:'A'+(row.number+1)}];return row.number;
+ if(freeze)sheet.views=[{state:'frozen',ySplit:row.number,zoomScale:90,activeCell:'A'+(row.number+1)}];
+ return row.number;
 }
 function total(row:ExcelJS.Row,width:number){fill(row,xp.total,width);row.font={bold:true,color:{argb:'FF1F3B57'}};}
 function formatted(row:ExcelJS.Row,columns:number[],numFmt:string){for(const i of columns)row.getCell(i).numFmt=numFmt;}
 function setup(sheet:ExcelJS.Worksheet,widths:number[]){
  sheet.columns=widths.map(width=>({width}));sheet.properties.defaultRowHeight=21;
  sheet.pageSetup={orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,margins:{left:.25,right:.25,top:.5,bottom:.5,header:.2,footer:.2}};
+}
+
+function writeWageRows(sheet:ExcelJS.Worksheet,items:readonly PayEstimate[],names:ReadonlyMap<string,string>,labels:PayEstimateCopy,c:WorkbookCopy,freeze=false){
+ const header=headers(sheet,[labels.worker,labels.month,labels.hours,labels.rate,labels.gross,labels.netRate,labels.deductions,labels.net,labels.status],freeze);
+ const amount=(cents:number|undefined)=>cents===undefined?'—':cents/100;
+ const currency='#,##0.00 "PLN"',formatMoney=new Intl.NumberFormat(c.locale,{style:'currency',currency:'PLN'});
+ for(const item of items){
+  const name=names.get(item.workerId)??c.missingName;
+  for(const m of item.months){
+   const entry=sheet.addRow([name,m.month,duration(m.paidMinutes),amount(m.rateCents),
+    m.basis==='gross'?amount(m.hourlyBaseCents):'—',m.basis==='net'?amount(m.hourlyBaseCents):'—',
+    m.deductions.map(d=>d.name+': '+formatMoney.format(d.cents/100)).join('; ')||'—',amount(m.netCents),labels[m.status]]);
+   fill(entry,xp.shift,9);formatted(entry,[3],'[h]:mm');formatted(entry,[5,6,8],currency);
+   if(m.rateCents!==undefined)entry.getCell(4).numFmt='#,##0.00 "PLN/h '+(m.basis==='gross'?'brutto':'netto')+'"';
+  }
+  if(item.months.length>1){
+   const summary=sheet.addRow([name,'',null,null,null,null,null,amount(item.netCents),
+    item.netCents===undefined?labels.incomplete:labels.net]);
+   total(summary,9);formatted(summary,[8],currency);
+  }
+ }
+ return header;
 }
 
 export function buildAgencyTimecardWorkbook(snapshot:TimecardReport,c:WorkbookCopy,membershipId?:string,estimates?:PayEstimates){
@@ -64,11 +87,15 @@ export function buildAgencyTimecardWorkbook(snapshot:TimecardReport,c:WorkbookCo
  if(preview&&!c.preview)throw Error('Missing preview labels');
  const from=preview?c.preview!.source:received?c.factorySource:c.internal,status=preview?c.preview!.status:received?c.received:c.archived;
  const totalLabel=preview?c.preview!.total:c.total;
+ const wageLabels=preview?c.wages:undefined;
+ const allowedWages=wageLabels&&estimates?estimatesForRows(picked.rows,estimates,membershipId):[];
+ const estimatesByWorker=new Map(allowedWages.map(item=>[item.workerId,item]));
+ const wageNames=new Map(group.map(person=>[person.id,person.name]));
  const absences=preview?snapshot.absences?.filter(a=>!membershipId||a.membershipId===membershipId):undefined;
  const period=[snapshot.worksiteName,snapshot.dateFrom+' – '+snapshot.dateTo,snapshot.timeZone].join(' · ');
  const wb=new ExcelJS.Workbook();wb.creator='Timeax';wb.subject=c.worksheet;wb.title=c.worksheet+' – '+snapshot.worksiteName;
  const used=new Set<string>(),summary=wb.addWorksheet(sheetName(totalLabel,used));
- setup(summary,[27,34,12,18,18,18,22]);
+ setup(summary,allowedWages.length?[27,34,17,27,21,24,34,23,46]:[27,34,12,18,18,18,22]);
  banner(summary,c.worksheet,7,'title');
  banner(summary,period,7,'sub');
  summary.addRow([c.source,from,c.status,status]);
@@ -76,6 +103,7 @@ export function buildAgencyTimecardWorkbook(snapshot:TimecardReport,c:WorkbookCo
  if(membershipId)summary.addRow([c.scope,c.workerExtract,group[0]?.name]);
  banner(summary,preview?c.preview!.notice:c.notInSnapshot,7,'sub');
  if(preview&&absences===undefined&&c.preview!.absenceUnavailable)banner(summary,c.preview!.absenceUnavailable,7,'sub');
+ const wageShortcut=wageLabels&&allowedWages.length?summary.addRow([wageLabels.title]):undefined;
  const top=headers(summary,[c.site,c.worker,c.shifts,c.gross,c.break,c.paid,preview?c.preview!.absences??c.absences:c.absences]);
  const remaining=new Map<string,NonNullable<typeof absences>>();
  for(const row of absences??[]){const key=row.membershipId+'|'+row.worksiteId;if(!remaining.has(key))remaining.set(key,[]);remaining.get(key)!.push(row)}
@@ -100,13 +128,28 @@ export function buildAgencyTimecardWorkbook(snapshot:TimecardReport,c:WorkbookCo
  if(summary.rowCount>top)summary.autoFilter={from:'A'+top,to:'G'+summary.rowCount};
  const sums=summary.addRow([totalLabel,'',totals.shiftCount,duration(totals.grossMinutes),duration(totals.breakMinutes),duration(picked.paidMinutes),absences?.length??'—']);
  total(sums,7);formatted(sums,[4,5,6],'[h]:mm');
+ if(wageLabels&&allowedWages.length&&wageShortcut){
+  summary.addRow([]);
+  const heading=banner(summary,wageLabels.title,9,'title');
+  const link=wageShortcut.getCell(1);
+  link.value={text:wageLabels.title,hyperlink:"#'"+summary.name.replaceAll("'","''")+"'!A"+heading.number};
+  link.font={bold:true,underline:true,color:{argb:'FF1F3B57'}};
+  banner(summary,wageLabels.private,9,'sub');writeWageRows(summary,allowedWages,wageNames,wageLabels,c);
+ }
  for(const person of group){
   const sheet=wb.addWorksheet(sheetName(person.name,used));
   const widths=[26,23,23,15,17,13,13,18,19,18,21,23,37];
+  const personEstimate=estimatesByWorker.get(person.id);
+  if(personEstimate){widths[1]=23;widths[2]=23;widths[3]=27;widths[4]=21;widths[5]=24;widths[6]=34;widths[7]=23;widths[8]=46;}
   setup(sheet,widths);
   banner(sheet,c.worksheet,13,'title');banner(sheet,person.name,13,'sub');
   banner(sheet,period,13,'sub');
-  const rowHeader=headers(sheet,[c.worker,c.agency,c.site,c.date,c.weekday,c.start,c.end,c.gross,c.break,c.paid,c.breakState,c.status,c.comment]);
+  if(personEstimate&&wageLabels){
+   banner(sheet,wageLabels.title,13,'title');banner(sheet,wageLabels.private,13,'sub');
+   writeWageRows(sheet,[personEstimate],wageNames,wageLabels,c);sheet.addRow([]);
+   sheet.views=[{state:'frozen',ySplit:3,zoomScale:90,activeCell:'A4'}];
+  }
+  const rowHeader=headers(sheet,[c.worker,c.agency,c.site,c.date,c.weekday,c.start,c.end,c.gross,c.break,c.paid,c.breakState,c.status,c.comment],!personEstimate);
   for(const row of person.rows){
    const d=row.data,when=dateValue(d.localDate),weekday=when.getUTCDay();
    const breakValue=d.breakStatus==='not-reported'?c.breakUnreported:d.breakStatus==='not-taken'?c.breakNotTaken:duration(d.breakMinutes);
@@ -130,31 +173,12 @@ export function buildAgencyTimecardWorkbook(snapshot:TimecardReport,c:WorkbookCo
   for(const a of absences)for(const range of a.ranges){const row=sheet.addRow([a.name,a.worksiteName,dateValue(range.from),dateValue(range.to)]);fill(row,'FFE8DEFF',4);formatted(row,[3,4],'dd.mm.yyyy');}
   sheet.autoFilter={from:'A'+head,to:'D'+sheet.rowCount};
  }
- // Wages must never be serialized into an archived, received or factory-shared timecard.
- if(snapshot.source==='internal-live'&&c.wages&&estimates){
-  const labels=c.wages,allowed=estimatesForRows(picked.rows,estimates,membershipId);
-  if(allowed.length){
-   const names=new Map(group.map(person=>[person.id,person.name]));
-   const sheet=wb.addWorksheet(sheetName(labels.title,used));setup(sheet,[29,15,18,18,20,20,34,20,46]);
-   banner(sheet,labels.title,9,'title');banner(sheet,labels.private,9,'sub');
-   const header=headers(sheet,[labels.worker,labels.month,labels.hours,labels.rate,labels.gross,labels.netRate,labels.deductions,labels.net,labels.status]);
-   const amount=(cents:number|undefined)=>cents===undefined?'—':cents/100;
-   const currency='#,##0.00 "PLN"',formatMoney=new Intl.NumberFormat(c.locale,{style:'currency',currency:'PLN'});
-   for(const item of allowed){
-    for(const m of item.months){
-     const entry=sheet.addRow([names.get(item.workerId)??c.missingName,m.month,duration(m.paidMinutes),amount(m.rateCents),
-      m.basis==='gross'?amount(m.hourlyBaseCents):'—',m.basis==='net'?amount(m.hourlyBaseCents):'—',
-      m.deductions.map(d=>d.name+': '+formatMoney.format(d.cents/100)).join('; ')||'—',amount(m.netCents),labels[m.status]]);
-     fill(entry,xp.shift,9);formatted(entry,[3],'[h]:mm');formatted(entry,[4,5,6,8],currency);
-    }
-    if(item.months.length>1){
-     const summary=sheet.addRow([names.get(item.workerId)??c.missingName,'',null,null,null,null,null,amount(item.netCents),
-      item.netCents===undefined?labels.incomplete:labels.net]);
-     total(summary,9);formatted(summary,[8],currency);
-    }
-   }
-   sheet.autoFilter={from:'A'+header,to:'I'+sheet.rowCount};
-  }
+ // Keep the dedicated optional sheet for people who compare rates across months.
+ if(wageLabels&&allowedWages.length){
+  const sheet=wb.addWorksheet(sheetName(wageLabels.title,used));setup(sheet,[29,15,18,27,21,24,34,23,46]);
+  banner(sheet,wageLabels.title,9,'title');banner(sheet,wageLabels.private,9,'sub');
+  const header=writeWageRows(sheet,allowedWages,wageNames,wageLabels,c,true);
+  sheet.autoFilter={from:'A'+header,to:'I'+sheet.rowCount};
  }
  return wb;
 }

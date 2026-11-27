@@ -1,9 +1,13 @@
-import {useEffect,useState} from 'react';
+import {useCallback,useEffect,useState,type ReactNode} from 'react';
 import {useTranslation} from 'react-i18next';
 import {factoryHoursCall} from './factory-timecards';
 import {teamCall} from './team-workflow';
 import {minutesLabel,timecardCall} from './timecards';
 import {selectInternalWorkerShifts,selectReceivedWorkerShifts,selectWorkerAbsences,type ActivityShift,type WorkerActivityScope} from './agency-worker-activity';
+import {loadPayEstimateSettings} from './pay-estimate-settings';
+import {applicableEstimate,warsawEstimateMonth} from './worker-pay-estimate-form';
+import {agencyPayEstimates} from './agency-pay-estimate';
+import {payEstimateCopy} from './pay-estimate-copy';
 import './agency-worker-activity.css';
 
 const copy={
@@ -24,6 +28,7 @@ const absences:Load<ReturnType<typeof selectWorkerAbsences>>=async(scope,signal)
 
 function useActivity<T>({organizationId,membershipId,siteId}:WorkerActivityScope,enabled:boolean,load:Load<T>){
  const [attempt,refresh]=useState(0);
+ const retry=useCallback(()=>refresh(n=>n+1),[]);
  const key=[organizationId,membershipId,siteId,attempt].join('/');
  const [result,setResult]=useState<{key:string;data:LoadState<T>}>();
  useEffect(()=>{
@@ -36,7 +41,48 @@ function useActivity<T>({organizationId,membershipId,siteId}:WorkerActivityScope
   });
   return()=>controller.abort();
  },[key,organizationId,membershipId,siteId,enabled,load]);
- return {result:result?.key===key?result.data:{state:'loading'} as const,retry:()=>refresh(n=>n+1)};
+ return {result:result?.key===key?result.data:{state:'loading'} as const,retry};
+}
+const estimates:Load<Awaited<ReturnType<typeof loadPayEstimateSettings>>>=async(scope,signal)=>
+ (await loadPayEstimateSettings(scope.organizationId,signal)).filter(r=>r.workerId===scope.membershipId);
+const wageDetails={
+ en:{period:'Estimate month',unconfigured:'No hourly rate set for this month.',noHours:'No internal shifts for the selected month.',source:'Internal work hours only.'},
+ ru:{period:'Месяц расчёта',unconfigured:'На этот месяц ставка не задана.',noHours:'В выбранном месяце нет смен на внутренних производствах.',source:'Расчёт только по внутренним часам.'},
+ pl:{period:'Miesiąc rozliczenia',unconfigured:'Na ten miesiąc nie ustawiono stawki godzinowej.',noHours:'W tym miesiącu nie ma zmian wewnętrznych.',source:'Szacunek tylko na podstawie godzin wewnętrznych.'},
+ uk:{period:'Місяць розрахунку',unconfigured:'На цей місяць ставки не задано.',noHours:'У вибраному місяці немає змін на внутрішніх виробництвах.',source:'Розрахунок лише за внутрішніми годинами.'},
+};
+function WageCard({scope,lang,rows,hoursEnabled,settings,feedback}:{
+ scope:WorkerActivityScope;lang:keyof typeof wageDetails;rows?: ActivityShift[];hoursEnabled:boolean;
+ settings:ReturnType<typeof useActivity<Awaited<ReturnType<typeof loadPayEstimateSettings>>>>;
+ feedback:ReactNode;
+}){
+ const c=payEstimateCopy(lang),details=wageDetails[lang]??wageDetails.en,now=warsawEstimateMonth();
+ const [selected,setSelected]=useState(now);
+ const months=[...new Set([now,...(rows??[]).map(r=>r.data.localDate.slice(0,7))])].sort().reverse();
+ const month=months.includes(selected)?selected:now;
+ const number=new Intl.NumberFormat(lang,{style:'currency',currency:'PLN'});
+ const monthLabel=new Intl.DateTimeFormat(lang,{month:'long',year:'numeric',timeZone:'UTC'});
+ const source=settings.result.state==='ready'?settings.result.value:undefined;
+ const rate=source&&applicableEstimate(source,scope.membershipId,month);
+ const knownRows=rows?.filter(r=>r.data.localDate.startsWith(month+'-'));
+ const result=source&&knownRows?.length?agencyPayEstimates({rows:knownRows.map(r=>({membershipId:scope.membershipId,data:r.data}))},source,
+  !scope.siteId?month:undefined).get(scope.membershipId)?.months[0]:undefined;
+ const displayNet=result?.netCents!==undefined;
+ const value=displayNet?result.netCents:result?.hourlyBaseCents;
+ const money=(amount:number|undefined)=>amount===undefined?'—':number.format(amount/100);
+ return <section className="agency-worker-activity__section agency-worker-activity__wages"><h3>{c.title}</h3>
+  {!source?feedback:<>
+   <label className="field-label">{details.period}<select value={month} onChange={e=>setSelected(e.target.value)}>{months.map(m=>
+    <option key={m} value={m}>{monthLabel.format(new Date(m+'-01T00:00:00Z'))}</option>)}</select></label>
+   {!rate?<p>{details.unconfigured}</p>:<dl className="agency-worker-activity__summary">
+    <div><dt>{c.rate} ({rate.basis==='gross'?'brutto':'netto'})</dt><dd>{money(rate.rateCents)} / h</dd></div>
+    <div><dt>{displayNet||rate.basis==='net'?c.net:c.gross}</dt><dd>{money(value)}</dd></div>
+   </dl>}
+   <p className="muted-copy">{details.source}</p>
+   {result&&result.status!=='direct-net'&&result.status!=='gross-with-deductions'?<p className="muted-copy">{c[result.status]}</p>:
+    rate&&knownRows?.length===0?<p className="muted-copy">{details.noHours}</p>:rate&&(!hoursEnabled||!rows)?<p className="muted-copy">{(copy[lang]??copy.en).unavailable}</p>:null}
+  </>}
+ </section>;
 }
 function Hours({rows,labels,format}:{rows:ActivityShift[];labels:Words;format:(day:string)=>string}){
  const [limit,setLimit]=useState(12);
@@ -53,21 +99,28 @@ function Hours({rows,labels,format}:{rows:ActivityShift[];labels:Words;format:(d
   {rows.length>limit&&<button className="button button--outline button--small" type="button" onClick={()=>setLimit(n=>n+12)}>{labels.more}</button>}
  </>;
 }
-export function AgencyWorkerActivity({scope,timecardsEnabled,factoryHoursEnabled,absencesEnabled}:{
- scope:WorkerActivityScope;timecardsEnabled:boolean;factoryHoursEnabled:boolean;absencesEnabled:boolean;
+export function AgencyWorkerActivity({scope,timecardsEnabled,factoryHoursEnabled,absencesEnabled,estimatesEnabled=false}:{
+ scope:WorkerActivityScope;timecardsEnabled:boolean;factoryHoursEnabled:boolean;absencesEnabled:boolean;estimatesEnabled?:boolean;
 }){
  const {i18n}=useTranslation(),lang=(i18n.resolvedLanguage??'en').split('-')[0] as keyof typeof copy,labels=copy[lang]??copy.en;
  const displayDate=new Intl.DateTimeFormat(lang,{timeZone:'UTC',dateStyle:'medium'});
  const format=(day:string)=>displayDate.format(new Date(day+'T00:00:00Z'));
  const shifts=useActivity(scope,timecardsEnabled,internal),received=useActivity(scope,factoryHoursEnabled,factory),reports=useActivity(scope,absencesEnabled,absences);
+ const pay=useActivity(scope,estimatesEnabled,estimates);
+ const {retry:refreshPay}=pay;
+ useEffect(()=>{if(!estimatesEnabled)return;window.addEventListener('timeax-pay-estimate-settings-changed',refreshPay);
+  return()=>window.removeEventListener('timeax-pay-estimate-settings-changed',refreshPay)
+ },[estimatesEnabled,refreshPay]);
  const [limit,setLimit]=useState(12);
  function feedback({result,retry}:{result:LoadState<unknown>;retry:()=>void}){
   return result.state==='loading'?<p role="status">{labels.loading}</p>:result.state==='failed'?<div className="agency-worker-status">
    <p role="alert">{labels.unavailable}</p><button className="button button--outline button--small" type="button" onClick={retry}>{labels.again}</button>
   </div>:null;
  }
- if(!timecardsEnabled&&!factoryHoursEnabled&&!absencesEnabled)return <p>{labels.noHistory}</p>;
+ if(!timecardsEnabled&&!factoryHoursEnabled&&!absencesEnabled&&!estimatesEnabled)return <p>{labels.noHistory}</p>;
  return <div className="agency-worker-activity">
+  {estimatesEnabled&&<WageCard scope={scope} lang={lang} rows={shifts.result.state==='ready'?shifts.result.value:undefined}
+   hoursEnabled={timecardsEnabled} settings={pay} feedback={feedback(pay)}/>}
   {([[timecardsEnabled,labels.internal,shifts],[factoryHoursEnabled,labels.factory,received]] as const).map(([enabled,label,source])=>enabled&&
    <section key={label} className="agency-worker-activity__section"><h3>{label}</h3>
     {source.result.state==='ready'?<Hours labels={labels} format={format} rows={source.result.value}/>:feedback(source)}

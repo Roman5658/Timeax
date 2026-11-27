@@ -63,3 +63,26 @@ test('salary worksheet is explicit opt-in, limited to exact internal rows and ex
  const received={...records,source:'connected-factory',status:'received',factoryName:'Plant',agencyName:'Agency'};
  for(const source of [archived,received])assert.equal(buildAgencyTimecardWorkbook(source,copy,undefined,estimates).getWorksheet(wageSheet),undefined);
 });
+test('common summary and individual sheets visibly show numeric rates/basis and amounts for each month only once',async()=>{
+ const multiSite={...row(a,'2026-11-04',120),worksiteId:'other-site',worksiteName:'Other internal'};
+ const records=report([row(a,'2026-10-20',60),row(a,'2026-11-02',60),multiSite,row(b,'2026-11-02',60)]);
+ const estimates=agencyPayEstimates(records,[rate(a,'2026-10','net',2500),rate(a,'2026-11','gross',3000,[deduction('Insurance',500)])]);
+ const workbook=buildAgencyTimecardWorkbook(records,copy,undefined,estimates);
+ const output=new (await import('exceljs')).default.Workbook();
+ await output.xlsx.load(await workbook.xlsx.writeBuffer());
+ const salaryRows=sheet=>sheet.getRows(1,sheet.rowCount).filter(r=>r.getCell(1).value===a&&/^[0-9]{4}-[0-9]{2}$/.test(r.getCell(2).value));
+ const expected=[['2026-10',25,'netto','—',25],['2026-11',30,'brutto',90,'—']];
+ for(const sheet of [output.worksheets[0],output.getWorksheet(a),output.getWorksheet('Preliminary wages')]){
+  const rows=salaryRows(sheet);
+  assert.equal(rows.length,2);
+  assert.deepEqual(rows.map(r=>[r.getCell(2).value,r.getCell(4).value,
+   /PLN\/h (netto|brutto)/.exec(r.getCell(4).numFmt)[1],r.getCell(5).value,r.getCell(8).value]),expected);
+  assert.match(rows[1].getCell(9).value,/full month across all worksites/);
+ }
+ const summary=output.worksheets[0];
+ const link=summary.getRows(1,summary.rowCount).find(r=>r.getCell(1).value?.text==='Preliminary wages').getCell(1).value;
+ assert.match(link.hyperlink,/^#'Preview total'!A[0-9]+$/);
+ const only=buildAgencyTimecardWorkbook(records,copy,a,estimates);
+ assert.equal(only.getWorksheet(b),undefined);assert.equal(salaryRows(only.worksheets[0]).length,2);
+ assert.equal(buildAgencyTimecardWorkbook(records,copy).worksheets[0].getRows(1,8).some(r=>r.getCell(1).value?.text==='Preliminary wages'),false);
+});
