@@ -16,7 +16,17 @@ export async function verifyRuntimeManifest(root){
  if(!seen.has('public/index.html')||!seen.has('hosted-start.server.mjs')||!seen.has('lib/runtime.mjs'))throw Error('Runtime manifest incomplete');
  return {sha256:createHash('sha256').update(text).digest('hex'),builtWith:v.builtWith,profile:v.profile};
 }
-export async function loadHostedConfiguration({root,configPath,version=process.versions.node}){
+export function managedSelfService(env){
+ const fingerprint=env.TIMEAX_SELF_SERVICE_FUNCTION_SHA256;
+ const agencyOnboardingPassword=env.TIMEAX_AGENCY_ONBOARDING_DB;
+ const workspaceReadPassword=env.TIMEAX_WORKSPACE_READ_DB;
+ const values=[fingerprint,agencyOnboardingPassword,workspaceReadPassword];
+ if(values.every(v=>v===undefined))return null;
+ if(!/^[a-f0-9]{64}$/.test(fingerprint??'')||values.slice(1).some(v=>typeof v!=='string'||!/^[-_A-Za-z0-9]{43,128}$/.test(v))
+  ||agencyOnboardingPassword===workspaceReadPassword)throw Error('Managed self-service secrets incomplete');
+ return {selfService:{mode:'verified-email-agency-v1',functionSha:fingerprint},agencyOnboardingPassword,workspaceReadPassword};
+}
+export async function loadHostedConfiguration({root,configPath,version=process.versions.node,env=process.env}){
  if(!configPath)return {mode:'closed',origin:'https://staging.invalid'};
  const c=JSON.parse(await readFile(configPath,'utf8'));
  if(c.mode==='closed')return c;
@@ -29,6 +39,8 @@ export async function loadHostedConfiguration({root,configPath,version=process.v
    throw Error('Explicit public email profile and secret mounts required');
   const secrets={};
   const names=['password','ca','webhookSecret'];
+  const managed=managedSelfService(env);
+  if(managed&&c.selfService!==undefined)throw Error('Ambiguous self-service configuration');
   if(c.selfService!==undefined){
    if(c.selfService?.mode!=='verified-email-agency-v1'||!/^[a-f0-9]{64}$/.test(c.selfService.functionSha??'')||
     !['agencyOnboardingPassword','workspaceReadPassword'].every(name=>typeof c.secretFiles?.[name]==='string'&&path.isAbsolute(c.secretFiles[name])))
@@ -36,7 +48,7 @@ export async function loadHostedConfiguration({root,configPath,version=process.v
    names.push('agencyOnboardingPassword','workspaceReadPassword');
   }
   for(const name of names)secrets[name]=(await readFile(c.secretFiles[name],'utf8')).trim();
-  return {...c,...secrets};
+  return {...c,...secrets,...(managed??{})};
  }
  if(c.mode!=='configured')throw Error('Unknown runtime mode');
  requireTargetNode(version);

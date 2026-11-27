@@ -54,7 +54,7 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
  });
  const workspace=onboarding&&workspaceFactory?.(resolve);
  const agency=createAgencyPendingHandler({origin,issuer:ISSUER,sessionResolver:resolve,store:pendingStore,now,localLoopback,publicOrigin:!localLoopback});
- return {state:localLoopback?'local-email-auth':'public-email-auth',async handler(request){
+ return {state:localLoopback?'local-email-auth':'public-email-auth',publicRegistrationEnabled:!!(onboarding&&workspace),async handler(request){
   const url=new URL(request.url),site=request.headers.get('sec-fetch-site'),from=request.headers.get('origin');
   if(!localLoopback&&url.pathname==='/hooks/before-user-created')return signupHook.handler(request);
   if(url.origin!==origin||url.search||url.hash||site!==null&&site!=='same-origin'||(request.method==='POST'?from!==origin:from!==null&&from!==origin))

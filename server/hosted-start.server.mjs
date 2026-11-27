@@ -7,6 +7,9 @@ import {loadHostedConfiguration,targetNode} from './lib/hosted-config.mjs';
 const root=path.dirname(fileURLToPath(import.meta.url));
 let phase='config';
 const safeFailures=new Map([
+ ['Managed self-service secrets incomplete','self-service-environment'],
+ ['Ambiguous self-service configuration','self-service-ambiguous'],
+ ['Independent onboarding credentials required','self-service-credentials'],
  ['Invalid webhook configuration','webhook-format'],
  ['DB lane configuration denied','db-settings'],
  ['DB CA invalid','db-ca'],
@@ -38,6 +41,6 @@ try{
  if(!Number.isInteger(port)||port<0||port>65535||!['127.0.0.1','0.0.0.0'].includes(bind))throw Error('Listener configuration denied');
  const server=await createRuntimeServer({runtime,origin:config.origin,publicDir:path.join(root,'public')});
  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,bind,resolve)});
- console.log(JSON.stringify({state:runtime.state,port:server.address().port,targetNode:targetNode(process.versions.node),publicRegistrationEnabled:false}));
+ console.log(JSON.stringify({state:runtime.state,port:server.address().port,targetNode:targetNode(process.versions.node),publicRegistrationEnabled:runtime.publicRegistrationEnabled===true}));
  let closing=false;for(const sig of ['SIGTERM','SIGINT'])process.on(sig,()=>{if(closing)return;closing=true;server.close(()=>process.exit(0));server.closeAllConnections()});
 }catch(error){console.error(JSON.stringify({state:'closed',started:false,reason:'runtime-preflight-denied',phase,detail:safeStartupFailure(error)}));process.exitCode=1}

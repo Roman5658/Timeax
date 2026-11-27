@@ -29,7 +29,7 @@ export async function createRuntimeServer({runtime,origin,publicDir,localReload=
    try{if(typeof runtime.preflight!=='function')throw Error();await runtime.preflight();return send(200,JSON.stringify({state:'private-preflight-ready',publicRegistrationEnabled:false}),{'Content-Type':'application/json'})}
    catch{return send(503,JSON.stringify({state:'closed',publicRegistrationEnabled:false}),{'Content-Type':'application/json'})}
   }
-  if(req.url==='/healthz')return send(200,JSON.stringify({status:runtime.state,publicRegistrationEnabled:false}),{'Content-Type':'application/json'});
+  if(req.url==='/healthz')return send(200,JSON.stringify({status:runtime.state,publicRegistrationEnabled:runtime.publicRegistrationEnabled===true}),{'Content-Type':'application/json'});
   const target=new URL(req.url,base);
   if(localReload&&target.pathname==='/__timeax-revision'){
    if(req.headers.host!==base.host||req.method!=='GET')return send(403,'Not permitted');
