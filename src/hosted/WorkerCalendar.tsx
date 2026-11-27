@@ -78,6 +78,7 @@ export function WorkerCalendar({organizationId,membershipId,enableInternal=true,
  <div className="workflow-stat-grid workflow-stat-grid--four" aria-busy={loading}>
   {cards.map(({title,value,icon:Icon,color})=><div className="workflow-stat-card" key={title}><span className={'stat-icon stat-icon--'+color}><Icon size={18} aria-hidden="true"/></span><span>{title}</span><strong>{loading||partial?'—':value}</strong></div>)}
  </div>
+ {enableTeam&&<div className="form-actions worker-home-absence"><button className="button button--outline button--small" type="button" onClick={()=>setAbsenceDay(selected)}><MessageCircleWarning size={16} aria-hidden="true"/>{t('workflow.absence.reportButton')}</button></div>}
  <section className="dashboard-panel worker-calendar-panel worker-hosted-calendar" aria-labelledby={heading} aria-busy={loading}>
   <div className="panel-heading">
    <div><span className="eyebrow">{c.heading}</span><h2 id={heading} aria-live="polite">{monthText}</h2></div>
@@ -107,7 +108,6 @@ export function WorkerCalendar({organizationId,membershipId,enableInternal=true,
    <div className="worker-selected-day-heading"><div><span className="eyebrow">{t('workflow.worker.dayInfoTitle')}</span><h3>{dateText.format(new Date(selected+'T12:00:00Z'))}</h3></div>
     <div className="form-actions">
      <button type="button" className="button button--primary button--small" disabled={loading||assignment.state!=='ready'} onClick={()=>openShift()}><Plus size={15} aria-hidden="true"/>{t('workflow.worker.recordForDate')}</button>
-     {enableTeam&&<button className="button button--quiet button--small" type="button" onClick={()=>setAbsenceDay(selected)}><MessageCircleWarning size={15} aria-hidden="true"/>{t('workflow.absence.reportButton')}</button>}
      {!loading&&!!(detailRecords.shifts.length||detailRecords.absences.length||detailRecords.plans.length)&&<Link className="button button--quiet button--small" to={root+'/timecards?month='+selected.slice(0,7)+'&date='+selected}>{t('workflow.history.open')}</Link>}
     </div>
    </div>

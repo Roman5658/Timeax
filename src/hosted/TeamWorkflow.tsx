@@ -7,7 +7,7 @@ import {useMemberNames} from './MemberNames';
 import {teamCall,useTeam,changed,type ShiftTemplate,type TeamEntry} from './team-workflow';
 import {AgencyBookDrawer} from './AgencyBookDrawer';
 import {cleanTeamDay,eligibleTeamRecipients,warsawTeamDay,type TeamAudience} from './team-communication';
-import {indexMessageThreads} from './team-message-threads';
+import {groupInboxConversations,indexMessageThreads,unreadInboxMessageIds} from './team-message-threads';
 import {teamCommunicationCopy} from './team-communication-copy';
 import {AgencySchedule} from './AgencySchedule';
 import '../styles/team-workflow.css';
@@ -47,18 +47,18 @@ export function TeamPanel({organizationId,section,initialDay,compact=false}:{org
  const absenceDay=section==='absence'?(cleanTeamDay(initialDay??null)||cleanTeamDay(new URLSearchParams(route.search).get('date'))):'';
  const [compose,Compose]=useState(false),[audience,SetAudience]=useState<TeamAudience>('workers'),[folder,Folder]=useState<'inbox'|'sent'|'unread'>('inbox');
  const [replyTo,ReplyTo]=useState<TeamEntry>(),[subject,Subject]=useState('');
- const [busy,B]=useState(false),[notice,N]=useState(''),[site,S]=useState(''),[selected,C]=useState<string[]>([]),[body,T]=useState(''),[opened,O]=useState<string[]>([]);
+ const [busy,B]=useState(false),[notice,N]=useState(''),[site,S]=useState(''),[selected,C]=useState<string[]>([]),[body,T]=useState(''),[opened,O]=useState<string[]>([]),[conversation,Conversation]=useState<string>();
  const [date,D]=useState(()=>absenceDay||warsawTeamDay()),[until,U]=useState(date),[start,A]=useState('08:00'),[end,Z]=useState('16:00');
  const [edit,E]=useState<TeamEntry>(),[template,ET]=useState<ShiftTemplate>(),[name,NM]=useState(''),[minutes,M]=useState(0),[paid,P]=useState(false),[email,EM]=useState(''),[invite,I]=useState('');
  const sending=useRef(false);
  const op=useRef(crypto.randomUUID());const dirty=()=>{op.current=crypto.randomUUID();N('')};
- useEffect(()=>{E(undefined);ET(undefined);C([]);T('');O([]);I('');N('');S('');ReplyTo(undefined);Subject('');Compose(false);Folder('inbox');dirty()},[organizationId,section]);
+ useEffect(()=>{E(undefined);ET(undefined);C([]);T('');O([]);Conversation(undefined);I('');N('');S('');ReplyTo(undefined);Subject('');Compose(false);Folder('inbox');dirty()},[organizationId,section]);
  useEffect(()=>{if(section==='absence'){const next=absenceDay||warsawTeamDay();D(next);U(next);E(undefined);dirty()}},[section,organizationId,absenceDay]);
  async function run(action:string,data:Record<string,unknown>){if(sending.current)return;sending.current=true;B(true);N('');try{
   const r=await teamCall(organizationId,action,{...data,...(action==='read'?{}:{operationId:op.current})});
   if(action==='invite-accountant')I(location.origin+'/accountant/invitation#invite='+r.code);
   if(action==='read'){O(a=>[...a,String(data.id)]);if(folder==='unread')Folder('inbox');}
-  if(action==='message'){Compose(false);ReplyTo(undefined);Subject('');C([]);Folder('sent');}
+  if(action==='message'){Compose(false);ReplyTo(undefined);Subject('');C([]);if(!replyTo){Conversation(undefined);Folder('sent');}}
   else {T('');E(undefined);ET(undefined);NM('');N('saved');op.current=crypto.randomUUID()}
   changed();
  }catch(e){N((e as Error).message);refresh()}finally{sending.current=false;B(false)}}
@@ -103,8 +103,27 @@ export function TeamPanel({organizationId,section,initialDay,compact=false}:{org
   ReplyTo(entry);Compose(true);SetAudience(next.mode);S(next.chosen);C([next.target.id]);T('');Subject(typeof entry.payload.subject==='string'?entry.payload.subject:'');dirty();
  }
  const threads=useMemo(()=>indexMessageThreads(value?.messageThreads&&section==='messages'?value.entries:[]),[value,section]);
+ const conversations=useMemo(()=>groupInboxConversations(value?.entries??[],threads),[value,threads]);
+ const openConversation=conversations.find(group=>group.id===conversation);
+ const readPending=useRef(new Set<string>());
+ const [readError,setReadError]=useState<string>();
+ useEffect(()=>{const scope=new Set<string>();readPending.current=scope;setReadError(undefined);O([]);Conversation(undefined);return()=>{if(readPending.current===scope)readPending.current=new Set<string>()}},[organizationId,section,value?.membershipId]);
+ const viewConversation=(group:typeof conversations[number])=>{
+  if(conversation===group.id){Conversation(undefined);return}
+  Conversation(group.id);setReadError(undefined);
+  const ids=unreadInboxMessageIds(group.messages,opened).filter(id=>!readPending.current.has(id));
+  if(!ids.length)return;
+  const pending=readPending.current;ids.forEach(id=>pending.add(id));
+  void Promise.allSettled(ids.map(async id=>{await teamCall(organizationId,'read',{id});return id})).then(results=>{
+   ids.forEach(id=>pending.delete(id));
+   if(readPending.current!==pending)return;
+   const done=results.flatMap(r=>r.status==='fulfilled'?[r.value]:[]);
+   if(done.length){O(current=>[...new Set([...current,...done])]);changed()}
+   if(done.length!==ids.length)setReadError(group.id);
+  });
+ };
  const visibleEntries=value?.entries.filter(v=>section==='messages'
-  ?folder==='sent'?v.outgoing:!v.outgoing&&(folder==='inbox'||!v.read)
+  ?v.kind!=='message'&&(folder==='sent'?v.outgoing:!v.outgoing&&(folder==='inbox'||!v.read))
   :v.kind===(section==='schedule'?'schedule':'absence'))??[];
  const choices=(workersOnly=false)=><fieldset disabled={busy||!!edit}><legend>{tx('recipients')}</legend><div className="team-recipients">{value?.recipients.filter(x=>!workersOnly||x.role==='worker'&&x.worksiteIds.includes(site)).map(r=><label key={r.id}><input type="checkbox" checked={selected.includes(r.id)} onChange={e=>{C(a=>e.target.checked?[...a,r.id]:a.filter(x=>x!==r.id));dirty()}}/>{person(r.id)}</label>)}</div><small>{tx('recipientScope')}</small></fieldset>;
  const dates=<div className="timecards-pair"><label className="field-label">{tx('from')}<input type="date" required value={date} onChange={e=>{D(e.target.value);if(e.target.value>until)U(e.target.value);dirty()}}/></label><label className="field-label">{tx('to')}<input type="date" required min={date} value={until} onChange={e=>{U(e.target.value);dirty()}}/></label></div>;
@@ -115,11 +134,11 @@ export function TeamPanel({organizationId,section,initialDay,compact=false}:{org
  <p>{tx('messageHint')}</p>
  <div className="form-actions team-message-tools">
  {capable&&<button className="button button--primary" type="button" onClick={newMessage}><Send size={16} aria-hidden="true"/>{copy.open}</button>}
- {value.role==='worker'&&<Link className="button button--outline" to={'/workspace/'+organizationId+'/absence'}>{tx('absence')}</Link>}
+
  </div>
  <div className="form-actions team-message-folders" role="group" aria-label={copy.filters}>
  {(['inbox','sent','unread'] as const).map(v=><button className={'button button--small '+(folder===v?'button--primary':'button--outline')} key={v} type="button" disabled={busy}
-  aria-pressed={folder===v} onClick={()=>Folder(v)}>{copy[v]}{v==='unread'&&value.unread>0?' ('+value.unread+')':''}</button>)}
+  aria-pressed={folder===v} onClick={()=>{Folder(v);Conversation(undefined);setReadError(undefined)}}>{copy[v]}{v==='unread'&&value.unread>0?' ('+value.unread+')':''}</button>)}
  </div>
  {compose&&capable&&<AgencyBookDrawer title={replyTo?copy.replying.replace('{{name}}',person(replyTo.sender)):copy.compose} closeLabel={t('common.close')} busy={busy} onClose={()=>{Compose(false);ReplyTo(undefined);N('')}}>
   <form className="auth-form team-message-compose" onSubmit={e=>{
@@ -164,21 +183,46 @@ export function TeamPanel({organizationId,section,initialDay,compact=false}:{org
  {invite&&<div className="notice-box"><label className="field-label">{tx('inviteLink')}<input readOnly value={invite} onFocus={e=>e.target.select()}/></label><p>{tx('noMail')}</p><button className="button button--outline" onClick={()=>{void navigator.clipboard.writeText(invite).then(()=>N('copied')).catch(()=>N('copyManually'))}}>{tx('copy')}</button></div>}
  {value.invitations.map(v=><article className="notice-box" key={v.id}><strong>{v.email}</strong><p>{tx(v.state)} · {new Date(v.expiresAt).toLocaleString()}</p>{!['revoked','expired'].includes(v.state)&&<button className="button button--outline" disabled={busy} onClick={()=>{if(window.confirm(tx('revokeConfirm'))){dirty();void run('revoke-accountant',{id:v.id})}}}>{tx('revoke')}</button>}</article>)}</>}
  {edit&&<button className="button button--outline" onClick={()=>{E(undefined);dirty()}}>{tx('stopEditing')}</button>}
- {['messages','schedule','absence'].includes(section)&&!(section==='schedule'&&value.role==='agency_admin')&&<>{!compact&&<h2>{tx('history')}</h2>}
- {section==='messages'&&!visibleEntries.length&&<p className="muted-copy">{copy.empty}</p>}
+ {['messages','schedule','absence'].includes(section)&&!(section==='schedule'&&value.role==='agency_admin')&&<>{section!=='messages'&&!compact&&<h2>{tx('history')}</h2>}
+ {section==='messages'&&(()=>{
+  const read=(v:TeamEntry)=>v.outgoing||v.read||opened.includes(v.id);
+  const listed=conversations.filter(group=>folder==='sent'?group.messages.some(v=>v.outgoing):
+   folder==='unread'?group.id===openConversation?.id||group.messages.some(v=>!read(v)):group.messages.some(v=>!v.outgoing));
+  return <>{!listed.length&&<p className="muted-copy">{copy.empty}</p>}
+   {!!listed.length&&<ul className="team-inbox">{listed.map(group=>{
+    const incoming=group.messages.filter(v=>!v.outgoing).at(-1);
+    const outgoing=group.messages.filter(v=>v.outgoing).at(-1);
+    const summary=(folder==='sent'?outgoing:incoming)??group.messages.at(-1)!;
+    const who=summary.outgoing?(summary.recipients?.length===1?person(summary.recipients[0]):tx('you')):person(summary.sender);
+    const subject=typeof summary.payload.subject==='string'?summary.payload.subject:'';
+    const unread=group.messages.filter(v=>!read(v)).length;
+    const active=group.id===conversation;
+    const responder=group.messages.filter(v=>!v.outgoing&&responseMode(v)).at(-1);
+    return <li key={group.id} className="team-inbox__item">
+     <button type="button" className="team-inbox__open" aria-expanded={active} aria-controls={'team-thread-'+group.id} onClick={()=>viewConversation(group)}>
+      <strong>{who}</strong><time dateTime={summary.createdAt}>{new Date(summary.createdAt).toLocaleString()}</time>
+      {subject&&<span className="team-inbox__subject">{subject}</span>}
+      {unread>0&&<span className="team-inbox__unread">{tx('unread')} · {unread}</span>}
+     </button>
+     <div id={'team-thread-'+group.id} hidden={!active}>{active&&<>
+      <ol className="team-inbox__messages">{group.messages.map(v=><li key={v.id} className={v.outgoing?'team-inbox__bubble is-outgoing':'team-inbox__bubble'}>
+       <div><strong>{v.outgoing?tx('you'):person(v.sender)}</strong> <time dateTime={v.createdAt}>{new Date(v.createdAt).toLocaleString()}</time></div>
+       <p className="team-body">{String(v.payload.text)}</p>
+      </li>)}</ol>
+      {readError===group.id&&<p role="status">{tx('closed')}</p>}
+      {responder&&<button type="button" className="button button--outline button--small" onClick={()=>reply(responder)}>{tx('reply')}</button>}
+     </>}</div>
+    </li>;
+   })}</ul>}
+  </>;
+ })()}
+ {section==='messages'&&visibleEntries.length>0&&<h2>{t('workflow.notifications.title')}</h2>}
  {visibleEntries.map(v=><article className="notice-box" key={v.id}>
- <h3 className="team-message-thread-heading">{v.kind==='message'&&typeof v.payload.subject==='string'?v.payload.subject:tx(v.kind)} · {tx(v.outgoing?'outgoing':v.read?'read':'unread')}</h3><p>{v.outgoing?tx('you'):person(v.sender)} · {new Date(v.createdAt).toLocaleString()}</p>
+ <h3 className="team-message-thread-heading">{tx(v.kind)} · {tx(v.outgoing?'outgoing':v.read?'read':'unread')}</h3><p>{v.outgoing?tx('you'):person(v.sender)} · {new Date(v.createdAt).toLocaleString()}</p>
  <strong>{tx(v.state)}</strong>{v.outgoing&&<p>{tx('delivered')}: {v.recipientCount}</p>}
- {!v.outgoing&&!v.read&&!opened.includes(v.id)?<button className="button button--outline" disabled={busy} onClick={()=>void run('read',{id:v.id})}>{tx('open')}</button>:<>
- {v.kind==='message'?<p className="team-body">{String(v.payload.text)}</p>:v.kind==='absence'?<p>{String(v.payload.dateFrom)} — {String(v.payload.dateTo)}</p>:<p>{String(v.payload.localDate)} · {String(v.payload.startTime)}–{String(v.payload.endTime)} · Europe/Warsaw · {tx('planned')}</p>}
- {value.messageThreads&&section==='messages'&&v.kind==='message'&&threads(v).some(x=>x.id!==v.id&&(x.outgoing||x.read))&&
-  <details><summary>{t('workflow.messagesCenter.title')}</summary>
-   {threads(v).filter(x=>x.id!==v.id&&(x.outgoing||x.read)).slice(0,30).map(x=><blockquote className="team-body" key={x.id}>
-    <strong>{x.outgoing?tx('you'):person(x.sender)}</strong><p>{String(x.payload.text)}</p>
-   </blockquote>)}
-  </details>}
- {!v.outgoing&&v.kind==='message'&&section==='messages'&&responseMode(v)&&<button className="button button--outline" onClick={()=>reply(v)}>{tx('reply')}</button>}</>}
- {value.role!=='agency_admin'&&v.outgoing&&v.kind!=='message'&&v.state==='active'&&<div className="form-actions"><Link to={'/workspace/'+organizationId+'/'+(v.kind==='absence'?'absence':'schedule')}>{tx('section')}</Link>{section!=='messages'&&<button className="button button--outline" disabled={busy} onClick={()=>editPlan(v)}>{tx('edit')}</button>}<button className="button button--outline" disabled={busy} onClick={()=>{dirty();void run('cancel',{id:v.id,revision:v.revision})}}>{tx('cancelPlan')}</button></div>}
+ {!v.outgoing&&!v.read&&!opened.includes(v.id)?<button className="button button--outline" disabled={busy} onClick={()=>void run('read',{id:v.id})}>{tx('open')}</button>:
+ v.kind==='absence'?<p>{String(v.payload.dateFrom)} - {String(v.payload.dateTo)}</p>:<p>{String(v.payload.localDate)} · {String(v.payload.startTime)}-{String(v.payload.endTime)} · Europe/Warsaw · {tx('planned')}</p>}
+ {value.role!=='agency_admin'&&v.outgoing&&v.state==='active'&&<div className="form-actions"><Link to={'/workspace/'+organizationId+'/'+(v.kind==='absence'?'absence':'schedule')}>{tx('section')}</Link>{section!=='messages'&&<button className="button button--outline" disabled={busy} onClick={()=>editPlan(v)}>{tx('edit')}</button>}<button className="button button--outline" disabled={busy} onClick={()=>{dirty();void run('cancel',{id:v.id,revision:v.revision})}}>{tx('cancelPlan')}</button></div>}
  </article>)}</>}
  </>}
  {notice&&!compose&&<p role={['saved','copied'].includes(notice)?'status':'alert'}>{tx(notice)}</p>}<button className="button button--outline" disabled={busy} onClick={refresh}>{tx('refresh')}</button>

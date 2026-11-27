@@ -18,3 +18,22 @@ export function indexMessageThreads<T extends Message>(entries:T[]){
  }
  return (entry:T)=>groups.get(roots.get(entry.id)??'')??[];
 }
+
+type DatedMessage=Message&{createdAt:string};
+/** A reply chain is listed once; unrelated notices never become chat messages. */
+export function groupInboxConversations<T extends DatedMessage>(entries:T[],thread:(entry:T)=>T[]){
+ const seen=new Set<string>(),groups:{id:string;messages:T[]}[]=[];
+ const byDate=(a:T,b:T)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id);
+ for(const entry of entries){
+  if(entry.kind!=='message'||seen.has(entry.id))continue;
+  const chain=thread(entry),messages=(chain.length?[...chain]:[entry]).sort(byDate);
+  messages.forEach(v=>seen.add(v.id));
+  groups.push({id:messages[0].id,messages});
+ }
+ return groups.sort((a,b)=>byDate(b.messages.at(-1)!,a.messages.at(-1)!));
+}
+
+export function unreadInboxMessageIds(messages:{id:string;kind:string;outgoing:boolean;read:boolean}[],acknowledged:string[]){
+ const alreadyRead=new Set(acknowledged);
+ return messages.filter(v=>v.kind==='message'&&!v.outgoing&&!v.read&&!alreadyRead.has(v.id)).map(v=>v.id);
+}

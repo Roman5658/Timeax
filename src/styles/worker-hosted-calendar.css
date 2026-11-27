@@ -8,3 +8,5 @@
 .worker-hosted-calendar__detail h3,.worker-hosted-calendar__detail p{margin-block:.65rem}
 
 .worker-hosted-calendar__mark--planned{border:1.5px solid currentColor;background:transparent}
+
+.worker-home-absence{margin-block:.75rem;flex-wrap:wrap}

@@ -52,3 +52,17 @@ test('factory recipients are capability-gated and clean composition selects only
  assert.deepEqual(eligibleTeamRecipients(workerCtx,'factory',site2),[]);
  assert.deepEqual(eligibleTeamRecipients({...workerCtx,factoryChat:false},'factory',site),[]);
 });
+
+test('inbox shows a reply chain once, newest conversations first, and only reads unacknowledged incoming messages',async()=>{
+ const {groupInboxConversations,indexMessageThreads,unreadInboxMessageIds}=await import('../src/hosted/team-message-threads.ts');
+ const entry=(id,day,outgoing=false,read=false,replyTo)=>({id,kind:'message',createdAt:`2026-11-${day}T12:00:00Z`,outgoing,read,payload:{text:id,...(replyTo?{replyTo}:{})}});
+ const first=entry('first',21,false,true),sent=entry('sent',22,true,false,'first'),
+  incoming=entry('incoming',25,false,false,'sent'),ack=entry('ack',26,false,false,'incoming'),
+  other=entry('other',24),notice={...entry('notice',27),kind:'absence'};
+ const input=[notice,ack,incoming,other,sent,first];
+ const groups=groupInboxConversations(input,indexMessageThreads(input));
+ assert.deepEqual(groups.map(g=>g.id),['first','other']);
+ assert.deepEqual(groups[0].messages.map(v=>v.id),['first','sent','incoming','ack']);
+ assert.deepEqual(unreadInboxMessageIds(groups[0].messages,['ack']),['incoming']);
+ assert.deepEqual(unreadInboxMessageIds([notice,sent,first],[]),[]);
+});
