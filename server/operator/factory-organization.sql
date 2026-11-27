@@ -1,6 +1,37 @@
 -- Additive metadata + read-only schedule views for active owned factory worksites.
 -- Apply only after canonical factory-setup and Team SQL. Re-pin factory_setup after review.
 BEGIN;
+-- The managed postgres operator may have ADMIN but not INHERIT on the
+-- NOLOGIN object owners. Acquire only the needed inheritance for this
+-- transaction, and restore the grantor-specific membership rows before commit.
+CREATE TEMP TABLE timeax_factory_organization_lease(
+ owner_oid oid PRIMARY KEY, prior jsonb NOT NULL
+) ON COMMIT DROP;
+DO $lease$
+DECLARE
+ operator_oid constant oid:=current_user::regrole;
+ team_oid constant oid:='timeax_team_owner'::regrole;
+ factory_oid constant oid:='timeax_factory_setup_owner'::regrole;
+ placement_owner oid;
+ target oid;
+BEGIN
+ IF (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+   WHERE n.nspname='timeax_team' AND c.relname IN ('entries','deliveries') AND c.relowner=team_oid)<>2
+   OR (SELECT nspowner FROM pg_namespace WHERE nspname='timeax_team') IS DISTINCT FROM team_oid
+ THEN RAISE EXCEPTION 'Unreviewed Team object ownership';END IF;
+ SELECT c.relowner INTO STRICT placement_owner
+  FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+  WHERE n.nspname='timeax_core' AND c.relname='factory_worker_placements';
+ FOR target IN SELECT DISTINCT role_oid FROM unnest(ARRAY[team_oid,factory_oid,placement_owner]) AS role_oid LOOP
+  IF target<>operator_oid AND NOT pg_has_role(operator_oid,target,'USAGE') THEN
+   INSERT INTO pg_temp.timeax_factory_organization_lease
+   SELECT target,COALESCE(jsonb_object_agg(grantor::text,jsonb_build_array(admin_option,inherit_option,set_option)),'{}'::jsonb)
+   FROM pg_auth_members WHERE roleid=target AND member=operator_oid;
+   EXECUTE format('GRANT %I TO %I WITH INHERIT TRUE',pg_get_userbyid(target),current_user);
+  END IF;
+ END LOOP;
+END
+$lease$;
 CREATE TABLE timeax_core.factory_roster_units(
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  worksite_id uuid NOT NULL REFERENCES timeax_core.worksites(id),
@@ -42,9 +73,6 @@ DECLARE
  f regprocedure:='timeax_api.factory_setup(text,text,text,jsonb)'::regprocedure;
  ddl text:=pg_get_functiondef(f);
  owner_role constant text:='timeax_factory_setup_owner';
- restore_usage boolean:=pg_has_role(current_user,owner_role,'USAGE');
- restore_set boolean:=pg_has_role(current_user,owner_role,'SET');
- acting_role text:=current_user;
  anchor constant text:=$anchor$ IF p_action='context' THEN$anchor$;
  prefix constant text:=$body$
  IF p_action IN ('factory-roster','factory-schedule','factory-unit-save','factory-unit-archive') THEN
@@ -143,9 +171,26 @@ BEGIN
  IF pg_get_userbyid((SELECT proowner FROM pg_proc WHERE oid=f))<>owner_role
   OR encode(sha256(convert_to(ddl,'UTF8')),'hex')<>'9ec6bb313b6c819c50a1a51dd488667ecc7af9244fe9a3942cdab9eb82291224'
   OR strpos(ddl,anchor)=0 THEN RAISE EXCEPTION 'Unreviewed factory setup definition';END IF;
- IF NOT restore_usage THEN EXECUTE format('GRANT %I TO %I WITH INHERIT TRUE, SET TRUE',owner_role,acting_role);END IF;
  EXECUTE replace(ddl,anchor,prefix||chr(10)||anchor);
- IF NOT restore_usage THEN EXECUTE format('GRANT %I TO %I WITH INHERIT FALSE, SET %s',owner_role,acting_role,CASE WHEN restore_set THEN 'TRUE' ELSE 'FALSE' END);END IF;
 END
 $migration$;
+
+DO $restore$
+DECLARE operator_oid constant oid:=current_user::regrole;
+ leased record; membership record; current_rows jsonb;
+BEGIN
+ FOR leased IN SELECT * FROM pg_temp.timeax_factory_organization_lease LOOP
+  FOR membership IN SELECT grantor,inherit_option FROM pg_auth_members WHERE roleid=leased.owner_oid AND member=operator_oid LOOP
+   IF NOT leased.prior?(membership.grantor::text) THEN
+    EXECUTE format('REVOKE %I FROM %I GRANTED BY %I RESTRICT',pg_get_userbyid(leased.owner_oid),current_user,pg_get_userbyid(membership.grantor));
+   ELSIF membership.inherit_option AND NOT (leased.prior->membership.grantor::text->>1)::boolean THEN
+    EXECUTE format('REVOKE INHERIT OPTION FOR %I FROM %I GRANTED BY %I RESTRICT',pg_get_userbyid(leased.owner_oid),current_user,pg_get_userbyid(membership.grantor));
+   END IF;
+  END LOOP;
+  SELECT COALESCE(jsonb_object_agg(grantor::text,jsonb_build_array(admin_option,inherit_option,set_option)),'{}'::jsonb)
+   INTO current_rows FROM pg_auth_members WHERE roleid=leased.owner_oid AND member=operator_oid;
+  IF current_rows IS DISTINCT FROM leased.prior THEN RAISE EXCEPTION 'Object owner authority not restored';END IF;
+ END LOOP;
+END
+$restore$;
 COMMIT;
