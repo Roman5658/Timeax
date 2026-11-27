@@ -1,5 +1,12 @@
 export const accountAdminCopy = {
   "ru": {
+    "panel": "Панель администратора",
+    "panelLead": "Вход для владельца Timeax.",
+    "enter": "Войти в панель",
+    "overview": "Обзор",
+    "users": "Пользователи",
+    "usersLead": "Просматривай зарегистрированные аккаунты и проверяй, что будет удалено, перед подтверждением.",
+    "viewUsers": "Открыть список",
     "title": "Управление аккаунтами",
     "lead": "Доступ только для владельца. Удаление необратимо.",
     "key": "Ключ владельца",
@@ -27,6 +34,13 @@ export const accountAdminCopy = {
     "deleted": "Аккаунт удалён."
   },
   "pl": {
+    "panel": "Panel administratora",
+    "panelLead": "Dostęp dla właściciela Timeax.",
+    "enter": "Zaloguj się do panelu",
+    "overview": "Przegląd",
+    "users": "Użytkownicy",
+    "usersLead": "Zobacz zarejestrowane konta i sprawdź zakres usunięcia przed potwierdzeniem.",
+    "viewUsers": "Otwórz listę",
     "title": "Zarządzanie kontami",
     "lead": "Tylko dla właściciela. Usunięcie jest nieodwracalne.",
     "key": "Klucz właściciela",
@@ -54,6 +68,13 @@ export const accountAdminCopy = {
     "deleted": "Konto usunięto."
   },
   "uk": {
+    "panel": "Панель адміністратора",
+    "panelLead": "Вхід для власника Timeax.",
+    "enter": "Увійти в панель",
+    "overview": "Огляд",
+    "users": "Користувачі",
+    "usersLead": "Переглядай зареєстровані облікові записи й перевіряй, що буде видалено, перед підтвердженням.",
+    "viewUsers": "Відкрити список",
     "title": "Керування обліковими записами",
     "lead": "Лише для власника. Видалення незворотне.",
     "key": "Ключ власника",
@@ -81,6 +102,13 @@ export const accountAdminCopy = {
     "deleted": "Обліковий запис видалено."
   },
   "en": {
+    "panel": "Admin dashboard",
+    "panelLead": "Sign-in for the Timeax owner.",
+    "enter": "Enter dashboard",
+    "overview": "Overview",
+    "users": "Users",
+    "usersLead": "View registered accounts and review what will be removed before confirming deletion.",
+    "viewUsers": "Open user list",
     "title": "Account administration",
     "lead": "Owner only. Deletion is permanent.",
     "key": "Owner key",

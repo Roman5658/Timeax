@@ -162,8 +162,8 @@ export function HostedApp(){
  const TimecardsPageRoute=loc.pathname.match(/^\/workspace\/([0-9a-f-]+)\/timecards$/);
  if(TimecardsPageRoute)return <HostedCabinetRoute key={TimecardsPageRoute[1]} organizationId={TimecardsPageRoute[1]} section="timecards" fallback={<TimecardsPage/>}/>;
  if(['/account','/account/settings','/account/recovery','/account/reauth'].includes(loc.pathname))return <WorkerAccountPage/>;
- if(loc.pathname==="/super-admin/accounts")return <AccountAdminPage/>;
- if(loc.pathname==="/super-admin")return <OwnerQaPage/>;
+ if(["/super-admin","/super-admin/","/super-admin/accounts","/super-admin/accounts/"].includes(loc.pathname))return <AccountAdminPage/>;
+ if(loc.pathname==="/super-admin/qa")return <OwnerQaPage/>;
  if(loc.pathname==="/terms"||loc.pathname==="/terms/2026-11-27")return <HostedTermsPage/>;
  if(loc.pathname==="/privacy"||loc.pathname==="/privacy/")return <HostedPrivacyPage/>;
  if(["/","/register","/register/agency","/login"].includes(loc.pathname))return <PublicLanding pathname={loc.pathname}/>;

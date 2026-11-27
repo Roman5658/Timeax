@@ -16,7 +16,7 @@ async function call(path:string,body?:unknown,signal?:AbortSignal){
 export function OwnerQaLink({revision=0}:{revision?:number}){
  const {t}=useTranslation(),[allowed,setAllowed]=useState(false);
  useEffect(()=>{const c=new AbortController();setAllowed(false);void call('context',undefined,c.signal).then(v=>{if(!c.signal.aborted)setAllowed(v.state==='owner'&&v.cleanupEnabled===true)}).catch(()=>{});return()=>c.abort()},[revision]);
- return allowed?<Link className="button button--outline" to="/super-admin">{t('ownerQa.title')}</Link>:null;
+ return allowed?<Link className="button button--outline" to="/super-admin/qa">{t('ownerQa.title')}</Link>:null;
 }
 export function OwnerQaPage(){
  const {t}=useTranslation(),[state,setState]=useState('checking'),[context,setContext]=useState<Context|null>(null),[preview,setPreview]=useState<Preview|null>(null),

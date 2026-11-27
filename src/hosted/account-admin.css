@@ -1,0 +1,27 @@
+.owner-panel { display: grid; grid-template-columns: minmax(215px, 250px) minmax(0, 1fr); min-height: 100svh; }
+.owner-panel__sidebar { padding: 24px 20px; background: var(--surface); border-inline-end: 1px solid var(--line); }
+.owner-panel__brand { color: inherit; text-decoration: none; font-size: 1.35rem; font-weight: 800; }
+.owner-panel__sidebar nav { display: grid; gap: 6px; margin-block: 24px; }
+.owner-panel__sidebar nav a { color: inherit; text-decoration: none; border-radius: 9px; border: 1px solid transparent; padding: 10px 12px; }
+.owner-panel__sidebar nav a:hover,
+.owner-panel__sidebar [aria-current="page"] { border-color: var(--line-strong); background: var(--surface-soft, var(--surface)); }
+.owner-panel__sidebar [aria-current="page"] { font-weight: 750; }
+.owner-panel__content { padding: clamp(16px, 4vw, 52px); min-width: 0; }
+.owner-panel__leaf { max-width: 860px; }
+.owner-panel__card { margin-block: 20px; padding: clamp(14px, 3vw, 26px); background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.owner-panel__accounts { list-style: none; margin: 0; padding: 0; }
+.owner-panel__accounts li { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 14px; border-bottom: 1px solid var(--line); }
+.owner-panel__accounts strong { overflow-wrap: anywhere; }
+.owner-panel__accounts p { margin-block: 4px 0; }
+.owner-panel__accounts .button { text-align: center; }
+.owner-panel__pages { display: flex; flex-wrap: wrap; gap: 10px; }
+.owner-panel__pages:not(:empty) { margin-top: 16px; }
+@media (max-width: 660px) {
+  .owner-panel { grid-template-columns: minmax(0, 1fr); align-content: start; }
+  .owner-panel__sidebar { border-inline-end: 0; border-bottom: 1px solid var(--line); }
+  .owner-panel__sidebar nav { display: flex; flex-wrap: wrap; margin-block: 12px; }
+  .owner-panel__accounts li { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .owner-panel__leaf { transform-origin: right center; animation: timeax-book-window .32s cubic-bezier(.2,.75,.25,1) backwards; }
+}
