@@ -23,7 +23,7 @@ export function createLocalIdentityRuntime({origin,...options}){
  if(!loopback.test(origin))throw Error('The local listener must use a loopback origin');
  return createEmailIdentityRuntime({origin,...options,localLoopback:true,admitSend:()=>true,signupHook:null});
 }
-export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLength,admitSend,signupHook,onboardingStore=null,workspaceFactory=null,accountAdminFactory=null,localLoopback=false,now=Date.now}){
+export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLength,admitSend,signupHook,onboardingStore=null,workspaceFactory=null,accountAdminFactory=null,agencyProductionsFactory=null,localLoopback=false,now=Date.now}){
  if(!localLoopback && (!['https://timeax.pl','https://www.timeax.pl'].includes(origin)||typeof signupHook?.handler!=='function'))
   throw Error('HTTPS Timeax signup must use the verified provider hook');
  const name=localLoopback?'timeax-loopback-email-identity':'__Host-timeax-email-identity';
@@ -59,6 +59,7 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
   isActive:(request,session)=>sessions.get(idFrom(request,name))===session&&session.expiresAt>now()&&!request.signal.aborted,
  });
  const workspace=onboarding&&workspaceFactory?.(resolve);
+ const productions=onboarding&&agencyProductionsFactory?.(resolve);
  const admin=accountAdminFactory?.(subject=>{
   removedSubjects.set(subject,now()+ttl*1000);
   for(const [id,s] of sessions)if(s.issuer===ISSUER&&s.subject===subject)sessions.delete(id);
@@ -69,7 +70,7 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
   if(!localLoopback&&url.pathname==='/hooks/before-user-created')return signupHook.handler(request);
   if(url.origin!==origin||url.search||url.hash||site!==null&&site!=='same-origin'||(request.method==='POST'?from!==origin:from!==null&&from!==origin))
    return reply(403,{error:'not-permitted'});
-  const service=onboarding?{selfService:true}:{};
+  const service=onboarding?{selfService:true,agencyProductions:Boolean(productions)}:{};
   if(url.pathname===endpoint){
    if(request.method!=='GET')return reply(405,{error:'not-allowed'});
    const s=await resolve(request);
@@ -85,6 +86,7 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
   }
   if(onboarding&&onboarding.matches(url.pathname))return onboarding.handler(request);
   if(workspace&&url.pathname.startsWith('/api/workspace-access/'))return workspace(request);
+  if(productions&&url.pathname.startsWith('/api/factory-setup/'))return productions(request);
   if(url.pathname===ACCOUNT_ADMIN_ROUTE)return admin?admin(request):reply(503,{error:'admin-not-configured'});
   if(url.pathname==='/api/agency-registration')return agency(request);
   if(url.pathname.startsWith('/api/timeax/auth/public/'))return auth(request);

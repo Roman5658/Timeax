@@ -1,4 +1,5 @@
 import {ACCOUNT_ADMIN_ROLE,ACCOUNT_ADMIN_SIGNATURE,ACCOUNT_ADMIN_SQL,createAccountAdminHandler} from './account-admin.mjs';
+import {createFactorySetupHandler,createFactorySetupStore,FACTORY_SQL} from './factory-enrollment.server.mjs';
 import {createScopedPgLane} from './scoped-pg.mjs';
 import {createWorkspaceReadStore,createWorkspaceReadHandler,WORKSPACE_SQL} from './workspace-read.server.mjs';
 import {WORKSPACE_ROLE,WORKSPACE_FUNCTIONS} from './workspace-read.contract.mjs';
@@ -33,13 +34,20 @@ export async function assembleHostedEmailAuth(config,{fetchImpl=globalThis.fetch
   signupIntent:signupHook.withRegistrationIntent},{fetchImpl,now});
  const pendingStore=await assembleScopedPendingStore(config,{laneFactory});
  const scoped=laneFactory??createScopedPgLane;
- let onboardingStore=null,workspaceFactory=null,accountAdminFactory=null;
+ let onboardingStore=null,workspaceFactory=null,accountAdminFactory=null,agencyProductionsFactory=null;
  if(config.accountAdmin&&![config.password,config.agencyOnboardingPassword,config.workspaceReadPassword].includes(config.accountAdmin.password)){
   const {keySha,password,functionSha}=config.accountAdmin;
   const lane=scoped({host:config.host,ca:config.ca,role:ACCOUNT_ADMIN_ROLE,password,namespace:'timeax_api',
    functions:[{signature:ACCOUNT_ADMIN_SIGNATURE,owner:'postgres',sha256:functionSha}],statements:[ACCOUNT_ADMIN_SQL]});
   // A missing admin migration must never take normal login or registration down.
   if(await lane.preflight().then(()=>true,()=>false))accountAdminFactory=revoked=>createAccountAdminHandler({origin:config.origin,keySha,lane,revoked,now});
+ }
+ if(config.agencyProductions&&![config.password,config.agencyOnboardingPassword,config.workspaceReadPassword,config.accountAdmin?.password].includes(config.agencyProductions.password)){
+  const {password,functionSha}=config.agencyProductions;
+  const lane=scoped({host:config.host,ca:config.ca,role:'timeax_factory_setup_login',password,namespace:'timeax_api',
+   functions:[{signature:'timeax_api.factory_setup(text,text,text,jsonb)',owner:'timeax_factory_setup_owner',sha256:functionSha}],statements:[FACTORY_SQL]});
+  if(await lane.preflight().then(()=>true,()=>false))agencyProductionsFactory=resolveSession=>createFactorySetupHandler({origin:config.origin,resolveSession,
+    store:createFactorySetupStore(lane),agencyOnly:true,now});
  }
  if(config.selfService!==undefined){
   const credentials=[config.password,config.agencyOnboardingPassword,config.workspaceReadPassword];
@@ -61,5 +69,5 @@ export async function assembleHostedEmailAuth(config,{fetchImpl=globalThis.fetch
   onboardingStore={get:identity=>read(identity),create:(identity,draft)=>read(identity,draft.agencyName,draft.nip)};
   workspaceFactory=resolveSession=>createWorkspaceReadHandler({origin:config.origin,store:createWorkspaceReadStore(workspaces),resolveSession,now});
  }
- return createEmailIdentityRuntime({origin:config.origin,provider,pendingStore,otpLength:config.otpLength,admitSend,signupHook,now,onboardingStore,workspaceFactory,accountAdminFactory});
+ return createEmailIdentityRuntime({origin:config.origin,provider,pendingStore,otpLength:config.otpLength,admitSend,signupHook,now,onboardingStore,workspaceFactory,accountAdminFactory,agencyProductionsFactory});
 }

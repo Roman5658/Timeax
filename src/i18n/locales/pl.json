@@ -12,6 +12,21 @@
     "registration-required": "Aby utworzyć panel, rozpocznij rejestrację i potwierdź adres e-mail.",
     "service-unavailable": "Nie udało się kontynuować. Spróbuj ponownie."
   },
+  "agencyProductions": {
+    "create": "Utwórz zakład",
+    "connect": "Połącz zakład",
+    "internalHint": "Utwórz wewnętrzne miejsce pracy do ewidencji zmian. Sam zakład nie uzyska dostępu do Timeax.",
+    "internalList": "Twoje zakłady",
+    "connectionHint": "Tutaj możesz zaakceptować zgłoszenie od zakładu, który już korzysta z Timeax.",
+    "noConnections": "Nie ma jeszcze zgłoszeń do połączenia.",
+    "notEnabled": "Zarządzanie zakładami nie jest jeszcze dostępne.",
+    "loadError": "Nie udało się wczytać zakładów.",
+    "saveError": "Nie udało się zapisać zmiany. Sprawdź listę przed ponowną próbą.",
+    "siteCreated": "Utworzono zakład.",
+    "connectionChanged": "Stan połączenia został zmieniony.",
+    "moduleNotEnabled": "Ta sekcja nie jest jeszcze podłączona do serwera. Nie musisz logować się ponownie.",
+    "signOut": "Wyloguj"
+  },
   "publicSignup": {
     "unfinishedAgency": "Adres e-mail jest potwierdzony, ale panel agencji nie został jeszcze utworzony. Możesz kontynuować lub zacząć od potwierdzenia adresu.",
     "continueAgency": "Kontynuuj rejestrację",

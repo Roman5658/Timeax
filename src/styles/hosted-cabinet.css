@@ -1,3 +1,10 @@
 
 .hosted-cabinet .portal-main-column { min-width: 0; }
 .hosted-site-list { list-style: none; padding: 0; }
+
+@media (prefers-reduced-motion:no-preference) {
+ .agency-production-leaf {
+  transform-origin:right center;
+  animation:timeax-book-window .32s cubic-bezier(.2,.75,.25,1) backwards;
+ }
+}

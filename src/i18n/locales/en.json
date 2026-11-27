@@ -12,6 +12,21 @@
     "registration-required": "To create a workspace, register and verify your email.",
     "service-unavailable": "Could not continue. Try again."
   },
+  "agencyProductions": {
+    "create": "Create a worksite",
+    "connect": "Connect a factory",
+    "internalHint": "Create an internal worksite for tracking shifts. This does not give the factory access to Timeax.",
+    "internalList": "Your worksites",
+    "connectionHint": "Accept a request from a factory that already uses Timeax.",
+    "noConnections": "No connection requests yet.",
+    "notEnabled": "Worksite management is not connected yet.",
+    "loadError": "Could not load worksites.",
+    "saveError": "Could not save the change. Check the list before trying again.",
+    "siteCreated": "Worksite created.",
+    "connectionChanged": "Connection status updated.",
+    "moduleNotEnabled": "This section is not connected yet. You do not need to sign in again.",
+    "signOut": "Sign out"
+  },
   "publicSignup": {
     "unfinishedAgency": "Your email is verified, but your agency workspace hasn’t been created yet. You can continue or start over with email verification.",
     "continueAgency": "Continue registration",

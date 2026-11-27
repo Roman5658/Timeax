@@ -22,13 +22,14 @@ const valid=(action,b)=>{
  }return true;
 };
 const reply=(status,body)=>Response.json(body,{status,headers:{'Cache-Control':'no-store, private',Vary:'Cookie','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});
-export function createFactorySetupHandler({origin,resolveSession,store=null,now=Date.now}){
+export function createFactorySetupHandler({origin,resolveSession,store=null,agencyOnly=false,now=Date.now}){
  const base=new URL(origin);if(base.origin!==origin||base.protocol!=='https:'||typeof resolveSession!=='function')throw Error('Guarded factory dependencies required');
  return async request=>{
   try{
    const url=new URL(request.url),match=url.pathname.match(/^\/api\/factory-setup\/([a-z-]+)$/);
    if(url.origin!==origin||url.search||url.hash||!match)return reply(404,{error:'not-found'});
    const action=match[1],write=action!=='context';
+   if(agencyOnly&&!['context','create-site','approve-connection','decline-connection','revoke-connection'].includes(action))return reply(404,{error:'not-found'});
    if(request.method!==(write?'POST':'GET'))return reply(405,{error:'not-allowed'});
    const from=request.headers.get('origin'),site=request.headers.get('sec-fetch-site');
    if((write?from!==origin:from!==null&&from!==origin)||(site!==null&&site!=='same-origin')||[...request.headers.keys()].some(k=>/^(authorization|forwarded|x-forwarded-.*|x-role|x-subject|x-issuer|x-tenant.*|x-timeax-.*)$/.test(k)))return reply(403,{error:'not-permitted'});
@@ -45,7 +46,20 @@ export function createFactorySetupHandler({origin,resolveSession,store=null,now=
     try{for(;;){const r=await Promise.race([reader.read(),timeout]);if(r.done)break;size+=r.value.length;if(size>2048)return reply(400,{error:'invalid-request'});parts.push(r.value)}input=JSON.parse(new TextDecoder('utf8',{fatal:true}).decode(Buffer.concat(parts)))}finally{clearTimeout(timer);void reader.cancel().catch(()=>{})}
     if(!valid(action,input))return reply(400,{error:'invalid-request'});
    }
-   const value=await store.invoke({issuer:s.issuer,subject:s.subject},action,input);
+   const actor={issuer:s.issuer,subject:s.subject};
+   let value;
+   if(agencyOnly){
+    const c=await store.invoke(actor,'context',{});
+    const memberships=c.memberships.filter(m=>m.role==='agency_admin'&&m.kind==='agency');
+    const scopes=new Set(memberships.map(m=>m.organizationId));
+    const connections=c.connections.filter(v=>scopes.has(v.agencyId));
+    if(action==='context')value={memberships,connections,worksites:c.worksites.filter(w=>scopes.has(w.organizationId)),workers:[],invitations:[],assignments:[]};
+    else{
+     const allowed=action==='create-site'?scopes.has(input.organizationId):connections.some(v=>v.id===input.id);
+     if(!allowed||!await active())return reply(403,{error:'not-permitted'});
+     value=await store.invoke(actor,action,input);
+    }
+   }else value=await store.invoke(actor,action,input);
    if(!await active())return reply(401,{error:'valid-session-required'});
    return reply(200,value);
   }catch(e){return reply(e?.code==='42501'?403:e?.code==='22023'?400:503,{error:e?.code==='42501'?'not-permitted':'factory-unavailable'})}

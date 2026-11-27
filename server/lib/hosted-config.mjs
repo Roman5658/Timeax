@@ -27,6 +27,10 @@ export function managedSelfService(env){
   ||agencyOnboardingPassword===workspaceReadPassword)throw Error('Managed self-service secrets incomplete');
  return {selfService:{mode:'verified-email-agency-v1',functionSha:fingerprint},agencyOnboardingPassword,workspaceReadPassword};
 }
+export function managedAgencyProductions(env){
+ const password=env.TIMEAX_AGENCY_PRODUCTIONS_DB, functionSha=env.TIMEAX_AGENCY_PRODUCTIONS_RPC_SHA256;
+ return /^[-_A-Za-z0-9]{43,128}$/.test(password??'')&&/^[a-f0-9]{64}$/.test(functionSha??'')?{password,functionSha}:null;
+}
 export async function loadHostedConfiguration({root,configPath,version=process.versions.node,env=process.env}){
  if(!configPath)return {mode:'closed',origin:'https://staging.invalid'};
  const c=JSON.parse(await readFile(configPath,'utf8'));
@@ -49,7 +53,7 @@ export async function loadHostedConfiguration({root,configPath,version=process.v
    names.push('agencyOnboardingPassword','workspaceReadPassword');
   }
   for(const name of names)secrets[name]=(await readFile(c.secretFiles[name],'utf8')).trim();
-  return {...c,...secrets,...(managed??{}),accountAdmin:managedAccountAdmin(env)};
+  return {...c,...secrets,...(managed??{}),accountAdmin:managedAccountAdmin(env),agencyProductions:managedAgencyProductions(env)};
  }
  if(c.mode!=='configured')throw Error('Unknown runtime mode');
  requireTargetNode(version);

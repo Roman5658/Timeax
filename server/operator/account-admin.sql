@@ -64,6 +64,8 @@ BEGIN
   BEGIN
     DELETE FROM timeax_core.agency_registration_requests WHERE issuer=v_issuer AND subject=p_id::text;
     IF v_org IS NOT NULL THEN
+      DELETE FROM timeax_core.worksite_setup_operations WHERE organization_id=v_org;
+      DELETE FROM timeax_core.worksites WHERE owner_organization_id=v_org;
       DELETE FROM timeax_core.self_service_agencies WHERE identity_id=v_identity;
       DELETE FROM timeax_core.memberships WHERE id=v_member;
       DELETE FROM timeax_core.organizations WHERE id=v_org;
