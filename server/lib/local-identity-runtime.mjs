@@ -1,5 +1,6 @@
 import {randomBytes} from 'node:crypto';
 import {createPublicEmailRoutes} from './public-email-routes.mjs';
+import {createAgencyOnboardingRoutes} from './agency-onboarding.server.mjs';
 import {createPublicEmailProvider} from './public-email-provider.mjs';
 import {createAgencyPendingHandler} from './agency-pending.server.mjs';
 import {createScopedPgLane} from './scoped-pg.mjs';
@@ -21,7 +22,7 @@ export function createLocalIdentityRuntime({origin,...options}){
  if(!loopback.test(origin))throw Error('The local listener must use a loopback origin');
  return createEmailIdentityRuntime({origin,...options,localLoopback:true,admitSend:()=>true,signupHook:null});
 }
-export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLength,admitSend,signupHook,localLoopback=false,now=Date.now}){
+export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLength,admitSend,signupHook,onboardingStore=null,workspaceFactory=null,localLoopback=false,now=Date.now}){
  if(!localLoopback && (!['https://timeax.pl','https://www.timeax.pl'].includes(origin)||typeof signupHook?.handler!=='function'))
   throw Error('HTTPS Timeax signup must use the verified provider hook');
  const name=localLoopback?'timeax-loopback-email-identity':'__Host-timeax-email-identity';
@@ -30,28 +31,41 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
  function purge(){for(const [id,s] of sessions)if(s.expiresAt<=now())sessions.delete(id)}
  const resolve=async request=>{
   purge();const id=idFrom(request,name),s=sessions.get(id);
-  return s?{...s,state:'verified',registrationAllowed:true,isActive:async()=>sessions.get(id)===s&&s.expiresAt>now()}
+  return s?{issuer:s.issuer,subject:s.subject,emailConfirmed:true,isAnonymous:false,expiresAt:s.expiresAt,
+   state:'verified',registrationAllowed:true,isActive:async()=>sessions.get(id)===s&&s.expiresAt>now()}
    :{state:'anonymous'};
  };
+ function issueIdentitySession(identity,credential=null,prior=null){
+  purge();if(sessions.size>=1000&&!sessions.has(prior))throw Error('Session capacity reached');
+  if(prior)sessions.delete(prior);
+  const id=randomBytes(32).toString('base64url');
+  sessions.set(id,{...identity,credential,expiresAt:now()+ttl*1000});return {id,maxAge:ttl};
+ }
  const auth=createPublicEmailRoutes({origin,provider,otpLength,tagKey:randomBytes(32),localLoopback,now,admitSend,
-  issueIdentitySession(identity){
-   purge();if(sessions.size>=1000)throw Error('Session capacity reached');
-   const id=randomBytes(32).toString('base64url');
-   sessions.set(id,{...identity,expiresAt:now()+ttl*1000});return {id,maxAge:ttl};
-  }
+  retainPasswordSetup:onboardingStore!==null,issueIdentitySession,readSessionId:request=>idFrom(request,name)
  });
+ const onboarding=onboardingStore&&createAgencyOnboardingRoutes({origin,now,provider,store:onboardingStore,
+  readSession:request=>{purge();return sessions.get(idFrom(request,name))},
+  issueSession:(identity,request)=>{
+   const issued=issueIdentitySession({...identity,flow:'password'},null,idFrom(request,name));
+   return name+'='+issued.id+'; Max-Age='+issued.maxAge+'; Path=/; '+(localLoopback?'':'Secure; ')+'HttpOnly; SameSite=Strict';
+  },
+  isActive:(request,session)=>sessions.get(idFrom(request,name))===session&&session.expiresAt>now()&&!request.signal.aborted,
+ });
+ const workspace=onboarding&&workspaceFactory?.(resolve);
  const agency=createAgencyPendingHandler({origin,issuer:ISSUER,sessionResolver:resolve,store:pendingStore,now,localLoopback,publicOrigin:!localLoopback});
  return {state:localLoopback?'local-email-auth':'public-email-auth',async handler(request){
   const url=new URL(request.url),site=request.headers.get('sec-fetch-site'),from=request.headers.get('origin');
   if(!localLoopback&&url.pathname==='/hooks/before-user-created')return signupHook.handler(request);
   if(url.origin!==origin||url.search||url.hash||site!==null&&site!=='same-origin'||(request.method==='POST'?from!==origin:from!==null&&from!==origin))
    return reply(403,{error:'not-permitted'});
+  const service=onboarding?{selfService:true}:{};
   if(url.pathname===endpoint){
    if(request.method!=='GET')return reply(405,{error:'not-allowed'});
    const s=await resolve(request);
-   if(s.state==='verified')return reply(200,{version:1,state:'verified',verified:true,serverTime:new Date(now()).toISOString(),
+   if(s.state==='verified')return reply(200,{version:1,state:'verified',verified:true,...service,serverTime:new Date(now()).toISOString(),
     expiresAt:new Date(s.expiresAt).toISOString(),grants:[],capabilities:{login:false,verify:false,agencyRegistration:true,logout:true}});
-   return reply(200,{version:1,state:auth.hasChallenge(request)?'verification-required':'anonymous',otpLength,
+   return reply(200,{version:1,state:auth.hasChallenge(request)?'verification-required':'anonymous',otpLength,...service,
     capabilities:{login:true,verify:auth.hasChallenge(request),agencyRegistration:false,logout:false}});
   }
   if(url.pathname===logout){
@@ -59,6 +73,8 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
    sessions.delete(idFrom(request,name));
    return reply(204,undefined,{'Set-Cookie':name+cookieEnd});
   }
+  if(onboarding&&onboarding.matches(url.pathname))return onboarding.handler(request);
+  if(workspace&&url.pathname.startsWith('/api/workspace-access/'))return workspace(request);
   if(url.pathname==='/api/agency-registration')return agency(request);
   if(url.pathname.startsWith('/api/timeax/auth/public/'))return auth(request);
   return reply(503,{error:'service-unavailable'});

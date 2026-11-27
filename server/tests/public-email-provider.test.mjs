@@ -18,7 +18,7 @@ function fixture(user=confirmed,{otpStatus=200}={}){
    assert.equal(init.credentials,'omit');assert.equal(init.redirect,'error');assert.ok(init.signal);
    assert.ok(url.startsWith(ISSUER+'/'));
    const response=url.endsWith('/otp')?new Response(null,{status:otpStatus}):
-    url.endsWith('/verify')?Response.json({access_token:syntheticToken,refresh_token:'not-for-the-client'}):
+    (url.endsWith('/verify')||url.endsWith('/token?grant_type=password'))?Response.json({access_token:syntheticToken,refresh_token:'not-for-the-client'}):
     Response.json(user);
    Object.defineProperty(response,'url',{value:url});
    return response;
@@ -50,4 +50,20 @@ test('provider errors and ineligible accounts are not treated as authenticated',
  for(const user of [{...confirmed,is_anonymous:true},{...confirmed,email_confirmed_at:null},{...confirmed,banned_until:new Date(at+300000).toISOString()}]){
   assert.equal(await fixture(user).provider.verifyCode(email,'12345678'),null);
  }
+});
+
+test('password update can use only the internally retained verified enrollment session',async()=>{
+ const {provider,requests}=fixture();
+ const normal=await provider.verifyCode(email,'12345678');
+ assert.equal(await provider.setPassword(normal,'example-long-password'),false);
+ const enrollment=await provider.verifyCode(email,'12345678',{forPasswordSetup:true});
+ assert.deepEqual(enrollment,normal);
+ assert.equal(await provider.setPassword({...enrollment},'example-long-password'),false);
+ assert.equal(await provider.setPassword(enrollment,'example-long-password'),true);
+ assert.equal(await provider.setPassword(enrollment,'another-long-password'),false);
+ const update=requests.filter(r=>r.init.method==='PUT');
+ assert.equal(update.length,1);
+ assert.equal(update[0].url,ISSUER+'/user');
+ assert.equal(update[0].init.headers.authorization,'Bearer '+syntheticToken);
+ assert.deepEqual(await provider.passwordLogin(email,'example-long-password'),normal);
 });

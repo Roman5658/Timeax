@@ -33,3 +33,40 @@ npm.cmd start
 4. Отправить проверенный коммит из основной папки в GitHub, привязать развертывание к нему, затем переключить веб-адрес, сохраняя почту и имея путь отката. Убедиться, что этот коммит обслуживает timeax.pl, а не только localhost.
 
 Документация: [Supabase OTP](https://supabase.com/docs/guides/auth/auth-email-passwordless), [проверка до создания пользователя](https://supabase.com/docs/guides/auth/auth-hooks/before-user-created-hook), [SMTP](https://supabase.com/docs/guides/auth/auth-smtp), [домены Render](https://render.com/docs/custom-domains).
+
+## Self-service agency release gate
+
+The hosted profile stays unchanged unless configured with `selfService.mode:
+verified-email-agency-v1`. This gates the new form and the server routes together.
+
+1. Apply `server/operator/agency-self-service.sql` as an additive migration.
+   It does not authorize any login or activate any issuer. Independently verify
+   that anon, authenticated and service_role cannot execute the new RPC or
+   access the private idempotency table.
+2. Provision a separate non-inheriting, non-superuser Postgres login
+   `timeax_agency_onboarding_login` with only USAGE on `timeax_api` and EXECUTE
+   on `self_service_agency(text,text,text,text)`. Prepare the existing
+   `timeax_workspace_read_login` independently. Neither role may have table
+   access. Handle passwords through the provider's secret controls, not Git or
+   chat. Pin the new reviewed function definition's SHA-256. Workspaces use the
+   preexisting pinned membership and site read contract.
+3. Before enabling self-service, explicitly enroll only this project's exact
+   verified Supabase Auth issuer in the Timeax database. Verify that issuer
+   changes cannot accidentally authorize unrelated environments or users.
+4. Add two separate Render secret mounts named in the configuration
+   (`secretFiles.agencyOnboardingPassword`, `secretFiles.workspaceReadPassword`),
+   plus `selfService: { mode: "verified-email-agency-v1", functionSha: "<reviewed
+   hash>" }` on the existing public profile. Do not replace the working OTP
+   callback, TLS validation or existing secret files. Current release remains
+   the rollback target; a pending request does not create a workspace.
+5. Verify with a controlled mailbox on the canonical hostname: new account,
+   emailed code, confirmed password and details, the real own workspace, sign
+   out then enter again by password. Simulate an interruption between choosing a
+   password and creating the workspace and confirm the retry creates exactly one
+   organization and first-admin membership. Verify anonymous and other tenants
+   cannot access it. A NIP claim never grants access to an existing organization
+   or publishes it by NIP. Confirm connected workspace features individually.
+6. The optional onboarding profile intentionally mounts only membership/worksite
+   reading. The operational agency/worker/factory modules and owner management
+   require their own reviewed scoped stores and real browser scenarios. Do not
+   describe the complete application or owner panel as live after only onboarding.

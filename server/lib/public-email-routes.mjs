@@ -27,7 +27,7 @@ export const isPublicEmailRoute=path=>path===START||path===VERIFY;
 
 // Single-process challenge lane. A deployment must supply an independent send
 // admission/abuse check and its own identity-only session issuer before enabling.
-export function createPublicEmailRoutes({origin,provider,admitSend,issueIdentitySession,tagKey,otpLength,localLoopback=false,now=Date.now}){
+export function createPublicEmailRoutes({origin,provider,admitSend,issueIdentitySession,tagKey,otpLength,localLoopback=false,now=Date.now,retainPasswordSetup=false,readSessionId=()=>null}){
  if(!(localLoopback?/^http:\/\/127\.0\.0\.1:[1-9][0-9]{3,4}$/.test(origin):['https://timeax.pl','https://www.timeax.pl'].includes(origin))||![6,8].includes(otpLength)
   ||typeof provider?.requestCode!=='function'||typeof provider?.verifyCode!=='function'
   ||typeof admitSend!=='function'||typeof issueIdentitySession!=='function'
@@ -81,13 +81,14 @@ export function createPublicEmailRoutes({origin,provider,admitSend,issueIdentity
    if(!challenge||challenge.busy||!challenge.acknowledged||challenge.attempts>=MAX_ATTEMPTS)return denied();
    challenge.attempts++;challenge.busy=true;
    try{
-    const identity=await provider.verifyCode(challenge.email,body.code);
+    const setup=retainPasswordSetup&&challenge.flow==='registration';
+    const identity=await provider.verifyCode(challenge.email,body.code,...(setup?[{forPasswordSetup:true}]:[]));
     if(!identity||identity.issuer!==ISSUER||typeof identity.subject!=='string'||!uuid.test(identity.subject)
      ||identity.subject==='00000000-0000-0000-0000-000000000000'||identity.emailConfirmed!==true||identity.isAnonymous!==false
      ||challenges.get(id)!==challenge||challenge.expires<=now()||request.signal.aborted)return denied();
     challenges.delete(id);
     const session=await issueIdentitySession({issuer:identity.issuer,subject:identity.subject,
-     emailConfirmed:true,isAnonymous:false,flow:challenge.flow});
+     emailConfirmed:true,isAnonymous:false,flow:challenge.flow},setup?identity:null,readSessionId(request));
     if(!token.test(session?.id??'')||!Number.isInteger(session?.maxAge)||session.maxAge<1||session.maxAge>900)
      return respond(503,{error:'service-unavailable'});
     return respond(200,{status:'email-verified'},[issueCookie(sessionName,session.id,session.maxAge),issueCookie(challengeName)]);

@@ -263,7 +263,7 @@ export function NotificationCenter() {
       <button ref={toggleRef} className="icon-button notification-toggle" type="button" aria-label={t("workflow.notifications.title")} aria-expanded={open} onClick={() => setOpen((value) => !value)}>
         <Bell size={16} />{unread > 0 && <span className="notification-count">{unread}</span>}
       </button>
-      {open && <section ref={popoverRef} className="notification-popover" aria-label={t("workflow.notifications.title")} style={{
+      {open && <section ref={popoverRef} className={`notification-popover${popoverPosition ? " is-positioned" : ""}`} aria-label={t("workflow.notifications.title")} style={{
         left: popoverPosition?.left,
         top: popoverPosition?.top,
         width: popoverPosition?.width,

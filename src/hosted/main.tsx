@@ -9,4 +9,6 @@ import "../styles/theme-pink.css";
 import "../styles/agency-registration.css";
 import {ThemeProvider} from "../app/ThemeContext";
 import {HostedApp} from "./HostedApp";
-createRoot(document.getElementById("root")!).render(<StrictMode><ThemeProvider><BrowserRouter><HostedApp/></BrowserRouter></ThemeProvider></StrictMode>);
+import {RoutePageTurn} from "../app/RoutePageTurn";
+import "../styles/page-turn.css";
+createRoot(document.getElementById("root")!).render(<StrictMode><ThemeProvider><BrowserRouter><HostedApp/><RoutePageTurn hostedAuthPanels/></BrowserRouter></ThemeProvider></StrictMode>);

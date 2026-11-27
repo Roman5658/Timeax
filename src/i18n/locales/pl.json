@@ -1,4 +1,16 @@
 {
+  "selfService": {
+    "password": "Hasło",
+    "open": "Utwórz panel agencji",
+    "invalid-credentials": "Nie udało się zalogować. Sprawdź adres e-mail i hasło.",
+    "invalid-nip": "Sprawdź NIP lub zostaw pole puste.",
+    "invalid-name": "Wpisz nazwę agencji (od 2 do 120 znaków).",
+    "invalid-password": "Hasło musi mieć co najmniej 12 znaków.",
+    "try-later": "Zbyt wiele prób. Spróbuj później.",
+    "password-not-set": "Nie udało się ustawić hasła. Spróbuj ponownie lub zaloguj się.",
+    "registration-required": "Aby utworzyć panel, rozpocznij rejestrację i potwierdź adres e-mail.",
+    "service-unavailable": "Nie udało się kontynuować. Spróbuj ponownie."
+  },
   "publicSignup": {
     "retry": "Spróbuj ponownie",
     "saved": "Dane agencji zapisano. Konto agencji nie zostało jeszcze utworzone.",

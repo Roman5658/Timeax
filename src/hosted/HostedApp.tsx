@@ -1,3 +1,4 @@
+import {SelfServiceAgencyStep} from './SelfServiceAgencyStep';
 import {TeamStandalone,AccountantInvitePage,type TeamSection} from './TeamWorkflow';
 import {HostedCabinetRoute} from './HostedCabinet';
 import {OwnerQaPage,OwnerQaLink} from './OwnerQaPage';
@@ -70,6 +71,19 @@ function WorkspaceStep({organizationId}:{organizationId:string}){
   <StagingSessionPanel key={accessRevision} purpose="existing" onChanged={()=>setRevision(n=>n+1)}/>
   <WorkspaceReadPage organizationId={organizationId} revision={revision}/><EnrollmentDestinations revision={revision}/></>;
 }
+function CanonicalAgencyStep({existing}:{existing:boolean}){
+ const [selfService,setSelfService]=useState<boolean>();
+ useEffect(()=>{
+  const c=new AbortController();
+  void fetch('/v1/session/timeax-email',{credentials:'same-origin',cache:'no-store',redirect:'error',signal:c.signal})
+   .then(async r=>r.ok&&((await r.json())?.selfService===true))
+   .then(v=>{if(!c.signal.aborted)setSelfService(v)})
+   .catch(()=>{if(!c.signal.aborted)setSelfService(false)});
+  return()=>c.abort();
+ },[]);
+ if(selfService===undefined)return null;
+ return selfService?<SelfServiceAgencyStep existing={existing}/>:<AgencyStep existing={existing}/>;
+}
 function PublicAuthPanel({pathname}:{pathname:string}){
  const dialog=useRef<HTMLDialogElement>(null), previous=useRef<HTMLElement|null>(null);
  const {t}=useTranslation(),navigate=useNavigate();
@@ -97,7 +111,7 @@ function PublicAuthPanel({pathname}:{pathname:string}){
   <AuthPanelContext.Provider value>
    {pathname==="/register"?<RegistrationChoices/>:<RegistrationFrame back={existing?"/":"/register"}
      title={t(existing?"common.login":"closedHosted.registerTitle")} lead="">
-     <AgencyStep key={pathname} existing={existing}/>
+     <CanonicalAgencyStep key={pathname} existing={existing}/>
    </RegistrationFrame>}
   </AuthPanelContext.Provider>
  </dialog>;

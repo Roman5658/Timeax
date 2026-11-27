@@ -1,0 +1,78 @@
+/* Shared book-fold motion. Apply only to app-owned windows and an inert route decoration. */
+.route-page-turn { display: none; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .route-page-turn {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .route-page-turn-leaf {
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: clamp(96px, 42vw, 520px);
+    background: linear-gradient(90deg, transparent 0%, var(--surface, #fff) 83%, var(--line-strong, #d7dfd7) 100%);
+    box-shadow: -22px 0 42px -28px rgb(15 25 38 / .38);
+    transform-origin: right center;
+    animation: timeax-route-sheet .36s cubic-bezier(.22,.75,.28,1) both;
+  }
+
+  .right-drawer-backdrop:not(.is-closing) .right-drawer,
+  .schedule-drawer {
+    transform-origin: right center;
+    animation: timeax-book-right .38s cubic-bezier(.2,.75,.25,1) backwards;
+  }
+
+  :is(.compact-modal, .group-manager-dialog, .worker-profile-dialog),
+  dialog[open]:not(.auth-book) {
+    transform-origin: right center;
+    animation: timeax-book-window .32s cubic-bezier(.2,.75,.25,1) backwards;
+  }
+
+  .notification-popover.is-positioned {
+    transform-origin: right top;
+    animation: timeax-book-window .28s cubic-bezier(.2,.75,.25,1) backwards;
+  }
+
+  .mobile-nav, .public-mobile-nav {
+    transform-origin: right top;
+    animation: timeax-book-window .28s cubic-bezier(.2,.75,.25,1) backwards;
+  }
+}
+
+@media (max-width: 850px) and (prefers-reduced-motion: no-preference) {
+  .portal-sidebar.is-open {
+    transform-origin: left center;
+    transition: none;
+    animation: timeax-book-left .36s cubic-bezier(.2,.75,.25,1) backwards;
+  }
+}
+
+@media (max-width: 850px) and (prefers-reduced-motion: reduce) {
+  .portal-sidebar { transition: none; }
+}
+
+@keyframes timeax-route-sheet {
+  0% { opacity: .55; transform: perspective(1000px) translateX(-18%) rotateY(-31deg); }
+  65% { opacity: .19; }
+  100% { opacity: 0; transform: perspective(1000px) translateX(100%) rotateY(-8deg); }
+}
+
+@keyframes timeax-book-right {
+  from { opacity: .78; transform: perspective(1050px) translateX(12%) rotateY(-29deg); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes timeax-book-left {
+  from { opacity: .83; transform: perspective(1050px) translateX(-17%) rotateY(32deg); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes timeax-book-window {
+  from { opacity: .72; transform: perspective(1000px) translateY(4px) rotateY(-15deg); }
+  to { opacity: 1; transform: none; }
+}

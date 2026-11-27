@@ -28,7 +28,14 @@ export async function loadHostedConfiguration({root,configPath,version=process.v
    !['password','ca','webhookSecret'].every(name=>typeof c.secretFiles?.[name]==='string'&&path.isAbsolute(c.secretFiles[name])))
    throw Error('Explicit public email profile and secret mounts required');
   const secrets={};
-  for(const name of ['password','ca','webhookSecret'])secrets[name]=(await readFile(c.secretFiles[name],'utf8')).trim();
+  const names=['password','ca','webhookSecret'];
+  if(c.selfService!==undefined){
+   if(c.selfService?.mode!=='verified-email-agency-v1'||!/^[a-f0-9]{64}$/.test(c.selfService.functionSha??'')||
+    !['agencyOnboardingPassword','workspaceReadPassword'].every(name=>typeof c.secretFiles?.[name]==='string'&&path.isAbsolute(c.secretFiles[name])))
+    throw Error('Explicit self-service configuration and secret mounts required');
+   names.push('agencyOnboardingPassword','workspaceReadPassword');
+  }
+  for(const name of names)secrets[name]=(await readFile(c.secretFiles[name],'utf8')).trim();
   return {...c,...secrets};
  }
  if(c.mode!=='configured')throw Error('Unknown runtime mode');

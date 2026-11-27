@@ -82,7 +82,7 @@ WHERE n.nspname||'.'||p.proname||'('||replace(oidvectortypes(p.proargtypes),' ',
 
 const ENROLLMENT_FUNCTIONS=new Set([...ENROLLMENT_SIGNATURES.web,...ENROLLMENT_SIGNATURES.hook]);
 const WORKSPACE_READ_FUNCTIONS=new Set(WORKSPACE_FUNCTIONS.map(f=>f.signature));
-const PENDING_FUNCTIONS=new Set(['timeax_api.request_agency_registration(text,text,text,text)','timeax_api.my_agency_registration(text,text)']);
+const PENDING_FUNCTIONS=new Set(['timeax_api.self_service_agency(text,text,text,text)','timeax_api.request_agency_registration(text,text,text,text)','timeax_api.my_agency_registration(text,text)']);
 export function isApprovedRpcOwner(signature,owner){
  return ENROLLMENT_FUNCTIONS.has(signature)?owner==='timeax_enrollment_owner'
   :(signature===TEAM_FUNCTION.signature&&owner===TEAM_FUNCTION.owner)||(signature===OWNER_FUNCTION.signature&&owner===OWNER_FUNCTION.owner)||INTEGRATED_FUNCTIONS.some(f=>f.signature===signature&&f.owner===owner)||(PENDING_FUNCTIONS.has(signature)||WORKSPACE_READ_FUNCTIONS.has(signature))&&owner==='postgres';

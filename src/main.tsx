@@ -6,6 +6,7 @@ import "./styles/global.css";
 import "./styles/theme-mint.css";
 import "./styles/theme-turquoise.css";
 import "./styles/theme-pink.css";
+import "./styles/page-turn.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

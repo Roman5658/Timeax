@@ -5,6 +5,8 @@ import {ISSUER,createProviderTransport} from './provider-adapters.mjs';
 const PROJECT_REF=new URL(ISSUER).hostname.split('.')[0];
 const emailPattern=/^[^@\s\p{Cc}\p{Cf}]{1,64}@[a-z0-9-]+(?:\.[a-z0-9-]+)+$/iu;
 export const normalizePublicEmail=value=>typeof value==='string'&&value.length<=254&&emailPattern.test(value.trim())?value.trim().toLowerCase():null;
+export const validPasswordInput=value=>typeof value==='string'&&value.length>0&&Buffer.byteLength(value)<=72&&!/[\u0000-\u001f\u007f]/.test(value);
+export const validNewPassword=value=>validPasswordInput(value)&&[...value].length>=12;
 const maxResponse=64*1024;
 async function readJson(response){
  if(!response.body||response.headers.get('content-type')?.split(';',1)[0].trim().toLowerCase()!=='application/json')throw Error('Invalid provider response');
@@ -26,42 +28,67 @@ export function createPublicEmailProvider({publishableKey,otpLength,signupIntent
  if(!/^sb_publishable_[A-Za-z0-9_-]{20,160}$/.test(publishableKey??'')||![6,8].includes(otpLength))throw Error('Invalid email provider configuration');
  const send=createProviderTransport({fetchImpl});
  const pattern=new RegExp('^[0-9]{'+otpLength+'}$');
- const post=async(path,payload)=>send(ISSUER+path,{method:'POST',body:JSON.stringify(payload),
-  headers:{accept:'application/json','content-type':'application/json',apikey:publishableKey},
+ const secrets=new WeakMap();
+ const authRequest=(path,payload,method='POST',token)=>send(ISSUER+path,{method,body:JSON.stringify(payload),
+  headers:{accept:'application/json','content-type':'application/json',apikey:publishableKey,...(token?{authorization:'Bearer '+token}:{})},
   redirect:'error',credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(3500)});
+ async function validateIdentity(response,email,retain=false){
+  if(response.status!==200){void response.body?.cancel().catch(()=>{});return null}
+  const {access_token:accessToken}=await readJson(response);
+  if(typeof accessToken!=='string'||accessToken.length>8100||!/^[-\w]+\.[-\w]+\.[-\w]+$/.test(accessToken))return null;
+  let verifiedEmail;
+  const verifier=createIdentityVerifier({projectRef:PROJECT_REF,publishableKey,timeoutMs:3500},{now,transport:async (url,init)=>{
+   const result=await send(url,{...init,redirect:'error',credentials:'omit',cache:'no-store'});
+   if(result.status!==200)return result;
+   const user=await readJson(result);
+   verifiedEmail=normalizePublicEmail(user?.email);
+   return Response.json(user);
+  }});
+  const result=await verifier.verify({headers:new Headers({authorization:'Bearer '+accessToken})});
+  if(!result.ok||verifiedEmail!==email)return null;
+  const identity=Object.freeze({issuer:result.identity.issuer,subject:result.identity.subject,emailConfirmed:true,isAnonymous:false});
+  if(retain)secrets.set(identity,{accessToken,busy:false});
+  return identity;
+ }
  return Object.freeze({
   async requestCode(rawEmail,flow){
    const email=normalizePublicEmail(rawEmail);
    if(!email||!['login','registration'].includes(flow))return false;
    try{
     const sendCode=async data=>{
-     const response=await post('/otp',{email,create_user:flow==='registration',...(data?{data}:{})});
+     const response=await authRequest('/otp',{email,create_user:flow==='registration',...(data?{data}:{})});
      void response.body?.cancel().catch(()=>{});
      return response.status===200;
     };
     return flow==='registration'&&signupIntent?await signupIntent(email,sendCode):await sendCode();
    }catch{return false}
   },
-  async verifyCode(rawEmail,code){
+  async verifyCode(rawEmail,code,{forPasswordSetup=false}={}){
    const email=normalizePublicEmail(rawEmail);
    if(!email||typeof code!=='string'||!pattern.test(code))return null;
+   try{return await validateIdentity(await authRequest('/verify',{email,token:code,type:'email'}),email,forPasswordSetup)}
+   catch{return null}
+  },
+  async passwordLogin(rawEmail,password){
+   const email=normalizePublicEmail(rawEmail);
+   if(!email||!validPasswordInput(password))return null;
+   try{return await validateIdentity(await authRequest('/token?grant_type=password',{email,password}),email)}
+   catch{return null}
+  },
+  async setPassword(identity,password){
+   const session=secrets.get(identity);
+   if(!session||session.busy||!validNewPassword(password))return false;
+   session.busy=true;
    try{
-    const response=await post('/verify',{email,token:code,type:'email'});
-    if(response.status!==200){void response.body?.cancel().catch(()=>{});return null}
-    const {access_token:accessToken}=await readJson(response);
-    if(typeof accessToken!=='string'||accessToken.length>8100||!/^[-\w]+\.[-\w]+\.[-\w]+$/.test(accessToken))return null;
-    let verifiedEmail;
-    const verifier=createIdentityVerifier({projectRef:PROJECT_REF,publishableKey,timeoutMs:3500},{now,transport:async (url,init)=>{
-     const result=await send(url,{...init,redirect:'error',credentials:'omit',cache:'no-store'});
-     if(result.status!==200)return result;
-     const user=await readJson(result);
-     verifiedEmail=normalizePublicEmail(user?.email);
-     return Response.json(user);
-    }});
-    const result=await verifier.verify({headers:new Headers({authorization:'Bearer '+accessToken})});
-    if(!result.ok||verifiedEmail!==email)return null;
-    return Object.freeze({issuer:result.identity.issuer,subject:result.identity.subject,emailConfirmed:true,isAnonymous:false});
-   }catch{return null}
-  }
+    const res=await authRequest('/user',{password},'PUT',session.accessToken);
+    if(res.status!==200){void res.body?.cancel().catch(()=>{});return false}
+    const user=await readJson(res);
+    const ok=user?.id===identity.subject&&user?.is_anonymous!==true;
+    if(ok)secrets.delete(identity);
+    return ok;
+   }catch{return false}
+   finally{session.busy=false}
+  },
+
  });
 }

@@ -5,9 +5,10 @@ export const ISSUER='https://rohgpgogsdtiltbocdao.supabase.co/auth/v1';
 export function createProviderTransport({fetchImpl=globalThis.fetch}={}){
  if(typeof fetchImpl!=='function')throw Error('Missing HTTP transport');
  return async(url,init)=>{
-  if(![ISSUER+'/otp',ISSUER+'/verify',ISSUER+'/user'].includes(url)
-   ||init?.redirect!=='error'||init?.credentials!=='omit'||!init.signal
-   ||(url.endsWith('/user')?init.method!=='GET':init.method!=='POST'))throw Error('Provider transport denied');
+  const path=typeof url==='string'&&url.startsWith(ISSUER+'/')?url.slice(ISSUER.length):'';
+  const permitted=(path==='/otp'||path==='/verify'||path==='/token?grant_type=password')&&init?.method==='POST'
+   ||path==='/user'&&['GET','PUT'].includes(init?.method);
+  if(!permitted||init.redirect!=='error'||init.credentials!=='omit'||!init.signal)throw Error('Provider transport denied');
   const res=await fetchImpl(url,init);
   if(!(res instanceof Response)||res.redirected||res.url!==url)throw Error('Provider response denied');
   return res;

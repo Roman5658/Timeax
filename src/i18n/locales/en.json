@@ -1,4 +1,16 @@
 {
+  "selfService": {
+    "password": "Password",
+    "open": "Create agency workspace",
+    "invalid-credentials": "Sign-in failed. Check your email and password.",
+    "invalid-nip": "Check the NIP or leave it blank.",
+    "invalid-name": "Enter an agency name between 2 and 120 characters.",
+    "invalid-password": "Use a password of at least 12 characters.",
+    "try-later": "Too many attempts. Try again later.",
+    "password-not-set": "Could not set the password. Try again or sign in again.",
+    "registration-required": "To create a workspace, register and verify your email.",
+    "service-unavailable": "Could not continue. Try again."
+  },
   "publicSignup": {
     "retry": "Try again",
     "saved": "Agency details were saved. An agency account has not been created yet.",

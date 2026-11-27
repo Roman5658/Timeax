@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
+import { RoutePageTurn } from "./RoutePageTurn";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { StartPage } from "../modules/auth/pages/StartPage";
@@ -44,6 +45,7 @@ function AppRoutes() {
 
   return (
     <BrowserRouter>
+      <RoutePageTurn />
       <Suspense fallback={<div className="route-loading" aria-busy="true" />}>
         <Routes>
           <Route path="/" element={<StartPage />} />
