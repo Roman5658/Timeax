@@ -1,5 +1,5 @@
 import {ACCOUNT_ADMIN_ROUTE} from './account-admin.mjs';
-import {randomBytes} from 'node:crypto';
+import {createHash,randomBytes} from 'node:crypto';
 import {SESSION_TTL_SECONDS} from './web-session-store.mjs';
 import {createPublicEmailRoutes} from './public-email-routes.mjs';
 import {createWorkerPasswordHandler,WORKER_PASSWORD_PATH} from './worker-password.server.mjs';
@@ -39,8 +39,8 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
  }
  const resolve=async request=>{
   purge();const id=idFrom(request,name),local=sessions.get(id),s=local??await sessionStore?.get(id);
-  return s&&s.expiresAt>now()&&!removedSubjects.has(s.subject)?{issuer:s.issuer,subject:s.subject,email:s.email,emailConfirmed:true,isAnonymous:false,expiresAt:s.expiresAt,
-   state:'verified',registrationAllowed:true,isActive:async()=>s.expiresAt>now()&&!removedSubjects.has(s.subject)&&(local?sessions.get(id)===s:(await sessionStore.get(id))?.subject===s.subject)}
+  return id&&s&&s.expiresAt>now()&&!removedSubjects.has(s.subject)?{issuer:s.issuer,subject:s.subject,email:s.email,emailConfirmed:true,isAnonymous:false,expiresAt:s.expiresAt,
+   state:'verified',sessionKey:createHash('sha256').update('timeax-hosted-session:nfc:v1:').update(id).digest('hex'),registrationAllowed:true,isActive:async()=>s.expiresAt>now()&&!removedSubjects.has(s.subject)&&(local?sessions.get(id)===s:(await sessionStore.get(id))?.subject===s.subject)}
    :{state:'anonymous'};
  };
  async function issueIdentitySession(identity,credential=null,prior=null){

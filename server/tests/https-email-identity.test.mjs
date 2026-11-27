@@ -5,7 +5,7 @@ import {ISSUER} from '../lib/provider-adapters.mjs';
 
 const origin='https://timeax.pl';
 const make=(options={})=>createEmailIdentityRuntime({origin,otpLength:8,
- provider:{requestCode:async()=>true,verifyCode:async()=>({issuer:ISSUER,subject:'91ab2f65-cee9-47c9-918b-a121efa2df4d',emailConfirmed:true,isAnonymous:false})},
+ provider:{requestCode:async()=>true,passwordLogin:async()=>null,setPassword:async()=>false,verifyCode:async()=>({issuer:ISSUER,subject:'91ab2f65-cee9-47c9-918b-a121efa2df4d',emailConfirmed:true,isAnonymous:false})},
  pendingStore:{get:async()=>null,submit:async()=>null},admitSend:()=>true,
  signupHook:{handler:async()=>new Response(null,{status:204})},...options});
 const api='/api/timeax/auth/public/';
@@ -29,7 +29,8 @@ test('canonical HTTPS auth issues secure host cookies and grants only its own pe
  const session=verified.headers.getSetCookie()[0];
  assert.match(session,/^__Host-timeax-email-identity=.*; Secure; HttpOnly; SameSite=Strict$/);
  const cookie=session.split(';')[0];
- assert.deepEqual((await (await handler(request(context,{cookie}))).json()).grants,[]);
+ const publicState=await (await handler(request(context,{cookie}))).json();
+ assert.deepEqual(publicState.grants,[]);assert.equal(Object.hasOwn(publicState,'sessionKey'),false);
  assert.equal((await handler(request('/api/agency-registration',{cookie}))).status,200);
  assert.notEqual((await handler(request('/api/owner-qa/operations',{cookie}))).status,200);
  const logged=await handler(request(api+'logout',{cookie,body:{}}));
@@ -45,17 +46,24 @@ test('ordinary login survives process restart with durable storage and logout re
   async put(id,identity){sessionsTest.set(id,{...identity,expiresAt:Date.now()+43_200_000})},
   async delete(id){sessionsTest.delete(id)}
  };
- const first=make({sessionStore});
+ let resolveFirst,resolveRestarted;
+ const onboardingStore={get:async()=>null,create:async()=>null};
+ const first=make({sessionStore,onboardingStore,workspaceFactory:(resolve)=>{resolveFirst=resolve;return async()=>new Response(null,{status:200})}});
  const challenge=(await first.handler(request(api+'start',{body:{email:'worker@example.test',flow:'login'}}))).headers.getSetCookie()[0].split(';')[0];
  const verify=await first.handler(request(api+'verify',{body:{code:'00000001'},cookie:challenge}));
  assert.equal(verify.status,200);
  const token=verify.headers.getSetCookie()[0];
  assert.match(token,/Max-Age=43200; Path=\/; Secure; HttpOnly; SameSite=Strict$/);
  const cookie=token.split(';')[0];
- const restarted=make({sessionStore});
+ const restarted=make({sessionStore,onboardingStore,workspaceFactory:(resolve)=>{resolveRestarted=resolve;return async()=>new Response(null,{status:200})}});
+ const initialScope=await resolveFirst(request(context,{cookie}));
+ const restartedScope=await resolveRestarted(request(context,{cookie}));
+ assert.match(initialScope.sessionKey,/^[0-9a-f]{64}$/);assert.equal(restartedScope.sessionKey,initialScope.sessionKey);
+ assert.notEqual(initialScope.sessionKey,cookie.split('=')[1]);
  assert.equal((await (await restarted.handler(request(context,{cookie}))).json()).state,'verified');
  assert.equal((await restarted.handler(request('/api/agency-registration',{cookie}))).status,200);
  assert.equal((await restarted.handler(request(api+'logout',{cookie,body:{}}))).status,204);
+ assert.equal(await initialScope.isActive(),false);assert.equal(await restartedScope.isActive(),false);
  const afterLogout=make({sessionStore});
  assert.equal((await (await afterLogout.handler(request(context,{cookie}))).json()).state,'anonymous');
 });
