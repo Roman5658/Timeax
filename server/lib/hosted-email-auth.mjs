@@ -46,7 +46,7 @@ export async function assembleHostedEmailAuth(config,{fetchImpl=globalThis.fetch
   await lane.preflight();
   sessionStore=createWebSessionStore(lane);
  }
- let onboardingStore=null,workspaceFactory=null,accountAdminFactory=null,agencyProductionsFactory=null;
+ let onboardingStore=null,workspaceFactory=null,sharedWorkspaceStore=null,accountAdminFactory=null,agencyProductionsFactory=null;
  if(config.accountAdmin&&![config.password,config.agencyOnboardingPassword,config.workspaceReadPassword].includes(config.accountAdmin.password)){
   const {keySha,password,functionSha}=config.accountAdmin;
   const lane=scoped({host:config.host,ca:config.ca,role:ACCOUNT_ADMIN_ROLE,password,namespace:'timeax_api',
@@ -81,9 +81,10 @@ export async function assembleHostedEmailAuth(config,{fetchImpl=globalThis.fetch
    return result.rows[0].organization_id;
   }
   onboardingStore={get:identity=>read(identity),create:(identity,draft)=>read(identity,draft.agencyName,draft.nip,draft.termsVersion)};
-  workspaceFactory=resolveSession=>createWorkspaceReadHandler({origin:config.origin,store:createWorkspaceReadStore(workspaces),resolveSession,now});
+  sharedWorkspaceStore=createWorkspaceReadStore(workspaces);
+  workspaceFactory=resolveSession=>createWorkspaceReadHandler({origin:config.origin,store:sharedWorkspaceStore,resolveSession,now});
  }
- const agencyOperationsFactory=await assembleAgencyOperations(config,scoped,{now});
+ const agencyOperationsFactory=await assembleAgencyOperations(config,scoped,{now,sharedWorkspaceStore});
  let pushService;
  const password=env.TIMEAX_WEB_PUSH_DB,sha=env.TIMEAX_WEB_PUSH_RPC_SHA256,publicKey=env.TIMEAX_WEB_PUSH_PUBLIC_KEY,privateKey=env.TIMEAX_WEB_PUSH_PRIVATE_KEY;
  if(sessionStore&&/^[-_A-Za-z0-9]{43,128}$/.test(password??'')&&/^[a-f0-9]{64}$/.test(sha??'')&&

@@ -70,7 +70,7 @@ export function managedAgencyOperations(env){
   return v;
  }catch{return null}
 }
-export async function assembleAgencyOperations(config,lane,{now=Date.now}={}){
+export async function assembleAgencyOperations(config,lane,{now=Date.now,sharedWorkspaceStore=null}={}){
  if(!config.agencyOperations||!config.selfService)return null;
  const common={host:config.host,ca:config.ca,namespace:'timeax_api'};
  const used=[config.password,config.agencyOnboardingPassword,config.workspaceReadPassword,config.agencyProductions?.password,config.accountAdmin?.password];
@@ -114,7 +114,7 @@ export async function assembleAgencyOperations(config,lane,{now=Date.now}={}){
   // must never change a password for an account with another active role.
   return Array.isArray(members)&&members.length>0&&members.every(m=>m?.role==='worker')&&await workerTerms.accepted(actor)===true;
  }:undefined;
- const access=createWorkspaceReadStore(lane({...common,role:WORKSPACE_ROLE,password:config.workspaceReadPassword,functions:WORKSPACE_FUNCTIONS,statements:[WORKSPACE_SQL]}));
+ const access=sharedWorkspaceStore??createWorkspaceReadStore(lane({...common,role:WORKSPACE_ROLE,password:config.workspaceReadPassword,functions:WORKSPACE_FUNCTIONS,statements:[WORKSPACE_SQL]}));
  const invitationMailer=provisioning?createWorkerInvitationMailer():null;
  return resolveSession=>{
   const handlers=ready.map(([name,store,inviteKey])=>{

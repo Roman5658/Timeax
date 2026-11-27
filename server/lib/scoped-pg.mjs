@@ -8,7 +8,7 @@ import {ACCOUNT_ADMIN_SIGNATURE} from './account-admin.mjs';
 import {OWNER_FUNCTION} from './owner-qa-store.mjs';
 import pg from 'pg';
 import {INTEGRATED_FUNCTIONS} from './integrated.contract.mjs';
-import {WORKSPACE_FUNCTIONS} from './workspace-read.contract.mjs';
+import {WORKSPACE_FUNCTIONS,WORKSPACE_ROLE} from './workspace-read.contract.mjs';
 import {createHash,X509Certificate} from 'node:crypto';
 import {checkServerIdentity} from 'node:tls';
 import {ENROLLMENT_SIGNATURES} from './enrollment-rpc-store.mjs';
@@ -124,13 +124,15 @@ export function createScopedPgLane({host,role,password,ca,namespace,functions,st
    }
    return operation(client);
  }
- // Durable-session reads occur several times per cabinet request. Reuse only
- // verified connections for this dedicated role, never identity results or ACLs.
+ // Reuse verified connections, never identity results or ACLs. The shared
+ // workspace lane allows one connection per process; the DB cap is two, so
+ // an overlapping Render deploy still has capacity.
  const verified=new WeakSet();
  class ScopedSessionClient extends Client{
   constructor(){let instance;super(options(()=>verified.add(instance)));instance=this;}
  }
- const pool=role===SESSION_ROLE?new Pool({...options(()=>{}),Client:ScopedSessionClient,max:4,idleTimeoutMillis:5000,maxLifetimeSeconds:60,allowExitOnIdle:true}):null;
+ const maxPool=role===SESSION_ROLE?4:role===WORKSPACE_ROLE?1:0;
+ const pool=maxPool?new Pool({...options(()=>{}),Client:ScopedSessionClient,max:maxPool,idleTimeoutMillis:5000,maxLifetimeSeconds:60,allowExitOnIdle:true}):null;
  pool?.on('error',()=>{});
  async function connectAndRun(operation){
   if(pool){
