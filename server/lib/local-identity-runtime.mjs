@@ -1,3 +1,4 @@
+import {ACCOUNT_ADMIN_ROUTE} from './account-admin.mjs';
 import {randomBytes} from 'node:crypto';
 import {createPublicEmailRoutes} from './public-email-routes.mjs';
 import {createAgencyOnboardingRoutes} from './agency-onboarding.server.mjs';
@@ -22,13 +23,17 @@ export function createLocalIdentityRuntime({origin,...options}){
  if(!loopback.test(origin))throw Error('The local listener must use a loopback origin');
  return createEmailIdentityRuntime({origin,...options,localLoopback:true,admitSend:()=>true,signupHook:null});
 }
-export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLength,admitSend,signupHook,onboardingStore=null,workspaceFactory=null,localLoopback=false,now=Date.now}){
+export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLength,admitSend,signupHook,onboardingStore=null,workspaceFactory=null,accountAdminFactory=null,localLoopback=false,now=Date.now}){
  if(!localLoopback && (!['https://timeax.pl','https://www.timeax.pl'].includes(origin)||typeof signupHook?.handler!=='function'))
   throw Error('HTTPS Timeax signup must use the verified provider hook');
  const name=localLoopback?'timeax-loopback-email-identity':'__Host-timeax-email-identity';
  const cookieEnd='=; Max-Age=0; Path=/; '+(localLoopback?'':'Secure; ')+'HttpOnly; SameSite=Strict';
- const sessions=new Map();
- function purge(){for(const [id,s] of sessions)if(s.expiresAt<=now())sessions.delete(id)}
+ const sessions=new Map(),removedSubjects=new Map();
+ function purge(){
+  const current=now();
+  for(const [id,s] of sessions)if(s.expiresAt<=current)sessions.delete(id);
+  for(const [subject,until] of removedSubjects)if(until<=current)removedSubjects.delete(subject);
+ }
  const resolve=async request=>{
   purge();const id=idFrom(request,name),s=sessions.get(id);
   return s?{issuer:s.issuer,subject:s.subject,emailConfirmed:true,isAnonymous:false,expiresAt:s.expiresAt,
@@ -36,7 +41,8 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
    :{state:'anonymous'};
  };
  function issueIdentitySession(identity,credential=null,prior=null){
-  purge();if(sessions.size>=1000&&!sessions.has(prior))throw Error('Session capacity reached');
+  purge();if(removedSubjects.has(identity.subject))throw Error('Account no longer exists');
+  if(sessions.size>=1000&&!sessions.has(prior))throw Error('Session capacity reached');
   if(prior)sessions.delete(prior);
   const id=randomBytes(32).toString('base64url');
   sessions.set(id,{...identity,credential,expiresAt:now()+ttl*1000});return {id,maxAge:ttl};
@@ -53,6 +59,10 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
   isActive:(request,session)=>sessions.get(idFrom(request,name))===session&&session.expiresAt>now()&&!request.signal.aborted,
  });
  const workspace=onboarding&&workspaceFactory?.(resolve);
+ const admin=accountAdminFactory?.(subject=>{
+  removedSubjects.set(subject,now()+ttl*1000);
+  for(const [id,s] of sessions)if(s.issuer===ISSUER&&s.subject===subject)sessions.delete(id);
+ });
  const agency=createAgencyPendingHandler({origin,issuer:ISSUER,sessionResolver:resolve,store:pendingStore,now,localLoopback,publicOrigin:!localLoopback});
  return {state:localLoopback?'local-email-auth':'public-email-auth',publicRegistrationEnabled:!!(onboarding&&workspace),async handler(request){
   const url=new URL(request.url),site=request.headers.get('sec-fetch-site'),from=request.headers.get('origin');
@@ -75,6 +85,7 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
   }
   if(onboarding&&onboarding.matches(url.pathname))return onboarding.handler(request);
   if(workspace&&url.pathname.startsWith('/api/workspace-access/'))return workspace(request);
+  if(url.pathname===ACCOUNT_ADMIN_ROUTE)return admin?admin(request):reply(503,{error:'admin-not-configured'});
   if(url.pathname==='/api/agency-registration')return agency(request);
   if(url.pathname.startsWith('/api/timeax/auth/public/'))return auth(request);
   return reply(503,{error:'service-unavailable'});
