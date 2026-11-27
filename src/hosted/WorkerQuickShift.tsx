@@ -7,6 +7,7 @@ import type {ShiftDraft} from '../modules/workflows/demo-store';
 import {timecardCall,minutesLabel} from './timecards';
 import {factoryHoursCall} from './factory-timecards';
 import type {ShiftTemplate} from './team-workflow';
+import {warsawTeamDay} from './team-communication';
 import {workerShiftCopy} from './worker-shift-copy';
 
 export type WorkerShiftSource='internal'|'factory';
@@ -21,7 +22,7 @@ function initialDraft(day:string,template?:QuickTemplate):ShiftDraft{
 }
 
 export function WorkerQuickShift({organizationId,source,day,template,onClose,onSaved}:{
- organizationId:string;source:WorkerShiftSource;day:string;template?:QuickTemplate;onClose:()=>void;onSaved:(day:string)=>void;
+ organizationId:string;source:WorkerShiftSource;day:string;template?:QuickTemplate;onClose:()=>void;onSaved:(day:string,pending?:boolean)=>void;
 }){
  const {t,i18n}=useTranslation(),heading=useId(),copy=workerShiftCopy(i18n.language);
  const [draft,setDraft]=useState(()=>initialDraft(day,template));
@@ -39,7 +40,8 @@ export function WorkerQuickShift({organizationId,source,day,template,onClose,onS
     const call=source==='internal'?timecardCall:factoryHoursCall;
     const result=await call(organizationId,'create',{operationId:operation.current,localDate:draft.localDate,
      startTime:draft.startTime,endTime:draft.endTime,comment:draft.comment.replace(/[\r\n]+/g,' '),
-     breakStatus:draft.breakStatus,breakTreatment:draft.breakTreatment,breakMinutes:minutes}) as {id?:unknown;revision?:unknown;saved?:unknown};
+     breakStatus:draft.breakStatus,breakTreatment:draft.breakTreatment,breakMinutes:minutes}) as {id?:unknown;revision?:unknown;saved?:unknown;state?:unknown};
+    if(source==='internal'&&result.state==='pending'&&uuid(result.id)){onSaved(draft.localDate,true);return}
     if(result.saved!==true||!uuid(result.id)||typeof result.revision!=='number'||!Number.isSafeInteger(result.revision)||result.revision<1)throw Error('uncertain');
     window.dispatchEvent(new Event('timeax-timecards-changed'));onSaved(draft.localDate);
    }catch(e){const message=(e as Error).message;setNotice(['login','denied','invalid','conflict','period-closed','assignment-required','outside-assignment-period'].includes(message)?message:'uncertain')}
@@ -60,6 +62,7 @@ export function WorkerQuickShift({organizationId,source,day,template,onClose,onS
     <span><small>{t('workflow.fields.breakDuration')}</small><strong>{draft.breakStatus==='taken'?minutesLabel(minutes):t('workflow.breakReport.none')}</strong></span>
     <span><small>{t('workflow.fields.paid')}</small><strong>{valid?minutesLabel(gross-minutes):'—'}</strong></span>
    </div>
+   {draft.localDate&&draft.localDate<warsawTeamDay()&&<p className="notice-box field-label--wide" role="status">{copy.pastDate}</p>}
    {notice&&<p className="notice-box field-label--wide" role="alert">{notice==='assignment-required'?copy.assignmentChanged:notice==='outside-assignment-period'?copy.outsideAssignment:t('timecards.'+notice)}</p>}
    <div className="form-actions field-label--wide">
     <button type="submit" className="button button--primary" disabled={busy||!valid}>{t('workflow.worker.submitShift')}</button>

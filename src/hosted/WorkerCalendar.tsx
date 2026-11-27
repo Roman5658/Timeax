@@ -28,7 +28,7 @@ export function WorkerCalendar({organizationId,membershipId,enableInternal=true,
  const [revision,refresh]=useState(0),[loading,setLoading]=useState(true),[partial,setPartial]=useState(false);
  const heading=useId(),detail=useId(),[templateOpen,setTemplateOpen]=useState(false);
  const absenceHeading=useId(),[absenceDay,setAbsenceDay]=useState<string>();
- const [collapsed,setCollapsed]=useState(false),[saved,setSaved]=useState(false),[entry,setEntry]=useState<{source:WorkerShiftSource;day:string;template?:QuickTemplate}>();
+ const [collapsed,setCollapsed]=useState(false),[saved,setSaved]=useState(false),[reviewPending,setReviewPending]=useState<string>(),[entry,setEntry]=useState<{source:WorkerShiftSource;day:string;template?:QuickTemplate}>();
  useEffect(()=>{
   const ctl=new AbortController();
   const exact=<T extends {membershipId:string;role:string;organizationId:string},>(v:T)=>{
@@ -57,7 +57,7 @@ export function WorkerCalendar({organizationId,membershipId,enableInternal=true,
  const records=useMemo(()=>workerCalendarRecords({organizationId,membershipId,internal,factory,team}),[organizationId,membershipId,internal,factory,team]);
  const detailRecords=calendarDayRecords(selected,records);
  const assignment=resolveWorkerShiftAssignment({organizationId,membershipId,internal,factory,internalKnown:!enableInternal||!!internal,factoryKnown:!enableFactory||!!factory});
- function openShift(template?:QuickTemplate){if(!loading&&assignment.state==='ready'){setSaved(false);setEntry({source:assignment.source,day:selected,template})}}
+ function openShift(template?:QuickTemplate){if(!loading&&assignment.state==='ready'){setSaved(false);setReviewPending(undefined);setEntry({source:assignment.source,day:selected,template})}}
  const dateText=new Intl.DateTimeFormat(i18n.resolvedLanguage||'pl',{dateStyle:'full',timeZone:'UTC'});
  const monthText=new Intl.DateTimeFormat(i18n.resolvedLanguage||'pl',{month:'long',year:'numeric',timeZone:'UTC'}).format(month);
  const count=new Date(Date.UTC(month.getUTCFullYear(),month.getUTCMonth()+1,0)).getUTCDate(),today=wardate();
@@ -122,6 +122,7 @@ export function WorkerCalendar({organizationId,membershipId,enableInternal=true,
    </div>
    {!loading&&assignment.state!=='ready'&&<p className="muted-copy">{shiftCopy[assignment.state]}</p>}
    {saved&&<p role="status">{t('timecards.saved')}</p>}
+   {reviewPending===selected&&<p role="status">{shiftCopy.requestSent}</p>}
    {!loading&&!detailRecords.shifts.length&&!detailRecords.absences.length&&!detailRecords.plans.length&&(!partial||internal||factory||team)&&<p>{c.empty}</p>}
    {detailRecords.shifts.map(s=><p key={s.source+s.id}><strong>{s.data.startTime} – {s.data.endTime}</strong>{s.site?' · '+s.site:''} · {t((s.source==='internal'?'timecards.':'factoryHours.')+s.status)}</p>)}
    {detailRecords.absences.map(a=><p key={a.id}>{c.absence}{a.site?' · '+a.site:''}{a.to!==a.from?' · '+a.from+' – '+a.to:''}</p>)}
@@ -132,7 +133,7 @@ export function WorkerCalendar({organizationId,membershipId,enableInternal=true,
   <button type="button" className="button button--outline" disabled={loading} onClick={()=>refresh(n=>n+1)}>{t('timecards.refresh')}</button>
  </section>
  {templateOpen&&<WorkerTemplateDrawer organizationId={organizationId} onClose={()=>setTemplateOpen(false)}/>}
- {entry&&<WorkerQuickShift organizationId={organizationId} {...entry} onClose={()=>setEntry(undefined)} onSaved={day=>{setSelected(day);setMonth(monthOf(day));setSaved(true);setEntry(undefined)}}/>}
+ {entry&&<WorkerQuickShift organizationId={organizationId} {...entry} onClose={()=>setEntry(undefined)} onSaved={(day,pending)=>{setSelected(day);setMonth(monthOf(day));setSaved(!pending);setReviewPending(pending?day:undefined);setEntry(undefined)}}/>}
  {absenceDay&&<RightDrawer eyebrow={t('workflow.absence.eyebrow')} title={t('workflow.absence.reportTitle')} titleId={absenceHeading} onClose={()=>setAbsenceDay(undefined)}>
   <TeamPanel organizationId={organizationId} section="absence" initialDay={absenceDay} compact/>
  </RightDrawer>}

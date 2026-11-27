@@ -19,7 +19,7 @@ const orgRoute=(prefix,actions)=>new RegExp('^/api/'+prefix+'/('+id+')/(?:'+acti
 const specs={
  profile:{handler:createAgencyProfileHandler,match:new RegExp('^/api/agency-profile/('+id+')(?:/worksite/'+id+')?/(?:context|settings)$')},
  worker:{handler:createWorkerEnrollmentHandler,match:new RegExp('^/api/worker-enrollment/(?:agency/('+id+')(?:/(?:invite|approve|provision|directory|cards|send-invitation|joins))?|context|lookup|request|claim|email-invitations|accept-email-invitation|terms)$')},
- timecards:{handler:createTimecardsHandler,match:orgRoute('timecards','context|create|archive|(?:read|history)/'+id)},
+ timecards:{handler:createTimecardsHandler,match:orgRoute('timecards','context|create|archive|backdated-list|backdated-read|earlier-list|earlier-approve|earlier-reject|(?:read|history)/'+id)},
  factoryTimecards:{handler:createFactoryTimecardsHandler,match:orgRoute('factory-timecards','context|create|correct|set-mode|propose-placement|approve-placement|revoke-placement|review|confirm|dispute|send|history|read/'+id)},
  payroll:{handler:createPayslipsHandler,match:orgRoute('payslips','context|settings|group|group-member|rate|create|assign|save|issue|read/'+id)},
  names:{handler:createMemberNamesHandler,match:orgRoute('member-names','context|set')},

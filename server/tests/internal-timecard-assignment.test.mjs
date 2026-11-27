@@ -30,3 +30,17 @@ test('internal worker with manual access gets a clear assignment-period error, a
  assert.equal(denied.status,403);assert.deepEqual(await denied.json(),{error:'denied'});
  assert.equal(writes.length,1);
 });
+
+test('worker earlier shift receipt reports a pending request, not a saved timecard',async()=>{
+ const session={state:'verified',issuer:ISSUER,subject:id(5),emailConfirmed:true,isAnonymous:false,expiresAt:1,workspaceRole:'worker',workspaceMembershipId:member,workspaceWorksites:[site],isActive:async()=>true};
+ const handler=createTimecardsHandler({origin,now:()=>0,resolveSession:async()=>session,store:{async invoke(_actor,action){
+  if(action==='context')return {organizationId:org,membershipId:member,role:'worker',worksites:[{id:site,manualEntry:true}]};
+  assert.equal(action,'create');return {id:id(6),state:'pending',ignored:'private'};
+ }}});
+ const r=await handler(request('2026-11-27','06:00','14:00'));
+ assert.equal(r.status,202);assert.deepEqual(await r.json(),{id:id(6),state:'pending'});
+ for(const action of ['backdated-list','earlier-list']){
+  const r=await handler(new Request(origin+'/api/timecards/'+org+'/'+action));
+  assert.equal(r.status,403);
+ }
+});

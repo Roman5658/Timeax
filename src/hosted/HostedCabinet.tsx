@@ -2,6 +2,7 @@ import {WorkerTermsGate} from './WorkerTermsGate';
 import {WorkerPasswordPanel} from './WorkerPasswordPanel';
 import {AgencyProfile} from './AgencyProfile';
 import {AgencyNipVisibility} from './AgencyWorkerCards';
+import {AgencyBackdatedShifts,useBackdatedShifts} from './AgencyBackdatedShifts';
 import {AgencyJoinNotifications,useAgencyJoinNotifications} from './AgencyJoinNotifications';
 import {WorkerCalendar} from './WorkerCalendar';
 import {WorkerShiftHistory} from './WorkerShiftHistory';
@@ -109,6 +110,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
  const heading=menu.find(entry=>entry.section===section)?.label??(section==='templates'?'team.templates':section==='absence'?'team.absence':menu[0].label);
  const org=access.organization.id;
  const joins=useAgencyJoinNotifications(publicAgency&&uses('workerProvisioning')?org:undefined);
+ const backdated=useBackdatedShifts(publicAgency&&uses('timecards')&&uses('team')?org:undefined);
  const [agencySearch]=useSearchParams();
  const unifiedHours=publicAgency&&(section==='timecards'||section==='factory-timecards');
  const directory=publicAgency&&section==='workers';
@@ -143,7 +145,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
      <button className="portal-mobile-menu" type="button" aria-controls="hosted-cabinet-menu" aria-label={t('common.openMenu')} aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}><Menu size={19}/></button>
      <div className="portal-breadcrumb"><span className="breadcrumb-dot"/>{agencyName||home}</div>
     </div>
-    <div className="portal-top-actions">{uses('team')&&<TeamBell organizationId={org} additionalUnread={joins.value?.unread}/>}
+    <div className="portal-top-actions">{uses('team')&&<TeamBell organizationId={org} additionalUnread={(joins.value?.unread??0)+(backdated.feed?.unread??0)+(backdated.feed?.pending??0)}/>}
     <LanguageSwitcher compact/><ThemeToggle/></div>
    </header>
    <main className="portal-content">
@@ -151,6 +153,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
     {production&&section!=='messages'&&(section!=='schedule'||factoryAdmin)&&!(factoryAdmin&&['factory-timecards','timesheets'].includes(section))&&<FactoryRolePanel key={org+section} access={access} section={section as FactoryRoleSection}/>}
     {factoryAdmin&&(section==='factory-timecards'||section==='timesheets')&&<FactoryTimecardsPanel key={org+section} organizationId={org} expectedRole='factory_admin' expectedMembershipId={access.membership.id} archiveOnly={section==='timesheets'} leaderSection={section==='timesheets'?'timesheets':'hours'}/>}
     {publicAgency&&section!=='home'&&section!=='setup'&&!directory&&!unifiedHours&&!sectionReady&&<p className="notice-box" role="status">{t('agencyProductions.moduleNotEnabled')}</p>}
+    {publicAgency&&section==='messages'&&backdated.feed&&<AgencyBackdatedShifts organizationId={org} feed={backdated.feed} refresh={backdated.refresh}/>}
     {publicAgency&&section==='messages'&&<AgencyJoinNotifications value={joins.value} mark={joins.mark}/>}
     {uses('team')&&!(factoryAdmin&&section==='schedule')&&(['messages','schedule','templates','absence','accountants'] as string[]).includes(section)&&<TeamPanel organizationId={org} section={section as TeamSection}/>}
     {section==='settings'&&agencyProfile?.ops.includes('profile')&&<AgencyProfile key={org} organizationId={org} onSaved={setAgencyName}/>}
