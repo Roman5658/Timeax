@@ -41,6 +41,7 @@ try{
  if(!Number.isInteger(port)||port<0||port>65535||!['127.0.0.1','0.0.0.0'].includes(bind))throw Error('Listener configuration denied');
  const server=await createRuntimeServer({runtime,origin:config.origin,publicDir:path.join(root,'public')});
  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,bind,resolve)});
+ runtime.startPush?.();
  console.log(JSON.stringify({state:runtime.state,port:server.address().port,targetNode:targetNode(process.versions.node),publicRegistrationEnabled:runtime.publicRegistrationEnabled===true}));
- let closing=false;for(const sig of ['SIGTERM','SIGINT'])process.on(sig,()=>{if(closing)return;closing=true;server.close(()=>process.exit(0));server.closeAllConnections()});
+ let closing=false;for(const sig of ['SIGTERM','SIGINT'])process.on(sig,()=>{if(closing)return;closing=true;runtime.stopPush?.();server.close(()=>process.exit(0));server.closeAllConnections()});
 }catch(error){console.error(JSON.stringify({state:'closed',started:false,reason:'runtime-preflight-denied',phase,detail:safeStartupFailure(error)}));process.exitCode=1}

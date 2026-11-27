@@ -2,6 +2,7 @@ import {WORKER_PROVISIONING_SIGNATURE} from './worker-provisioning.mjs';
 import {WORKER_TERMS_SIGNATURE} from './worker-terms.mjs';
 import {SESSION_ROLE,SESSION_RPC} from './web-session-store.mjs';
 import {AGENCY_PROFILE_SIGNATURE} from './agency-profile.mjs';
+import {PUSH_SIGNATURE} from './web-push.server.mjs';
 import {TEAM_FUNCTION} from './team-workflow.server.mjs';
 import {ACCOUNT_ADMIN_SIGNATURE} from './account-admin.mjs';
 import {OWNER_FUNCTION} from './owner-qa-store.mjs';
@@ -90,7 +91,7 @@ const WORKSPACE_READ_FUNCTIONS=new Set(WORKSPACE_FUNCTIONS.map(f=>f.signature));
 const PENDING_FUNCTIONS=new Set(['timeax_api.self_service_agency(text,text,text,text)','timeax_api.request_agency_registration(text,text,text,text)','timeax_api.my_agency_registration(text,text)']);
 export function isApprovedRpcOwner(signature,owner){
  return ENROLLMENT_FUNCTIONS.has(signature)?owner==='timeax_enrollment_owner'
-  :(signature===TEAM_FUNCTION.signature&&owner===TEAM_FUNCTION.owner)||(signature===OWNER_FUNCTION.signature&&owner===OWNER_FUNCTION.owner)||INTEGRATED_FUNCTIONS.some(f=>f.signature===signature&&f.owner===owner)||(signature===WORKER_PROVISIONING_SIGNATURE||signature===WORKER_TERMS_SIGNATURE||signature===SESSION_RPC||signature===AGENCY_PROFILE_SIGNATURE||signature===ACCOUNT_ADMIN_SIGNATURE||PENDING_FUNCTIONS.has(signature)||WORKSPACE_READ_FUNCTIONS.has(signature))&&owner==='postgres';
+  :(signature===TEAM_FUNCTION.signature&&owner===TEAM_FUNCTION.owner)||(signature===OWNER_FUNCTION.signature&&owner===OWNER_FUNCTION.owner)||INTEGRATED_FUNCTIONS.some(f=>f.signature===signature&&f.owner===owner)||(signature===PUSH_SIGNATURE||signature===WORKER_PROVISIONING_SIGNATURE||signature===WORKER_TERMS_SIGNATURE||signature===SESSION_RPC||signature===AGENCY_PROFILE_SIGNATURE||signature===ACCOUNT_ADMIN_SIGNATURE||PENDING_FUNCTIONS.has(signature)||WORKSPACE_READ_FUNCTIONS.has(signature))&&owner==='postgres';
 }
 
 export function createScopedPgLane({host,role,password,ca,namespace,functions,statements,Client=pg.Client,Pool=pg.Pool}){

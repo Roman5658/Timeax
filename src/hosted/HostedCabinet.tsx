@@ -2,6 +2,7 @@ import {WorkerTermsGate} from './WorkerTermsGate';
 import {WorkerPasswordPanel} from './WorkerPasswordPanel';
 import {AgencyProfile} from './AgencyProfile';
 import {AgencyNipVisibility} from './AgencyWorkerCards';
+import {PhonePushSettings} from './PhonePushSettings';
 import {AgencyBackdatedShifts,useBackdatedShifts} from './AgencyBackdatedShifts';
 import {AgencyJoinNotifications,useAgencyJoinNotifications} from './AgencyJoinNotifications';
 import {WorkerCalendar} from './WorkerCalendar';
@@ -153,6 +154,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
     {production&&section!=='messages'&&(section!=='schedule'||factoryAdmin)&&!(factoryAdmin&&['factory-timecards','timesheets'].includes(section))&&<FactoryRolePanel key={org+section} access={access} section={section as FactoryRoleSection}/>}
     {factoryAdmin&&(section==='factory-timecards'||section==='timesheets')&&<FactoryTimecardsPanel key={org+section} organizationId={org} expectedRole='factory_admin' expectedMembershipId={access.membership.id} archiveOnly={section==='timesheets'} leaderSection={section==='timesheets'?'timesheets':'hours'}/>}
     {publicAgency&&section!=='home'&&section!=='setup'&&!directory&&!unifiedHours&&!sectionReady&&<p className="notice-box" role="status">{t('agencyProductions.moduleNotEnabled')}</p>}
+    {section==='messages'&&uses('team')&&<PhonePushSettings/>}
     {publicAgency&&section==='messages'&&backdated.feed&&<AgencyBackdatedShifts organizationId={org} feed={backdated.feed} refresh={backdated.refresh}/>}
     {publicAgency&&section==='messages'&&<AgencyJoinNotifications value={joins.value} mark={joins.mark}/>}
     {uses('team')&&!(factoryAdmin&&section==='schedule')&&(['messages','schedule','templates','absence','accountants'] as string[]).includes(section)&&<TeamPanel organizationId={org} section={section as TeamSection}/>}

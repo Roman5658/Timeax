@@ -27,7 +27,7 @@ function preferredEncoding(header) {
  choices.push(['identity',identity??Number.EPSILON]);
  return choices.filter(([,q])=>q>0).sort((a,b)=>b[1]-a[1])[0]?.[0];
 }
-const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.ico':'image/x-icon'};
+const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.ico':'image/x-icon','.webmanifest':'application/manifest+json'};
 export async function createRuntimeServer({runtime,origin,publicDir,localReload=false}){
  let assets=new Map(),compressed=new Map(),revision=0;
  const base=new URL(origin);

@@ -1,3 +1,4 @@
+import {createPushSender,createPushService,PUSH_ROLE,PUSH_SIGNATURE,PUSH_SQL} from './web-push.server.mjs';
 import {assembleAgencyOperations} from './agency-operations.mjs';
 import {ACCOUNT_ADMIN_ROLE,ACCOUNT_ADMIN_SIGNATURE,ACCOUNT_ADMIN_SQL,createAccountAdminHandler} from './account-admin.mjs';
 import {createFactorySetupHandler,createFactorySetupStore,FACTORY_SQL} from './factory-enrollment.server.mjs';
@@ -24,7 +25,7 @@ export function createHourlySendBudget(limit,now=Date.now){
  };
 }
 
-export async function assembleHostedEmailAuth(config,{fetchImpl=globalThis.fetch,laneFactory,now=Date.now}={}){
+export async function assembleHostedEmailAuth(config,{fetchImpl=globalThis.fetch,laneFactory,now=Date.now,env=process.env}={}){
  if(config?.mode!=='public-email-v1'||config.instances!==1||
   !['https://timeax.pl','https://www.timeax.pl'].includes(config.origin))throw Error('Expected explicit canonical HTTPS email profile');
  if(!/^[a-f0-9]{64}$/.test(config.registrationSha??'')||!/^[a-f0-9]{64}$/.test(config.statusSha??''))
@@ -83,5 +84,15 @@ export async function assembleHostedEmailAuth(config,{fetchImpl=globalThis.fetch
   workspaceFactory=resolveSession=>createWorkspaceReadHandler({origin:config.origin,store:createWorkspaceReadStore(workspaces),resolveSession,now});
  }
  const agencyOperationsFactory=await assembleAgencyOperations(config,scoped,{now});
- return createEmailIdentityRuntime({origin:config.origin,provider,pendingStore,otpLength:config.otpLength,admitSend,signupHook,now,onboardingStore,workspaceFactory,accountAdminFactory,agencyProductionsFactory,agencyOperationsFactory,sessionStore});
+ let pushService;
+ const password=env.TIMEAX_WEB_PUSH_DB,sha=env.TIMEAX_WEB_PUSH_RPC_SHA256,publicKey=env.TIMEAX_WEB_PUSH_PUBLIC_KEY,privateKey=env.TIMEAX_WEB_PUSH_PRIVATE_KEY;
+ if(sessionStore&&/^[-_A-Za-z0-9]{43,128}$/.test(password??'')&&/^[a-f0-9]{64}$/.test(sha??'')&&
+  ![config.password,config.agencyOnboardingPassword,config.workspaceReadPassword,config.webSessions?.password,config.accountAdmin?.password,config.agencyProductions?.password,...Object.values(config.agencyOperations??{}).map(v=>v?.password)].includes(password)){
+  try{
+   const send=createPushSender({publicKey,privateKey},fetchImpl);
+   const db=scoped({host:config.host,ca:config.ca,role:PUSH_ROLE,password,namespace:'timeax_api',functions:[{signature:PUSH_SIGNATURE,owner:'postgres',sha256:sha}],statements:[PUSH_SQL]});
+   await db.preflight();pushService=createPushService({origin:config.origin,lane:db,publicKey,send});
+  }catch{}
+ }
+ return createEmailIdentityRuntime({origin:config.origin,provider,pendingStore,otpLength:config.otpLength,admitSend,signupHook,now,onboardingStore,workspaceFactory,accountAdminFactory,agencyProductionsFactory,agencyOperationsFactory,sessionStore,pushService});
 }

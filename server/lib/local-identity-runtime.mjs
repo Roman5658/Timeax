@@ -25,7 +25,7 @@ export function createLocalIdentityRuntime({origin,...options}){
  if(!loopback.test(origin))throw Error('The local listener must use a loopback origin');
  return createEmailIdentityRuntime({origin,...options,localLoopback:true,admitSend:()=>true,signupHook:null});
 }
-export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLength,admitSend,signupHook,onboardingStore=null,workspaceFactory=null,accountAdminFactory=null,agencyProductionsFactory=null,agencyOperationsFactory=null,sessionStore=null,localLoopback=false,now=Date.now}){
+export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLength,admitSend,signupHook,onboardingStore=null,workspaceFactory=null,accountAdminFactory=null,agencyProductionsFactory=null,agencyOperationsFactory=null,sessionStore=null,pushService=null,localLoopback=false,now=Date.now}){
  if(!localLoopback && (!['https://timeax.pl','https://www.timeax.pl'].includes(origin)||typeof signupHook?.handler!=='function'))
   throw Error('HTTPS Timeax signup must use the verified provider hook');
  const name=localLoopback?'timeax-loopback-email-identity':'__Host-timeax-email-identity';
@@ -40,7 +40,7 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
  const resolve=async request=>{
   purge();const id=idFrom(request,name),local=sessions.get(id),s=local??await sessionStore?.get(id);
   return id&&s&&s.expiresAt>now()&&!removedSubjects.has(s.subject)?{issuer:s.issuer,subject:s.subject,email:s.email,emailConfirmed:true,isAnonymous:false,expiresAt:s.expiresAt,
-   state:'verified',sessionKey:createHash('sha256').update('timeax-hosted-session:nfc:v1:').update(id).digest('hex'),registrationAllowed:true,isActive:async()=>s.expiresAt>now()&&!removedSubjects.has(s.subject)&&(local?sessions.get(id)===s:(await sessionStore.get(id))?.subject===s.subject)}
+   state:'verified',...(!local?{pushSessionKey:createHash('sha256').update(id).digest('hex')}:{}),sessionKey:createHash('sha256').update('timeax-hosted-session:nfc:v1:').update(id).digest('hex'),registrationAllowed:true,isActive:async()=>s.expiresAt>now()&&!removedSubjects.has(s.subject)&&(local?sessions.get(id)===s:(await sessionStore.get(id))?.subject===s.subject)}
    :{state:'anonymous'};
  };
  async function issueIdentitySession(identity,credential=null,prior=null){
@@ -89,8 +89,9 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
   for(const [id,proof] of workerProofs)if(proof.credential.subject===subject)workerProofs.delete(id);
   for(const [id,s] of sessions)if(s.issuer===ISSUER&&s.subject===subject)sessions.delete(id);
  });
+ const push=pushService?.routes(resolve);
  const agency=createAgencyPendingHandler({origin,issuer:ISSUER,sessionResolver:resolve,store:pendingStore,now,localLoopback,publicOrigin:!localLoopback});
- return {state:localLoopback?'local-email-auth':'public-email-auth',publicRegistrationEnabled:!!(onboarding&&workspace),async handler(request){
+ return {state:localLoopback?'local-email-auth':'public-email-auth',publicRegistrationEnabled:!!(onboarding&&workspace),startPush:()=>pushService?.start(),stopPush:()=>pushService?.stop(),async handler(request){
   const url=new URL(request.url),site=request.headers.get('sec-fetch-site'),from=request.headers.get('origin');
   if(!localLoopback&&url.pathname==='/hooks/before-user-created')return signupHook.handler(request);
   if(url.origin!==origin||url.search||url.hash||site!==null&&site!=='same-origin'||(request.method==='POST'?from!==origin:from!==null&&from!==origin))
@@ -112,6 +113,7 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
    sessions.delete(id);workerProofs.delete(id);
    return reply(204,undefined,{'Set-Cookie':name+cookieEnd});
   }
+  if(url.pathname==='/api/web-push')return push?push(request):reply(503,{error:'push-not-enabled'});
   if(workerPassword&&url.pathname===WORKER_PASSWORD_PATH)return workerPassword(request);
   if(onboarding&&onboarding.matches(url.pathname))return onboarding.handler(request);
   if(workspace&&url.pathname.startsWith('/api/workspace-access/'))return workspace(request);
