@@ -1,6 +1,6 @@
-import type {WorkerLabel} from './member-label';
-import {workerLabelText} from './member-label';
-import {isWorkerLocal} from './worker-enrollment';
+import type {WorkerLabel} from './member-label.ts';
+import {workerLabelText} from './member-label.ts';
+import {isWorkerLocal} from './worker-enrollment.ts';
 export type ShiftData={localDate:string;startTime:string;endTime:string;startAt:string;endAt:string;grossMinutes:number;paidMinutes:number;breakMinutes:number;breakStatus:'taken'|'not-taken'|'not-reported';breakTreatment:'paid'|'unpaid';comment:string;timeZone:'Europe/Warsaw'};
 export type TimecardShift={id:string;worksiteId:string;worksiteName:string;membershipId:string;revision:number;state:'recorded'|'archived';data:ShiftData};
 export type TimecardContext={organizationId:string;role:'worker'|'agency_admin';membershipId:string;timeZone:'Europe/Warsaw';worksites:{id:string;name:string;manualEntry?:boolean}[];shifts:TimecardShift[];archive:{id:string;worksiteId:string;worksiteName:string;dateFrom:string;dateTo:string;paidMinutes:number;createdAt:string}[]};

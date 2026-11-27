@@ -25,10 +25,11 @@ export function useBellAnchor(enabled:boolean){
   return()=>{observer.disconnect();window.clearTimeout(timer);cancelAnimationFrame(frame)};
  },[enabled,target,key]);
 }
+export const noticeDestination=(anchor:string)=>anchor.startsWith('earlier-shift-')?'timecards':'messages';
 export function previewText(v:unknown){
  return typeof v==='string'?v.replace(/\s+/gu,' ').trim().slice(0,130):'';
 }
-export function latestBellPreviews(entries:BellPreview[],limit=8){
+export function latestBellPreviews(entries:BellPreview[],limit=Infinity){
  return entries.filter(e=>bellTarget('#'+e.anchor)&&Number.isFinite(Date.parse(e.at)))
   .sort((a,b)=>Number(b.unread)-Number(a.unread)||Date.parse(b.at)-Date.parse(a.at)).slice(0,limit);
 }

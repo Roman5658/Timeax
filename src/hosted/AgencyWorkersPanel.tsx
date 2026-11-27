@@ -3,6 +3,7 @@ import {useTranslation} from 'react-i18next';
 import {AgencyWorkerCardForm,PendingWorkerList,readWorkerCards,type WorkerCards} from './AgencyWorkerCards';
 import {workerProvisionCopy} from './worker-provisioning-copy';
 import {AgencyBookDrawer} from './AgencyBookDrawer';
+import {AgencyWorkerActivity} from './AgencyWorkerActivity';
 import {agencyWorkerCopy} from './agency-workers-copy';
 import {factoryCall,parseSetupContext,type SetupContext} from './factory-enrollment';
 import {factoryHoursCall,parseFactoryHours,type FactoryHoursContext} from './factory-timecards';
@@ -10,18 +11,18 @@ import {memberNamesCall,useMemberNames} from './MemberNames';
 import {accountCall} from './worker-account';
 import {workerCall} from './worker-enrollment';
 
-type Props={organizationId:string;enrollmentEnabled:boolean;provisioningEnabled?:boolean;productionsEnabled:boolean;lifecycleEnabled:boolean;namesEnabled:boolean;factoryHoursEnabled?:boolean;siteId?:string;initialSection?:'roster'|'applications'};
+type Props={organizationId:string;enrollmentEnabled:boolean;provisioningEnabled?:boolean;productionsEnabled:boolean;lifecycleEnabled:boolean;namesEnabled:boolean;factoryHoursEnabled?:boolean;timecardsEnabled?:boolean;absencesEnabled?:boolean;siteId?:string;initialSection?:'roster'|'applications'};
 type Application={application_id:string;claimed_at:string};
 type Member={membershipId:string;state:string;endedAt:string|null};
 type WorkersResponse={organizationId:string;workers:Member[]};
-type UiDrawer={type:'invite'}|{type:'email';cardId?:string}|{type:'worker';id:string};
+type UiDrawer={type:'invite'}|{type:'email';cardId?:string}|{type:'worker';id:string}|{type:'activity';id:string};
 type CopyKey=keyof typeof agencyWorkerCopy.en;
 type WorkAssignment={worksiteId:string;startsAt:string;endsAt?:string|null};
 const uuid=(s:unknown)=>typeof s==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(s);
 const localDay=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Warsaw',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const validDay=(s:string)=>/^\d{4}-\d{2}-\d{2}$/.test(s)&&Number.isFinite(Date.parse(s+'T00:00:00Z'));
 
-export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisioningEnabled=false,productionsEnabled,lifecycleEnabled,namesEnabled,factoryHoursEnabled=false,siteId,initialSection='roster'}:Props){
+export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisioningEnabled=false,productionsEnabled,lifecycleEnabled,namesEnabled,factoryHoursEnabled=false,timecardsEnabled=false,absencesEnabled=false,siteId,initialSection='roster'}:Props){
  const {t,i18n}=useTranslation();
  const lang=(i18n.resolvedLanguage??'en').toLowerCase().split('-')[0];
  const strings=agencyWorkerCopy[lang as keyof typeof agencyWorkerCopy]??agencyWorkerCopy.en;
@@ -110,6 +111,7 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisionin
  }).sort((a,b)=>a.group.localeCompare(b.group,lang)||a.display.localeCompare(b.display,lang,{numeric:true}));
  const groups=[...new Set(roster.map(w=>w.group))];
  const id=drawer?.type==='worker'?drawer.id:undefined;
+ const activityId=drawer?.type==='activity'?drawer.id:undefined;
  const current=id?scopedNames?.workers.find(w=>w.membershipId===id&&w.organizationId===organizationId&&w.state==='active'):undefined;
  const moves= id?workAssignments(id).filter(a=>internalSites.some(s=>s.id===a.worksiteId)&&currentAt(a,startInstant)):[];
  const originAssignment=moves.find(a=>a.worksiteId===source)??(moves.length===1?moves[0]:undefined);
@@ -173,7 +175,7 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisionin
    {rosterReady&&!loadFailed&&!roster.length&&<p>{copy(active.size?'noMatches':'emptyRoster')}</p>}
    {groups.map(group=><section className="agency-worker-group" key={group||'unassigned'}>
     <h3>{group||copy('unassigned')}</h3><ul>{roster.filter(w=>w.group===group).map(w=><li key={w.id}>
-     <div><strong>{w.display}</strong><p className="muted-copy">{sites.filter(s=>w.assignments.some(a=>a.worksiteId===s.id)).map(s=>s.name).join(' · ')||copy('unassigned')}</p></div>
+     <button type="button" className="agency-worker-activity-link" aria-haspopup="dialog" disabled={busy} onClick={()=>open({type:'activity',id:w.id})}><strong>{w.display}</strong><span className="muted-copy">{sites.filter(s=>w.assignments.some(a=>a.worksiteId===s.id)).map(s=>s.name).join(' · ')||copy('unassigned')}</span></button>
      <button type="button" className="button button--outline button--small" data-worker-settings={w.id} onClick={()=>selectWorker(w.id)}>{copy('options')}</button>
     </li>)}</ul></section>)}
    {provisioningEnabled&&!siteId&&<PendingWorkerList value={workerCards} error={cardsError} onOpen={cardId=>{reset();open({type:'email',cardId});WR(n=>n+1)}}/>}
@@ -191,7 +193,11 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisionin
   </section>}
   </div>
   {!drawer&&status}
-  {drawer&&<AgencyBookDrawer title={drawer.type==='email'?provision.createAccount:drawer.type==='invite'?copy('add'):copy('settings')} closeLabel={copy('close')} busy={busy} onClose={dismiss}>
+  {activityId&&<AgencyBookDrawer key={'activity/'+activityId} centered title={roster.find(worker=>worker.id===activityId)?.display??label(activityId)} closeLabel={copy('close')} onClose={dismiss}>
+   {active.has(activityId)?<AgencyWorkerActivity scope={{organizationId,membershipId:activityId,siteId}} timecardsEnabled={timecardsEnabled} factoryHoursEnabled={factoryHoursEnabled} absencesEnabled={absencesEnabled}/>
+    :<p role="status">{copy('rosterUnavailable')}</p>}
+  </AgencyBookDrawer>}
+  {drawer&&drawer.type!=='activity'&&<AgencyBookDrawer title={drawer.type==='email'?provision.createAccount:drawer.type==='invite'?copy('add'):copy('settings')} closeLabel={copy('close')} busy={busy} onClose={dismiss}>
    {drawer.type==='email'?(drawer.cardId&&!workerCards?.cards.some(c=>c.id===drawer.cardId)
     ?<p role="status">{copy(cardsError?'rosterUnavailable':'load')}</p>
     :<AgencyWorkerCardForm key={drawer.cardId??'new'} organizationId={organizationId} sites={internalSites}

@@ -1,0 +1,24 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {createInboxHandler} from '../lib/inbox.server.mjs';
+import {ISSUER} from '../lib/provider-adapters.mjs';
+const org='a0000000-0000-4000-8000-000000000001',id='a0000000-0000-4000-8000-000000000002',origin='https://timeax.pl';
+const body={id,kind:'team-message',state:'archived'};
+const request=(a='context',data,from=origin)=>new Request(origin+'/api/inbox/'+org+'/'+a,data?{method:'POST',headers:{origin:from,'Content-Type':'application/json'},body:JSON.stringify(data)}:{});
+test('inbox uses verified session and pathname, rejects foreign-origin and invalid updates before database',async()=>{
+ const calls=[];
+ const s={issuer:ISSUER,subject:'fixture-actor',state:'verified',emailConfirmed:true,isAnonymous:false,expiresAt:10,isActive:async()=>true};
+ const handle=createInboxHandler({origin,now:()=>0,resolveSession:async()=>s,store:{invoke:async(...args)=>{calls.push(args);return {state:'archived'}}}});
+ assert.equal((await handle(request('set',body,'https://example.org'))).status,403);
+ assert.equal((await handle(request('set',{...body,organizationId:id}))).status,400);
+ assert.equal((await handle(request('set',{...body,kind:'earlier-shift'}))).status,400);
+ assert.equal((await handle(request('set',{...body,id:null}))).status,400);
+ assert.deepEqual(calls,[]);
+ const response=await handle(request('set',body));
+ assert.equal(response.status,200);
+ assert.equal(response.headers.get('cache-control'),'no-store, private');
+ assert.deepEqual(calls,[[s,'set',{...body,organizationId:org}]]);
+ s.isActive=async()=>false;
+ assert.equal((await handle(request())).status,401);
+ assert.equal(calls.length,1);
+});

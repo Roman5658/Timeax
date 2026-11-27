@@ -1,6 +1,6 @@
 import {workerShiftCopy} from './worker-shift-copy';
 import {useMemberNames} from './MemberNames';
-import {workerLabelText} from './member-label';
+import {TimecardReportDrawer} from './TimecardReportDrawer';
 import {FactoryTimecardsPanel} from './FactoryTimecardsPage';
 import {useEffect,useMemo,useRef,useState} from 'react';import {Link,useLocation} from 'react-router-dom';import {useTranslation} from 'react-i18next';
 import {RegistrationFrame} from '../components/PublicExperience';import {StagingSessionPanel} from '../modules/auth/pages/StagingSessionPanel';import {PrivateAccess} from './PrivateAccess';import {isWorkerLocal} from './worker-enrollment';
@@ -44,7 +44,8 @@ export function TimecardsPanel({organizationId,revision=0,includeFactoryArchive=
  {context.role==='agency_admin'&&<><h2>{tx('archive')}</h2>{!context.archive.length&&<p>{tx('noArchive')}</p>}{context.archive.map(a=><article className="notice-box timecards-row" key={a.id}><h3>{a.worksiteName}</h3><p>{a.dateFrom} – {a.dateTo} · {tx('archived')}</p><p>{tx('counted')}: {minutesLabel(a.paidMinutes)}</p><button className="button button--outline" disabled={busy} onClick={()=>void act('read/'+a.id)}>{tx('open')}</button></article>)}</>}
  </>}
  {context&&history&&<section className="notice-box"><h2>{tx('history')}</h2>{history.map(h=><p key={h.revision}>{tx('version')} {h.revision}: {h.data.localDate} {h.data.startTime}–{h.data.endTime}; {h.reason==='created'?tx('created'):h.reason}</p>)}<button className="button button--outline" onClick={()=>setHistory(undefined)}>{tx('close')}</button></section>}
- {context?.role==='agency_admin'&&snapshot?.organizationId===organizationId&&snapshot&&<section className="notice-box timecards-snapshot"><h2>{tx('document')}: {snapshot.worksiteName}</h2><p>{snapshot.dateFrom} – {snapshot.dateTo} · Europe/Warsaw · {tx('archived')}</p><p>{tx('counted')}: {minutesLabel(snapshot.paidMinutes)}</p>{snapshot.rows.map(r=><p key={r.id}>{r.data.localDate} {r.data.startTime}–{r.data.endTime} · {minutesLabel(r.data.paidMinutes)}<br/><small>{tx('workerRef')}: {workerLabelText(r.workerLabel,t('memberNames.historicalMissing'),t('memberNames.reference'))}</small></p>)}<a className="button button--primary button--full" href={csvUrl} download={'Timeax-'+snapshot.dateFrom+'-'+snapshot.dateTo+'.csv'}>{tx('download')}</a><button className="button button--outline button--full" onClick={()=>setSnapshot(undefined)}>{tx('close')}</button></section>}
+ {context?.role==='agency_admin'&&snapshot?.organizationId===organizationId&&<TimecardReportDrawer snapshot={snapshot} onClose={()=>setSnapshot(undefined)}
+  csv={csvUrl?{url:csvUrl,filename:'Timeax-'+snapshot.dateFrom+'-'+snapshot.dateTo+'.csv'}:undefined}/>}
  {notice&&<p role={['saved','archivedNotice'].includes(notice)?'status':'alert'}>{tx(notice)}</p>}
  {includeFactoryArchive&&context?.role==='agency_admin'&&<FactoryTimecardsPanel organizationId={organizationId} revision={revision} archiveOnly/>}<button className="button button--outline button--full" disabled={busy||status==='checking'} onClick={reload}>{tx('refresh')}</button>
  <Link to={'/workspace/'+organizationId}>{tx('back')}</Link>

@@ -1,6 +1,6 @@
 import {workerShiftCopy} from './worker-shift-copy';
 import {useMemberNames} from './MemberNames';
-import {workerLabelText} from './member-label';
+import {TimecardReportDrawer} from './TimecardReportDrawer';
 import {useEffect,useMemo,useRef,useState} from 'react';import {Link,useLocation} from 'react-router-dom';import {useTranslation} from 'react-i18next';
 import {RegistrationFrame} from '../components/PublicExperience';import {StagingSessionPanel} from '../modules/auth/pages/StagingSessionPanel';import {PrivateAccess} from './PrivateAccess';import {isWorkerLocal} from './worker-enrollment';import {minutesLabel} from './timecards';
 import {factoryHoursCall,parseFactoryHours,parseFactorySnapshot,factorySnapshotCsv,type FactoryHoursContext,type FactoryShift,type FactorySnapshot} from './factory-timecards';
@@ -90,7 +90,8 @@ export function FactoryTimecardsPanel({organizationId,revision=0,archiveOnly=fal
  <div className="timecards-pair"><label className="field-label">{tt('from')}<input type="date" value={from} required disabled={busy} onInput={e=>{setFrom(e.currentTarget.value);setConfirmed(false)}} onChange={e=>{setFrom(e.target.value);setConfirmed(false)}}/></label><label className="field-label">{tt('to')}<input type="date" value={to} required disabled={busy} onInput={e=>{setTo(e.currentTarget.value);setConfirmed(false)}} onChange={e=>{setTo(e.target.value);setConfirmed(false)}}/></label></div>
  <p>{tx('sealHint')}</p><label className="timecards-check"><input type="checkbox" checked={confirmed} disabled={busy} onChange={e=>setConfirmed(e.target.checked)}/>{tx('sealConfirm')}</label><button className="button button--primary button--full" disabled={busy||!site||!agency||!confirmed}>{tx('send')}</button></form>}
  {leaderSection!=='hours'&&['agency_admin','team_leader','factory_admin'].includes(context.role)&&<>{!archiveOnly&&<h3>{tx(leader||factoryAdmin?'sent':'received')}</h3>}{!context.archive.some(a=>!factoryAdmin||!site||a.worksiteId===site)&&<p>{tt('noArchive')}</p>}{context.archive.filter(a=>!factoryAdmin||!site||a.worksiteId===site).map(a=><article className="notice-box" key={a.id}><h3>{a.snapshot.factoryName} · {a.snapshot.worksiteName}</h3><p>{a.dateFrom} - {a.dateTo} · {tx(leader||factoryAdmin?'sent':'received')}</p><p>{a.snapshot.agencyName} · {minutesLabel(a.snapshot.paidMinutes)}</p><button className="button button--outline" disabled={busy} onClick={()=>void act('read/'+a.id)}>{tt('open')}</button></article>)}
- {snapshot&&<section className="notice-box"><h3>{snapshot.factoryName} · {snapshot.worksiteName}</h3><p>{snapshot.dateFrom} – {snapshot.dateTo} · {snapshot.agencyName} · Europe/Warsaw</p>{snapshot.rows.map(r=><p key={r.id}>{r.data.localDate} {r.data.startTime}–{r.data.endTime} · {minutesLabel(r.data.paidMinutes)}<br/><span>{workerLabelText(r.workerLabel,t('memberNames.historicalMissing'),t('memberNames.reference'))}</span></p>)}<p>{tt('counted')}: {minutesLabel(snapshot.paidMinutes)}</p><a href={blob} download={'Timeax-factory-'+snapshot.dateFrom+'-'+snapshot.dateTo+'.csv'} className="button button--primary button--full">{tt('download')}</a></section>}
+ {snapshot&&<TimecardReportDrawer snapshot={snapshot} sent={leader||factoryAdmin} onClose={()=>setSnapshot(undefined)}
+  csv={blob?{url:blob,filename:'Timeax-factory-'+snapshot.dateFrom+'-'+snapshot.dateTo+'.csv'}:undefined}/>}
  </>}
  {history&&<section className="notice-box"><h3>{tt('history')}</h3>{history.map((e,i)=><p key={i}>{tx(e.action)}: {e.after?.data?.startTime}–{e.after?.data?.endTime} · {e.note}</p>)}</section>}
  </>}

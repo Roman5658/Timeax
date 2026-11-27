@@ -35,10 +35,10 @@ const filters={
  }
 } as const;
 const exportsCopy={
- en:{exportScope:'Workers in this file',fullDocument:'Everyone in this timecard',workerExtract:'Extract for one worker',extractNotice:'This file includes only the selected worker’s shifts. The full timecard is unchanged.'},
- ru:{exportScope:'Работники в файле',fullDocument:'Все работники из табеля',workerExtract:'Выписка по одному работнику',extractNotice:'В файл войдут только смены выбранного работника. Полный табель не изменится.'},
- uk:{exportScope:'Працівники у файлі',fullDocument:'Усі працівники з табеля',workerExtract:'Витяг за одним працівником',extractNotice:'До файлу увійдуть лише зміни вибраного працівника. Повний табель не зміниться.'},
- pl:{exportScope:'Pracownicy w pliku',fullDocument:'Wszyscy pracownicy z ewidencji',workerExtract:'Wyciąg dla jednego pracownika',extractNotice:'Plik zawiera tylko zmiany wybranego pracownika. Pełna ewidencja pozostaje bez zmian.'},
+ en:{exportScope:'Workers in this file',fullDocument:'Everyone in this timecard',workerExtract:'Extract for one worker',notInSnapshot:'The saved timecard contains recorded shifts only. It does not contain absence, day-off or payroll classifications.',extractNotice:'This file includes only the selected worker’s shifts. The full timecard is unchanged.'},
+ ru:{exportScope:'Работники в файле',fullDocument:'Все работники из табеля',workerExtract:'Выписка по одному работнику',notInSnapshot:'В сохранённом табеле только записанные смены. Отсутствия, выходные и расчётные категории сюда не входят.',extractNotice:'В файл войдут только смены выбранного работника. Полный табель не изменится.'},
+ uk:{exportScope:'Працівники у файлі',fullDocument:'Усі працівники з табеля',workerExtract:'Витяг за одним працівником',notInSnapshot:'У збереженому табелі є лише записані зміни. Відсутність, вихідні й розрахункові категорії сюди не входять.',extractNotice:'До файлу увійдуть лише зміни вибраного працівника. Повний табель не зміниться.'},
+ pl:{exportScope:'Pracownicy w pliku',fullDocument:'Wszyscy pracownicy z ewidencji',workerExtract:'Wyciąg dla jednego pracownika',notInSnapshot:'Zapisana ewidencja zawiera tylko zarejestrowane zmiany. Nie obejmuje nieobecności, dni wolnych ani kategorii rozliczeniowych.',extractNotice:'Plik zawiera tylko zmiany wybranego pracownika. Pełna ewidencja pozostaje bez zmian.'},
 } as const;
 export const agencyTimecardsCopy=(language:string)=>{
  const lang=language.split('-')[0] as keyof typeof copy;

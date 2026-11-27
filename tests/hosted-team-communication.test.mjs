@@ -78,3 +78,15 @@ test('bell previews prioritize unread events and accept only known exact anchor 
  assert.equal(previewText(' First  paragraph\n Next ').length,'First paragraph Next'.length);
  assert.equal(previewText('a'.repeat(240)).length,130);
 });
+
+test('inbox pages list at most ten and earlier requests go to timekeeping',async()=>{
+ const {inboxPage}=await import('../src/hosted/inbox.ts');
+ const {noticeDestination}=await import('../src/hosted/notification-navigation.ts');
+ const rows=Array.from({length:23},(_,i)=>i);
+ assert.deepEqual(inboxPage(rows,0),{page:0,pages:3,rows:rows.slice(0,10)});
+ assert.deepEqual(inboxPage(rows,1).rows,rows.slice(10,20));
+ assert.deepEqual(inboxPage(rows,99),{page:2,pages:3,rows:[20,21,22]});
+ assert.deepEqual(inboxPage([],4),{page:0,pages:1,rows:[]});
+ assert.equal(noticeDestination('earlier-shift-any'),'timecards');
+ assert.equal(noticeDestination('backdated-internal-any'),'messages');
+});

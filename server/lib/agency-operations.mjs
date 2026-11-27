@@ -12,11 +12,13 @@ import {createPayslipsHandler} from './payslips.server.mjs';
 import {createMemberNamesHandler} from './member-names.server.mjs';
 import {createAccountHandler} from './worker-account.server.mjs';
 import {createFactoryRegistrationHandler} from './factory-registration.server.mjs';
+import {createInboxHandler,createInboxStore,inboxRoute,INBOX_SIGNATURE,INBOX_ROLE,INBOX_SQL} from './inbox.server.mjs';
 import {createTeamHandler,createTeamStore,TEAM_SQL,TEAM_FUNCTION} from './team-workflow.server.mjs';
 
 const id='[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}';
 const orgRoute=(prefix,actions)=>new RegExp('^/api/'+prefix+'/('+id+')/(?:'+actions+')$');
 const specs={
+ inbox:{handler:createInboxHandler,match:inboxRoute},
  profile:{handler:createAgencyProfileHandler,match:new RegExp('^/api/agency-profile/('+id+')(?:/worksite/'+id+')?/(?:context|settings)$')},
  worker:{handler:createWorkerEnrollmentHandler,match:new RegExp('^/api/worker-enrollment/(?:agency/('+id+')(?:/(?:invite|approve|provision|directory|cards|send-invitation|joins))?|context|lookup|request|claim|email-invitations|accept-email-invitation|terms)$')},
  timecards:{handler:createTimecardsHandler,match:orgRoute('timecards','context|create|archive|backdated-list|backdated-read|earlier-list|earlier-approve|earlier-reject|(?:read|history)/'+id)},
@@ -42,7 +44,7 @@ function workerWorkspaceAction(name,pathname,method){
   ||['factoryTimecards','names'].includes(name)&&pathname.endsWith('/context')
   ||name==='payroll'&&new RegExp('/(?:context|read/'+id+')$').test(pathname);
 }
-const lanes=[...INTEGRATED_LANES.filter(l=>l.id!=='factory'),
+const lanes=[{id:'inbox',role:INBOX_ROLE,functions:[{signature:INBOX_SIGNATURE,owner:'postgres'}],statements:[INBOX_SQL],create:createInboxStore},...INTEGRATED_LANES.filter(l=>l.id!=='factory'),
  {id:'profile',role:'timeax_agency_profile_login',functions:[{signature:AGENCY_PROFILE_SIGNATURE,owner:'postgres'}],statements:[AGENCY_PROFILE_SQL],create:createAgencyProfileStore},
  {id:'team',role:'timeax_team_login',functions:[TEAM_FUNCTION],statements:[TEAM_SQL],create:createTeamStore}];
 const key=v=>typeof v==='string'&&/^[-_A-Za-z0-9]{43,128}$/.test(v);
@@ -67,6 +69,7 @@ export function managedAgencyOperations(env){
   const teamFingerprint=env.TIMEAX_AGENCY_TEAM_RPC_SHA256;
   if(sha(teamFingerprint)&&v.team&&typeof v.team==='object'&&!Array.isArray(v.team))
    v.team={...v.team,hashes:{...v.team.hashes,[TEAM_FUNCTION.signature]:teamFingerprint}};
+  if(key(env.TIMEAX_INBOX_DB)&&sha(env.TIMEAX_INBOX_RPC_SHA256))v.inbox={password:env.TIMEAX_INBOX_DB,hashes:{[INBOX_SIGNATURE]:env.TIMEAX_INBOX_RPC_SHA256}};
   return v;
  }catch{return null}
 }
@@ -129,6 +132,12 @@ export async function assembleAgencyOperations(config,lane,{now=Date.now,sharedW
      if(!organization||name==='worker')return session;
      const scope=await access.get(session,organization);
      const action=pathname.slice(pathname.lastIndexOf('/')+1);
+     if(name==='inbox'){
+      const role=scope?.membership.role;
+      const allowed=scope?.organization.kind==='agency'?role==='agency_admin'||role==='worker'&&await workerTerms?.accepted(session)===true:
+       scope?.organization.kind==='factory'&&(role==='factory_admin'||role==='team_leader'||role==='worker'&&await workerTerms?.accepted(session)===true);
+      return allowed&&await session.isActive()?session:{state:'anonymous'};
+     }
      if(scope?.organization.kind==='factory'){
       const role=scope.membership.role,method=request.method;
       const context=method==='GET'&&action==='context';

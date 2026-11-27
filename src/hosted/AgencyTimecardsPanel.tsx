@@ -4,7 +4,7 @@ import {useTranslation} from 'react-i18next';
 import {useMemberNames} from './MemberNames';
 import {AgencyBookDrawer} from './AgencyBookDrawer';
 import {agencyPeriodToday,agencyPeriodBounds,agencyPeriodOverlaps,agencyShiftGroups,weekdays,type AgencyPeriodKind} from './agency-hours-scope';
-import {workerLabelText} from './member-label';
+import {TimecardReportDrawer} from './TimecardReportDrawer';
 import {agencyTimecardsCopy} from './agency-timecards-copy';
 import {timecardCall,parseTimecards,parseSnapshot,minutesLabel,type TimecardContext,type ShiftData,type TimecardShift} from './timecards';
 import {factoryHoursCall,parseFactoryHours,parseFactorySnapshot,type FactoryHoursContext} from './factory-timecards';
@@ -193,49 +193,9 @@ function AgencySource({organizationId,source,c}:{organizationId:string;source:So
         <p>{record.dateFrom} – {record.dateTo} · {tt('counted')}: <strong>{minutesLabel(record.paidMinutes)}</strong></p>
         <button type="button" className="button button--outline" disabled={busy} onClick={()=>void act(record.id)}>{tt('open')}</button>
       </article>)}</div>
-      {snapshot&&<SnapshotDialog key={snapshot.source+snapshot.worksiteId+snapshot.dateFrom+snapshot.dateTo} snapshot={snapshot} c={c} onClose={()=>setSnapshot(undefined)}/>}
+      {snapshot&&<TimecardReportDrawer key={snapshot.source+snapshot.worksiteId+snapshot.dateFrom+snapshot.dateTo} snapshot={snapshot} onClose={()=>setSnapshot(undefined)}/>}
     </>}
     {notice&&<p role={notice==='archivedNotice'?'status':'alert'}>{tt(notice)}</p>}
     <button type="button" className="button button--outline" disabled={busy||status==='checking'} onClick={()=>{setNotice('');setSnapshot(undefined);setHistory(undefined);setRevision(n=>n+1)}}>{tt('refresh')}</button>
   </section>;
 }
-
-function SnapshotDialog({snapshot,c,onClose}:{snapshot:AgencyTimecardSnapshot;c:Copy;onClose:()=>void}){
-  const {t,i18n}=useTranslation(),tt=(k:string)=>t('timecards.'+k);
-  const saving=useRef(false);
-  const [busy,setBusy]=useState(false),[failed,setFailed]=useState(false),[worker,setWorker]=useState('');
-  const workerText=(r:AgencyTimecardSnapshot['rows'][number])=>workerLabelText(r.workerLabel,t('memberNames.historicalMissing'),t('memberNames.reference'));
-  const distinct=new Map<string,string>();
-  for(const row of snapshot.rows){
-    if(uuid(row.membershipId)&&(!distinct.has(row.membershipId)||row.workerLabel?.name))
-      distinct.set(row.membershipId,workerText(row));
-  }
-  const labelCounts=new Map<string,number>();
-  for(const name of distinct.values())labelCounts.set(name,(labelCounts.get(name)??0)+1);
-  const workerOptions=[...distinct].sort((a,b)=>a[1].localeCompare(b[1],i18n.language)||a[0].localeCompare(b[0]));
-  const rows=worker?snapshot.rows.filter(row=>row.membershipId===worker):snapshot.rows;
-  const paidMinutes=worker?rows.reduce((sum,row)=>sum+row.data.paidMinutes,0):snapshot.paidMinutes;
-  async function download(){
-    if(saving.current)return;saving.current=true;setBusy(true);setFailed(false);
-    try{const {downloadAgencyTimecardWorkbook}=await import('./timecard-xlsx');
-      await downloadAgencyTimecardWorkbook(snapshot,{source:c.source,site:c.site,factory:c.factoryLabel,worker:tt('workerRef'),date:tt('date'),start:tt('start'),end:tt('end'),gross:c.gross,break:c.break,paid:c.paid,comment:tt('comment'),total:c.total,worksheet:c.workbook,missingName:t('memberNames.historicalMissing'),reference:t('memberNames.reference'),internal:c.internal,factorySource:c.factory,timeZone:c.timeZone,scope:c.exportScope,workerExtract:c.workerExtract,breakState:t('workflow.breakReport.inputLabel'),breakUnreported:t('workflow.breakReport.notReported'),breakNotTaken:t('breaks.notTaken'),breakPaid:t('workflow.breakReport.paidChoice'),breakUnpaid:t('workflow.breakReport.unpaidChoice')},worker||undefined);
-    }catch{setFailed(true)}finally{saving.current=false;setBusy(false)}
-  }
-  const title=snapshot.source==='connected-factory'?snapshot.factoryName+' / '+snapshot.worksiteName:snapshot.worksiteName;
-  return <AgencyBookDrawer title={title} closeLabel={tt('close')} busy={busy} onClose={onClose}>
-    <p>{snapshot.dateFrom} – {snapshot.dateTo} · {snapshot.timeZone}</p>
-    <label className="field-label">{c.exportScope}<select value={worker} disabled={busy} onChange={e=>{setWorker(e.target.value);setFailed(false)}}>
-      <option value="">{c.fullDocument}</option>{workerOptions.map(([id,name])=><option key={id} value={id}>{name}{(labelCounts.get(name)??0)>1?' · '+id.slice(0,8):''}</option>)}
-    </select></label>
-    {worker&&<p className="muted-copy">{c.extractNotice}</p>}
-    <p>{tt('counted')}: <strong>{minutesLabel(paidMinutes)}</strong></p>
-    <div className="agency-hours__rows">
-      {rows.map(row=><p key={row.id}>{workerText(row)} · {row.data.localDate} · {row.data.startTime}–{row.data.endTime} · <strong>{minutesLabel(row.data.paidMinutes)}</strong></p>)}
-    </div>
-    <div className="timecards-actions">
-      <button type="button" className="button button--primary" disabled={busy} onClick={()=>void download()}>{busy?c.exporting:c.download}</button>
-    </div>
-    {failed&&<p role="alert">{c.exportError}</p>}
-  </AgencyBookDrawer>;
-}
-

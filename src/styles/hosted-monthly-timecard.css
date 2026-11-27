@@ -1,0 +1,16 @@
+dialog.agency-book:has(.hosted-monthly-timecard){width:min(100%,60rem)}
+.hosted-monthly-timecard{display:grid;gap:.8rem;min-width:0}
+.hosted-monthly-timecard__export{display:flex;align-items:end;gap:.85rem;flex-wrap:wrap;margin-block-end:1rem}
+.hosted-monthly-timecard__export label{min-width:min(100%,18rem)}
+.hosted-monthly-timecard .panel-heading p{margin:.2rem 0 0}
+.hosted-monthly-timecard .monthly-worker-table tfoot td{background:var(--surface-muted);font-weight:750}
+.hosted-monthly-timecard .monthly-worker-table th[scope=row]{text-transform:none}
+.hosted-monthly-timecard .monthly-worker-table th[scope=row]:first-child{max-width:13rem;white-space:normal}
+.hosted-monthly-timecard .monthly-worker-table .monthly-worker-detail td{white-space:normal}
+.hosted-monthly-timecard .monthly-worker-table-wrap:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.hosted-monthly-timecard .monthly-record-head{cursor:default}
+.hosted-monthly-timecard .monthly-summary-grid{margin:0}
+@media (max-width:700px){
+ .hosted-monthly-timecard .monthly-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .hosted-monthly-timecard .monthly-worker-table{min-width:34rem}
+}

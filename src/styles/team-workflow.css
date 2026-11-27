@@ -32,3 +32,9 @@
  .hosted-cabinet .portal-top-actions .team-bell-wrap{margin-inline-end:auto}
  .team-bell-popover{position:fixed;inset-inline:.75rem;top:7rem;width:auto;max-height:65dvh}
 }
+
+.inbox-pagination{align-items:center;justify-content:center;margin-block:.7rem}
+.inbox-actions{gap:.4rem;margin-block-start:.45rem}
+.team-work-notices>article{margin-block:.55rem}
+.hosted-cabinet .portal-nav-link .timeax-review-count{flex:none;margin-inline-start:auto;min-width:1.45rem;padding:.15rem .34rem;text-align:center;border-radius:999px;background:var(--accent,#266b5b);color:var(--on-accent,#fff);font-size:.8rem;font-weight:700}
+.agency-worker-group li[id^="earlier-shift-"]:target{outline:2px solid var(--accent,#2d8068);outline-offset:2px;scroll-margin-top:4rem}

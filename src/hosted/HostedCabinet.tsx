@@ -3,8 +3,10 @@ import {WorkerPasswordPanel} from './WorkerPasswordPanel';
 import {AgencyProfile} from './AgencyProfile';
 import {AgencyNipVisibility} from './AgencyWorkerCards';
 import {PhonePushSettings} from './PhonePushSettings';
+import {useInbox} from './inbox';
+import {useBackdatedCards} from './BackdatedNoticeCard';
 import {AgencyBackdatedShifts,agencyShiftPreviews,useBackdatedShifts} from './AgencyBackdatedShifts';
-import {AgencyJoinNotifications,agencyJoinPreviews,useAgencyJoinNotifications} from './AgencyJoinNotifications';
+import {agencyJoinPreviews,useAgencyJoinCards,useAgencyJoinNotifications} from './AgencyJoinNotifications';
 import {WorkerCalendar} from './WorkerCalendar';
 import {WorkerShiftHistory} from './WorkerShiftHistory';
 import {FactoryRolePanel,type FactoryRoleSection} from './FactoryRolePanel';
@@ -93,7 +95,6 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
  const agencyWorker=worker&&access.organization.kind==='agency';
  const [agencyProfile,setAgencyProfile]=useState<{public:boolean;productions:boolean;ops:string[]}>();
  useEffect(()=>{
-  if(!agency)return;
   const c=new AbortController();
   void fetch('/v1/session/timeax-email',{credentials:'same-origin',cache:'no-store',signal:c.signal}).then(async r=>r.ok?await r.json():null).then(v=>{
    if(!c.signal.aborted)setAgencyProfile({public:v?.selfService===true,productions:v?.agencyProductions===true,ops:Array.isArray(v?.agencyOperations)?v.agencyOperations:[]});
@@ -111,8 +112,20 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
  const heading=menu.find(entry=>entry.section===section)?.label??(section==='templates'?'team.templates':section==='absence'?'team.absence':menu[0].label);
  const org=access.organization.id;
  const {i18n}=useTranslation();
- const joins=useAgencyJoinNotifications(publicAgency&&uses('workerProvisioning')?org:undefined);
- const backdated=useBackdatedShifts(publicAgency&&uses('timecards')&&uses('team')?org:undefined);
+ const inbox=useInbox(org,access.membership.id,agencyProfile?.ops.includes('inbox')===true);
+ const joins=useAgencyJoinNotifications(publicAgency&&uses('workerProvisioning')?org:undefined,!inbox.data);
+ const backdated=useBackdatedShifts(publicAgency&&uses('timecards')&&uses('team')?org:undefined,!inbox.data);
+ const joinEntries=inbox.data?.joins??joins.value?.entries??[];
+ const shiftEntries=inbox.data?.backdated??backdated.feed?.notices??[];
+ const joinCards=useAgencyJoinCards(async id=>{await joins.mark(id);inbox.refresh()});
+ const shiftCards=useBackdatedCards(publicAgency&&section==='messages'&&uses('timecards')?org:undefined,()=>{backdated.refresh();inbox.refresh()});
+ const requests=inbox.data?.requests??backdated.feed?.requests??[];
+ const needsReview=inbox.data?requests.filter(e=>e.state==='pending').length:backdated.feed?.pending??0;
+ const shiftFeed={notices:shiftEntries,requests,pending:needsReview,unread:backdated.feed?.unread??0};
+ const bellEntries=[...agencyJoinPreviews({entries:joinEntries,unread:0},i18n.resolvedLanguage),...agencyShiftPreviews(shiftFeed,i18n.resolvedLanguage)];
+ const extraUnread=needsReview+(inbox.data?bellEntries.filter(p=>!p.anchor.startsWith('earlier-shift-')&&p.unread&&inbox.state(p.anchor)==='active').length:(joins.value?.unread??0)+(backdated.feed?.unread??0));
+ const externalNotices=section==='messages'?[...joinEntries.map(e=>({anchor:'agency-join-'+e.id,at:e.joinedAt,card:()=>joinCards.card(e)})),
+  ...shiftEntries.map(e=>({anchor:'backdated-'+e.source+'-'+e.id,at:e.submittedAt,card:()=>shiftCards.card(e)}))]:[];
  const [agencySearch]=useSearchParams();
  const unifiedHours=publicAgency&&(section==='timecards'||section==='factory-timecards');
  const directory=publicAgency&&section==='workers';
@@ -133,7 +146,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
    <nav className="portal-nav" aria-label={home}>
     {visibleMenu.map(({section:id,label,group,Icon},index)=><Fragment key={id}>
      {group!==visibleMenu[index-1]?.group&&<div className="portal-nav-group-label">{t('nav.groups.'+group)}</div>}
-     <Link className={'portal-nav-link'+(id===section||unifiedHours&&id==='timecards'?' is-active':'')} aria-current={id===section||unifiedHours&&id==='timecards'?'page':undefined} to={route(id)} onClick={()=>setMenuOpen(false)}><Icon size={17} aria-hidden="true"/><span>{t(label)}</span></Link>
+     <Link className={'portal-nav-link'+(id===section||unifiedHours&&id==='timecards'?' is-active':'')} aria-current={id===section||unifiedHours&&id==='timecards'?'page':undefined} to={route(id)} onClick={()=>setMenuOpen(false)}><Icon size={17} aria-hidden="true"/><span>{t(label)}</span>{publicAgency&&id==='timecards'&&needsReview>0&&<span className="timeax-review-count" aria-label={t('team.notifications',{count:needsReview})}>{needsReview}</span>}</Link>
     </Fragment>)}
     {worker&&<><div className="portal-nav-group-label">{t('nav.groups.account')}</div><Link className="portal-nav-link" to="/account"><Settings2 size={17} aria-hidden="true"/><span>{t('nav.profile')}</span></Link>{agencyWorker&&<Link className="portal-nav-link" to="/register/worker"><Building2 size={17} aria-hidden="true"/><span>{t('workerEnrollment.join')}</span></Link>}</>}
    </nav>
@@ -147,7 +160,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
      <button className="portal-mobile-menu" type="button" aria-controls="hosted-cabinet-menu" aria-label={t('common.openMenu')} aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}><Menu size={19}/></button>
      <div className="portal-breadcrumb"><span className="breadcrumb-dot"/>{agencyName||home}</div>
     </div>
-    <div className="portal-top-actions">{uses('team')&&<TeamBell organizationId={org} additionalUnread={(joins.value?.unread??0)+(backdated.feed?.unread??0)+(backdated.feed?.pending??0)} additional={[...agencyJoinPreviews(joins.value,i18n.resolvedLanguage),...agencyShiftPreviews(backdated.feed,i18n.resolvedLanguage)]}/>}
+    <div className="portal-top-actions">{uses('team')&&<TeamBell organizationId={org} inboxState={inbox} additionalUnread={extraUnread} additional={bellEntries}/>}
     <LanguageSwitcher compact/><ThemeToggle/></div>
    </header>
    <main className="portal-content">
@@ -156,10 +169,8 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
     {factoryAdmin&&(section==='factory-timecards'||section==='timesheets')&&<FactoryTimecardsPanel key={org+section} organizationId={org} expectedRole='factory_admin' expectedMembershipId={access.membership.id} archiveOnly={section==='timesheets'} leaderSection={section==='timesheets'?'timesheets':'hours'}/>}
     {publicAgency&&section!=='home'&&section!=='setup'&&!directory&&!unifiedHours&&!sectionReady&&<p className="notice-box" role="status">{t('agencyProductions.moduleNotEnabled')}</p>}
 
-    {uses('team')&&!(factoryAdmin&&section==='schedule')&&(['messages','schedule','templates','absence','accountants'] as string[]).includes(section)&&<TeamPanel organizationId={org} section={section as TeamSection} notificationExtras={section==='messages'?<>
-     {publicAgency&&backdated.feed&&<AgencyBackdatedShifts organizationId={org} feed={backdated.feed} refresh={backdated.refresh}/>}
-     {publicAgency&&<AgencyJoinNotifications value={joins.value} mark={joins.mark}/>}<PhonePushSettings/>
-    </>:undefined}/>}
+    {uses('team')&&!(factoryAdmin&&section==='schedule')&&(['messages','schedule','templates','absence','accountants'] as string[]).includes(section)&&<TeamPanel organizationId={org} section={section as TeamSection} inboxState={inbox} externalNotices={externalNotices}
+     notificationExtras={section==='messages'?<>{joinCards.error&&<p role="alert">{joinCards.error}</p>}{shiftCards.failure&&<p role="alert">{t('team.closed')}</p>}<PhonePushSettings/></>:undefined}/>}
     {section==='settings'&&agencyProfile?.ops.includes('profile')&&<AgencyProfile key={org} organizationId={org} onSaved={setAgencyName}/>}
     {section==='settings'&&publicAgency&&uses('workerProvisioning')&&<AgencyNipVisibility key={org} organizationId={org}/>}
     {!production&&section==='home'&&<>
@@ -171,9 +182,10 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
      </section>
      <div className="form-actions agency-overview-actions">{menu.filter(x=>x.section==='timecards'||x.section==='payslips'||x.section==='workers').map(x=><Link key={x.section} className="button button--outline button--small" to={route(x.section)}>{t(x.label)}</Link>)}</div>
     </>}
-    {directory&&<AgencyWorkersPanel key={org+(agencySearch.get('site')??'')} organizationId={org} siteId={agencySearch.get('site')??undefined} initialSection={agencySearch.get('tab')==='applications'?'applications':'roster'} enrollmentEnabled={uses('worker')} provisioningEnabled={publicAgency&&uses('workerProvisioning')} productionsEnabled={agencyProfile?.productions===true} factoryHoursEnabled={uses('factoryTimecards')} namesEnabled={uses('names')} lifecycleEnabled={uses('account')}/>}
+    {directory&&<AgencyWorkersPanel key={org+(agencySearch.get('site')??'')} organizationId={org} siteId={agencySearch.get('site')??undefined} initialSection={agencySearch.get('tab')==='applications'?'applications':'roster'} enrollmentEnabled={uses('worker')} provisioningEnabled={publicAgency&&uses('workerProvisioning')} productionsEnabled={agencyProfile?.productions===true} factoryHoursEnabled={uses('factoryTimecards')} timecardsEnabled={uses('timecards')} absencesEnabled={uses('team')} namesEnabled={uses('names')} lifecycleEnabled={uses('account')}/>}
     {!production&&!directory&&uses('worker')&&section==='workers'&&<AgencyWorkerPanel organizationId={org} verifiedAgency={publicAgency} namesEnabled={uses('names')} lifecycleEnabled={uses('account')}/> }
     {!production&&section==='setup'&&(publicAgency?<AgencyProductions key={org} organizationId={org} initialSites={access.worksites} enabled={agencyProfile?.productions===true} factoryInvites={uses('registration')} settingsEnabled={uses('profile')} namesEnabled={uses('names')} placementsEnabled={uses('factoryTimecards')}/>:loadModules?<FactorySetupPanel organizationId={org}/>:null)}
+    {unifiedHours&&<AgencyBackdatedShifts key={org} organizationId={org} feed={shiftFeed} refresh={()=>{backdated.refresh();inbox.refresh()}}/>}
     {unifiedHours&&<AgencyTimecardsPanel key={section} organizationId={org} internalEnabled={uses('timecards')} factoryEnabled={uses('factoryTimecards')} initialSource={section==='factory-timecards'?'factory':'internal'}/>}
     {agencyWorker&&section==='timecards'&&<WorkerShiftHistory key={org+access.membership.id} organizationId={org} membershipId={access.membership.id}/>}
     {!worker&&!unifiedHours&&uses('timecards')&&section==='timecards'&&<TimecardsPanel organizationId={org} includeFactoryArchive={uses('factoryTimecards')}/>}
