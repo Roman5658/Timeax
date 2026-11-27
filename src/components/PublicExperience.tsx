@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowRight, Building2, Factory, LockKeyhole, Menu, ShieldCheck, UserRound, X } from "lucide-react";
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { BrandMark } from "./BrandMark";
@@ -33,23 +33,25 @@ export function PublicFooter() {
   return <footer className="public-footer">
     <div className="public-footer-about"><strong>© Timeax</strong><p>{t("publicExperience.footerAbout")}</p></div>
     <div className="public-footer-links">
-      <a href="mailto:no-reply@timeax.pl">{t("common.support")}: no-reply@timeax.pl</a>
-      <Link to="/terms">{t("hostedLegal.termsLink")}</Link><Link to="/privacy">{t("hostedPrivacy.link")}</Link>
+      <LegalLink kind="support" to="mailto:no-reply@timeax.pl"/>
+      <LegalLink kind="terms" to="/terms"/><LegalLink kind="privacy" to="/privacy"/>
     </div>
   </footer>;
 }
 export const AuthPanelContext = createContext(false);
-export type LegalDocument = "terms" | "privacy";
+export type LegalDocument = "terms" | "privacy" | "support";
 export const LegalSheetContext = createContext<((kind: LegalDocument, opener: HTMLAnchorElement) => void) | null>(null);
 
 export function LegalLink({ kind, to }: { kind: LegalDocument; to: string }) {
   const { t } = useTranslation();
   const open = useContext(LegalSheetContext);
-  return <Link to={to} onClick={event => {
-    if (!open || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  const show = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!open || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     open(kind, event.currentTarget);
-  }}>{t(kind === "terms" ? "hostedLegal.termsLink" : "hostedPrivacy.link")}</Link>;
+  };
+  if(kind === "support")return <a href={to} onClick={show}>{t("common.support")}: no-reply@timeax.pl</a>;
+  return <Link to={to} onClick={show}>{t(kind === "terms" ? "hostedLegal.termsLink" : "hostedPrivacy.link")}</Link>;
 }
 export function RegistrationFrame({ children, title, lead, back = "/register" }: { children: ReactNode; title: string; lead: string; back?: string }) {
   const { t } = useTranslation();

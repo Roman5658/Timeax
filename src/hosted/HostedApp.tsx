@@ -135,8 +135,16 @@ function PublicLanding({pathname}:{pathname:string}){
  const [lastPanel,setLastPanel]=useState<string|null>(()=>pathname==="/"?null:pathname);
  useLayoutEffect(()=>{if(pathname!=="/")setLastPanel(pathname)},[pathname]);
  const finishClose=useCallback(()=>setLastPanel(null),[]);
+ const [footerSheet,setFooterSheet]=useState<{kind:LegalDocument;opener:HTMLAnchorElement}|null>(null);
+ const openFooterSheet=useCallback((kind:LegalDocument,opener:HTMLAnchorElement)=>setFooterSheet({kind,opener}),[]);
+ const closeFooterSheet=useCallback(()=>setFooterSheet(null),[]);
+ useEffect(()=>{if(pathname!=="/")closeFooterSheet()},[pathname,closeFooterSheet]);
  const panel=pathname==="/"?lastPanel:pathname;
- return <><StartPage/>{panel&&<PublicAuthPanel pathname={panel} closing={pathname==="/"} onClosed={finishClose}/>}</>;
+ return <>
+  <LegalSheetContext.Provider value={openFooterSheet}><StartPage/></LegalSheetContext.Provider>
+  {panel&&<PublicAuthPanel pathname={panel} closing={pathname==="/"} onClosed={finishClose}/>}
+  {pathname==="/"&&!panel&&footerSheet&&<HostedLegalSheet centered kind={footerSheet.kind} opener={footerSheet.opener} onClosed={closeFooterSheet}/>}
+ </>;
 }
 export function HostedApp(){
  const {t}=useTranslation(),loc=useLocation(),tx=(k:string)=>t("closedHosted."+k);
