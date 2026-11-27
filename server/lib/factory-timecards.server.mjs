@@ -29,6 +29,7 @@ export function createFactoryTimecardsHandler({origin,resolveSession,store=null,
     const body=JSON.parse(new TextDecoder('utf8',{fatal:true}).decode(Buffer.concat(chunks)));
     if(['create','correct'].includes(action)){
      if(!id(body.membershipId))return reply(400,{error:'invalid'});
+     if(s.workspaceRole==='worker'&&(action!=='create'||body.membershipId!==s.workspaceMembershipId))return reply(403,{error:'denied'});
      const {membershipId,...draft}=body;const normalized=normalizeTimecard(draft,action==='correct');if(!normalized)return reply(400,{error:'invalid'});value={...normalized,membershipId};
     }else{
      const fields={

@@ -99,7 +99,7 @@ function WorkerAgencyConnection({initialInvite,onSessionExpired,provisioning,aut
   try{
    const res=await workerCall('accept-email-invitation',{invitationId:invite.id}) as {state?:string;organizationId?:string};
    if(res?.state!=='connected'||res.organizationId!==invite.organizationId)throw Error('unavailable');
-   navigate('/workspace/'+invite.organizationId,{replace:true});
+   navigate('/workspace/'+invite.organizationId,{replace:true,state:{offerWorkerPassword:true}});
   }catch(e){if(e instanceof Error&&e.message==='login')expired.current();else E(inviteCopy.inviteError)}
   finally{pending.current=false;B(false)}
  },[inviteCopy.inviteError,navigate]);
@@ -147,7 +147,8 @@ function WorkerAgencyConnection({initialInvite,onSessionExpired,provisioning,aut
    const current=workers.some(m=>m.organizationId===a.organizationId);
    return <article className="notice-box" key={a.id}><strong>{a.name}</strong><p>{a.status==='pending'?copy.pending:current?copy.approved:copy.accessEnded}</p></article>;
   })}
-  {workers.map(m=><p key={m.membershipId}><Link className="button button--primary" to={'/workspace/'+m.organizationId}>{copy.workspace}: {m.name}</Link></p>)}
+  {workers.map(m=><p key={m.membershipId}><Link className="button button--primary" to={'/workspace/'+m.organizationId}
+    state={value?.applications.some(a=>a.organizationId===m.organizationId&&a.status==='approved')?{offerWorkerPassword:true}:undefined}>{copy.workspace}: {m.name}</Link></p>)}
   {value?.applications.some(a=>a.status==='pending')&&<button className="button button--outline" type="button" disabled={busy} onClick={()=>{E('');R(n=>n+1)}}>{copy.checkApplication}</button>}
   <div className="form-actions">
    <button className={'button '+(method==='nip'?'button--primary':'button--outline')} type="button" aria-pressed={method==='nip'} disabled={busy} onClick={()=>{M('nip');E('');T('')}}>{copy.nipMethod}</button>

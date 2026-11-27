@@ -29,6 +29,9 @@ export function createMemberNamesHandler({origin,resolveSession,store=null,now=D
   }
   const result=await store.invoke({issuer:s.issuer,subject:s.subject},action,{...value,organizationId,...(recordId?{id:recordId}:{})});
   if(!await active())return reply(401,{error:'login'});
+  if(s.workspaceRole==='worker'&&(action!=='context'||result?.organizationId!==organizationId||result.canEdit!==false
+   ||!Array.isArray(result.workers)||result.workers.some(w=>w?.membershipId!==s.workspaceMembershipId||w.organizationId!==organizationId)))
+   return reply(503,{error:'unavailable'});
   return reply(200,result);
  }catch(e){const code=e?.code;return reply(code==='42501'?403:code==='23505'||code==='P0001'||code==='P0002'?409:['22023','22007','22008','23514'].includes(code)?400:503,{error:code==='P0002'?'unresolved':code==='P0001'?'period-closed':code==='23505'?'conflict':code==='42501'?'denied':['22023','22007','22008','23514'].includes(code)?'invalid':'unavailable'})}};
 }

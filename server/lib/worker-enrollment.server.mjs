@@ -57,7 +57,7 @@ export function createWorkerEnrollmentHandler({origin,store=null,provisioning,in
     return reply(409,{error:'worker-terms-required'});
    }
    let result;
-   const agency=path.match(/^\/api\/worker-enrollment\/agency\/([0-9a-f-]+)(?:\/(invite|approve|provision|directory|cards|send-invitation))?$/);
+   const agency=path.match(/^\/api\/worker-enrollment\/agency\/([0-9a-f-]+)(?:\/(invite|approve|provision|directory|cards|send-invitation|joins))?$/);
    const workspace=path.match(/^\/api\/worker-enrollment\/workspace\/([0-9a-f-]+)$/);
    if(path==='/api/worker-enrollment/email-invitations'&&!mutate&&provisioning){
     result=await provisioning.call('list',actor);
@@ -84,6 +84,10 @@ export function createWorkerEnrollmentHandler({origin,store=null,provisioning,in
     if(rows.length!==1||!uuid(rows[0]?.application_id))throw Error();result={application:rows[0]};
    }else if(agency&&uuid(agency[1])){
     if(!agency[2]&&!mutate){result={applications:await store.call('queue',actor,agency[1])};}
+    else if(agency[2]==='joins'&&provisioning){
+     if(mutate&&(!exact(body,['id'])||!uuid(body.id)))return reply(400,{error:'invalid-request'});
+     result=await provisioning.call(mutate?'read-join-event':'join-events',actor,{agencyId:agency[1],...(mutate?{id:body.id}:{})});
+    }
     else if(agency[2]==='cards'&&provisioning){
      if(mutate){
       const email=exact(body,['email','firstName','lastName','worksiteId'])&&normalizePublicEmail(body.email);

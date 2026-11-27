@@ -47,6 +47,15 @@ export function createPayslipsHandler({origin,resolveSession,store=null,now=Date
   }
   const result=await store.invoke({issuer:s.issuer,subject:s.subject},action,{...value,organizationId,...(recordId?{id:recordId}:{})});
   if(!await active())return reply(401,{error:'login'});
+  if(s.workspaceRole==='worker'){
+   const own=publication=>id(publication?.id)&&publication?.document?.source?.workerKey===s.workspaceMembershipId&&
+    publication.document.source.agencyId===organizationId;
+   if(action==='read'?(result?.id!==recordId||!own(result)):
+    action!=='context'||result?.organizationId!==organizationId||result?.membershipId!==s.workspaceMembershipId||
+    result?.role!=='worker'||result?.settings!==null||!Array.isArray(result.published)||!result.published.every(own)||
+    ['workers','accountants','groups','rates','groupAssignments','sources','drafts'].some(k=>!Array.isArray(result[k])||result[k].length!==0))
+    return reply(503,{error:'unavailable'});
+  }
   return reply(200,result);
  }catch(e){const code=e?.code;return reply(code==='42501'?403:code==='23505'||code==='P0001'||code==='P0002'?409:['22023','22007','22008','23514'].includes(code)?400:503,{error:code==='P0002'?'unresolved':code==='P0001'?'period-closed':code==='23505'?'conflict':code==='42501'?'denied':['22023','22007','22008','23514'].includes(code)?'invalid':'unavailable'})}};
 }

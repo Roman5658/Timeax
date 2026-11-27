@@ -7,6 +7,11 @@ export function createTeamStore(lane){return {async invoke(s,action,input){const
 const id=v=>typeof v==='string'&&/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(v);
 const exact=(v,ks)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length===ks.length&&ks.every(k=>Object.hasOwn(v,k));
 const text=(v,max)=>typeof v==='string'&&v.trim().length>0&&v.length<=max&&!/[\p{Cc}\p{Cs}]/u.test(v.replace(/\n/g,''));
+const parseDay=v=>{
+ if(typeof v!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(v))return NaN;
+ const ms=Date.parse(v+'T00:00:00Z');
+ return Number.isFinite(ms)&&new Date(ms).toISOString().slice(0,10)===v?ms:NaN;
+};
 const hash=v=>createHash('sha256').update(v).digest('hex');
 const reply=(status,value)=>Response.json(value,{status,headers:{'Cache-Control':'no-store, private',Vary:'Cookie','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});
 export function createTeamHandler({origin,resolveSession,store=null,inviteKey,now=Date.now}){
@@ -44,7 +49,9 @@ export function createTeamHandler({origin,resolveSession,store=null,inviteKey,no
    if(b.recipients&&(!Array.isArray(b.recipients)||b.recipients.length<1||b.recipients.length>100||!b.recipients.every(id)))return reply(400,{error:'invalid'});
    if(action==='message'&&(!exact(b.payload,['text'])||!text(b.payload.text,2000)))return reply(400,{error:'invalid'});
    if(action==='absence'||action==='update-plan'&&Object.hasOwn(b.payload??{},'dateFrom')){
-    if(!exact(b.payload,['dateFrom','dateTo'])||![b.payload.dateFrom,b.payload.dateTo].every(x=>typeof x==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(x)))return reply(400,{error:'invalid'});
+    if(!exact(b.payload,['dateFrom','dateTo'])||action==='absence'&&!id(b.siteId))return reply(400,{error:'invalid'});
+    const days=(parseDay(b.payload.dateTo)-parseDay(b.payload.dateFrom))/86_400_000;
+    if(!Number.isInteger(days)||days<0||days>90)return reply(400,{error:'invalid'});
    }
    if(action==='schedule'||action==='update-plan'&&!Object.hasOwn(b.payload??{},'dateFrom')){
     if(!exact(b.payload,['localDate','startTime','endTime']))return reply(400,{error:'invalid'});

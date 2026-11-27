@@ -23,9 +23,11 @@ async function call(signal:AbortSignal,password?:string){
  if(v?.state==='ready'||v?.state==='saved'||v?.state==='reauthentication-required')return v.state as State;
  throw Error('unavailable');
 }
-export function WorkerPasswordPanel({compact=false}:{compact?:boolean}){
+export function WorkerPasswordPanel({compact=false,onDismiss}:{compact?:boolean;onDismiss?:()=>void}){
  const {i18n}=useTranslation(),navigate=useNavigate();
  const lang=i18n.resolvedLanguage?.split('-')[0],t=text[lang==='ru'||lang==='pl'||lang==='uk'?lang:'en'];
+ const skip=lang==='ru'?'Позже, продолжить в кабинет':lang==='pl'?'Później, przejdź do panelu':lang==='uk'?'Пізніше, перейти до кабінету':'Later, continue to my workspace';
+ const first=lang==='ru'?'Создай пароль для следующих входов':lang==='pl'?'Ustaw hasło do kolejnych logowań':lang==='uk'?'Створи пароль для наступних входів':'Set a password for future sign-ins';
  const [state,S]=useState<State>('loading'),[password,P]=useState(''),[again,A]=useState(''),[busy,B]=useState(false),[error,E]=useState('');
  const operation=useRef<AbortController|null>(null);
  useEffect(()=>{
@@ -63,6 +65,8 @@ export function WorkerPasswordPanel({compact=false}:{compact?:boolean}){
    </form>:
    <><p>{t.recent}</p><button type="button" className="button button--outline" onClick={()=>void reauthenticate()} disabled={busy}>{t.code}</button></>}
    {error&&<p role="alert">{error}</p>}</>;
+ if(onDismiss)return <section className="notice-box worker-password-welcome" aria-label={first}><h2>{first}</h2>{body}
+  <p><button type="button" className="button button--outline" disabled={busy} onClick={onDismiss}>{state==='saved'?(lang==='ru'?'Готово':lang==='pl'?'Gotowe':lang==='uk'?'Готово':'Done'):skip}</button></p></section>;
  return compact?<details className="notice-box"><summary>{t.title}</summary>{body}</details>:<section className="notice-box" aria-label={t.title}><h2>{t.title}</h2>{body}</section>;
 }
 

@@ -55,7 +55,9 @@ test('unknown role and runtime lane failure cannot enable a section',async()=>{
 test('agency schedule is read-only and other team actions stay enabled',async()=>{
  const {writes,module}=fixture(),ops=await module;
  const root='/api/team/'+organization+'/';
- for(const action of ['schedule','update-plan','cancel'])assert.equal(ops.find(root+action),undefined);
+ assert.equal(ops.find(root+'schedule'),undefined);
+ for(const action of ['update-plan','cancel','absence','save-template','delete-template'])
+  assert.equal((await ops.find(root+action)(request(root+action,{}))).status,401);
  assert.equal((await ops.find(root+'context')(request(root+'context'))).status,200);
  assert.deepEqual(writes.map(({dbRole,args})=>[dbRole,args[2]]),[['timeax_team_login','context']]);
  for(const action of ['read','message','invite-accountant','revoke-accountant'])assert.equal(typeof ops.find(root+action),'function');

@@ -1,3 +1,4 @@
+import {workerCalendarCopy} from './worker-calendar-copy';
 import {TemplatePicker} from './TeamWorkflow';
 import {useMemberNames} from './MemberNames';
 import {workerLabelText} from './member-label';
@@ -8,8 +9,8 @@ import {timecardCall,parseTimecards,parseSnapshot,snapshotCsv,minutesLabel,type 
 import {WorkerShiftCalendar} from './WorkerShiftCalendar';
 import '../styles/worker-enrollment.css';import '../styles/timecards.css';
 const yesterday=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Warsaw',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(Date.now()-86400000));
-export function TimecardsPanel({organizationId,revision=0,includeFactoryArchive=true}:{organizationId:string;revision?:number;includeFactoryArchive?:boolean}){
- const {t}=useTranslation(),tx=(k:string)=>t('timecards.'+k);
+export function TimecardsPanel({organizationId,revision=0,includeFactoryArchive=true,readOnlyWorker=false}:{organizationId:string;revision?:number;includeFactoryArchive?:boolean;readOnlyWorker?:boolean}){
+ const {t,i18n}=useTranslation(),tx=(k:string)=>t('timecards.'+k);
  const [context,setContext]=useState<TimecardContext>(),[status,setStatus]=useState('checking'),[refresh,setRefresh]=useState(0),[busy,setBusy]=useState(false),[notice,setNotice]=useState('');
  const {label}=useMemberNames(organizationId,revision+refresh);
  const [site,setSite]=useState(''),[date,setDate]=useState(yesterday),[start,setStart]=useState('08:00'),[end,setEnd]=useState('16:00'),[breakMinutes,setBreakMinutes]=useState(0),[paid,setPaid]=useState(false),[comment,setComment]=useState(''),[reason,setReason]=useState('');
@@ -23,17 +24,17 @@ export function TimecardsPanel({organizationId,revision=0,includeFactoryArchive=
  useEffect(()=>()=>{if(csvUrl)URL.revokeObjectURL(csvUrl)},[csvUrl]);
  async function act(action:string,body?:unknown){if(inflight.current)return;inflight.current=true;setBusy(true);setNotice('');try{
   const result=await timecardCall(organizationId,action,body);
-  if(action==='create'||action==='correct'){setEditing(undefined);setReason('');operation.current=crypto.randomUUID();setNotice('saved');reload()}
+  if(action==='create'||action==='correct'){setEditing(undefined);setReason('');operation.current=crypto.randomUUID();setNotice('saved');reload();window.dispatchEvent(new Event('timeax-timecards-changed'))}
   else if(action==='archive'){const r=result as {id:string};setSnapshot(parseSnapshot(await timecardCall(organizationId,'read/'+r.id),organizationId));setConfirmed(false);setNotice('archivedNotice');reload()}
   else if(action.startsWith('read/'))setSnapshot(parseSnapshot(result,organizationId));
   else if(action.startsWith('history/')){const h=result as {revisions:typeof history};if(!Array.isArray(h.revisions))throw Error('unavailable');setHistory(h.revisions)}
  }catch(e){const k=(e as Error).message;setNotice(['invalid','conflict','period-closed','denied','login'].includes(k)?k:'uncertain');reload()}finally{inflight.current=false;setBusy(false)}}
  function edit(s:TimecardShift){setEditing(s);setSite(s.worksiteId);setDate(s.data.localDate);setStart(s.data.startTime);setEnd(s.data.endTime);setBreakMinutes(s.data.breakMinutes);setPaid(s.data.breakTreatment==='paid');setComment(s.data.comment);setReason('');dirty()}
- const canWrite=context?.role==='worker'&&context.worksites.some(w=>w.id===site);
+ const canWrite=!readOnlyWorker&&context?.role==='worker'&&context.worksites.some(w=>w.id===site);
  return <section className="worker-enrollment timecards" aria-busy={busy}>
- {!context?<><p role="status">{tx(status)}</p><Link to="/login">{t('common.login')}</Link></>:<>
- <p className="notice-box">{tx(context.role==='worker'?'workerHint':'agencyHint')}</p><p>{tx('zone')}</p>
- {context.role==='worker'?<>
+ {!context?<><p role="status">{tx(status)}</p>{status==='login'&&<Link to="/login">{t('common.login')}</Link>}</>:<>
+ <p className="notice-box">{context.role==='worker'&&readOnlyWorker?workerCalendarCopy(i18n.language).internalReadOnly:tx(context.role==='worker'?'workerHint':'agencyHint')}</p><p>{tx('zone')}</p>
+ {context.role==='worker'?(readOnlyWorker?null:<>
  <TemplatePicker organizationId={organizationId} disabled={busy||!!editing} onApply={v=>{setStart(v.startTime);setEnd(v.endTime);setBreakMinutes(v.breakMinutes);setPaid(v.breakTreatment==='paid');dirty()}}/>
  <WorkerShiftCalendar value={date} shifts={context.shifts} disabled={busy||!!editing||!context.worksites.length} onSelect={day=>{setDate(day);dirty()}}/>
  {!context.worksites.length?<p role="status">{tx('noAssignment')}</p>:<form className="auth-form" onSubmit={e=>{e.preventDefault();if(!canWrite)return;void act(editing?'correct':'create',{worksiteId:site,operationId:operation.current,localDate:date,startTime:start,endTime:end,breakMinutes,breakStatus:breakMinutes?'taken':'not-taken',breakTreatment:paid?'paid':'unpaid',comment,...(editing?{id:editing.id,revision:editing.revision,reason}:{})})}}>
@@ -48,7 +49,7 @@ export function TimecardsPanel({organizationId,revision=0,includeFactoryArchive=
  <button className="button button--primary button--full" disabled={busy||!canWrite}>{tx(editing?'saveCorrection':'save')}</button>
  {editing&&<button type="button" className="button button--outline button--full" onClick={()=>{setEditing(undefined);dirty()}}>{tx('cancel')}</button>}
  </form>}
- </>:<form className="auth-form" onSubmit={e=>{e.preventDefault();void act('archive',{worksiteId:site,dateFrom:from,dateTo:to,confirmed})}}>
+ </>):<form className="auth-form" onSubmit={e=>{e.preventDefault();void act('archive',{worksiteId:site,dateFrom:from,dateTo:to,confirmed})}}>
  <h2>{tx('archiveTitle')}</h2><label className="field-label">{tx('site')}<select required disabled={busy} value={site} onChange={e=>{setSite(e.target.value);setConfirmed(false)}}><option value="">{tx('choose')}</option>{context.worksites.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}</select></label>
  <div className="timecards-pair"><label className="field-label">{tx('from')}<input type="date" required disabled={busy} value={from} onInput={e=>{setFrom(e.currentTarget.value);setConfirmed(false)}} onChange={e=>{setFrom(e.target.value);setConfirmed(false)}}/></label><label className="field-label">{tx('to')}<input type="date" required disabled={busy} value={to} onInput={e=>{setTo(e.currentTarget.value);setConfirmed(false)}} onChange={e=>{setTo(e.target.value);setConfirmed(false)}}/></label></div>
  <p className="notice-box">{tx('sealHint')}</p><label className="timecards-check"><input required type="checkbox" checked={confirmed} disabled={busy} onChange={e=>setConfirmed(e.target.checked)}/>{tx('sealConfirm')}</label>
@@ -59,7 +60,7 @@ export function TimecardsPanel({organizationId,revision=0,includeFactoryArchive=
  <h3>{s.data.localDate} · {s.worksiteName}</h3><strong>{tx(s.state)}</strong><p>{s.data.startTime}–{s.data.endTime} · {tx('counted')}: {minutesLabel(s.data.paidMinutes)}</p>
  <p>{tx('break')}: {s.data.breakMinutes} · {tx(s.data.breakTreatment)}</p><p>{s.data.comment}</p>
  {context.role==='agency_admin'&&<p className="muted-copy">{tx('workerRef')}: {label(s.membershipId)}</p>}
- <div className="timecards-actions">{context.role==='worker'&&s.state==='recorded'&&context.worksites.some(w=>w.id===s.worksiteId)&&<button className="button button--outline" disabled={busy} onClick={()=>edit(s)}>{tx('edit')}</button>}<button className="button button--outline" disabled={busy} onClick={()=>void act('history/'+s.id)}>{tx('history')}</button></div>
+ <div className="timecards-actions">{context.role==='worker'&&!readOnlyWorker&&s.state==='recorded'&&context.worksites.some(w=>w.id===s.worksiteId)&&<button className="button button--outline" disabled={busy} onClick={()=>edit(s)}>{tx('edit')}</button>}<button className="button button--outline" disabled={busy} onClick={()=>void act('history/'+s.id)}>{tx('history')}</button></div>
  </article>)}
  {context.role==='agency_admin'&&<><h2>{tx('archive')}</h2>{!context.archive.length&&<p>{tx('noArchive')}</p>}{context.archive.map(a=><article className="notice-box timecards-row" key={a.id}><h3>{a.worksiteName}</h3><p>{a.dateFrom} – {a.dateTo} · {tx('archived')}</p><p>{tx('counted')}: {minutesLabel(a.paidMinutes)}</p><button className="button button--outline" disabled={busy} onClick={()=>void act('read/'+a.id)}>{tx('open')}</button></article>)}</>}
  </>}

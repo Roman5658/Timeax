@@ -1,0 +1,8 @@
+const copy={
+ ru:{heading:'Календарь смен и отсутствий',work:'Смена записана',absence:'Сообщено об отсутствии',empty:'Нет записей на этот день. Это не означает отсутствие.',partial:'Часть записей не загрузилась. Попробуй обновить.',manualClosed:'На этом производстве ручной ввод не разрешён.',internalReadOnly:'Здесь видны записанные часы. Ручной ввод для внутренних производств пока недоступен.'},
+ uk:{heading:'Календар змін і відсутності',work:'Зміну записано',absence:'Повідомлено про відсутність',empty:'На цей день немає записів. Це не означає відсутність.',partial:'Частина записів не завантажилася. Спробуй оновити.',manualClosed:'На цьому виробництві ручне введення не дозволене.',internalReadOnly:'Тут видно записані години. Ручне введення для внутрішніх виробництв поки недоступне.'},
+ pl:{heading:'Kalendarz zmian i nieobecności',work:'Zapisana zmiana',absence:'Zgłoszona nieobecność',empty:'Brak wpisów na ten dzień. Nie oznacza to nieobecności.',partial:'Nie udało się wczytać części wpisów. Spróbuj odświeżyć.',manualClosed:'Na tym stanowisku ręczne wpisywanie godzin jest niedostępne.',internalReadOnly:'Tutaj widać zapisane godziny. Ręczne wpisywanie zmian w zakładach wewnętrznych jest na razie niedostępne.'},
+ en:{heading:'Shift and absence calendar',work:'Recorded shift',absence:'Reported absence',empty:'No entries for this day. This does not mean absence.',partial:'Some entries could not be loaded. Try refreshing.',manualClosed:'Manual entry is not enabled at this worksite.',internalReadOnly:'Recorded hours appear here. Manual entry for internal worksites is not available yet.'}
+} as const;
+export const workerCalendarCopy=(language:string)=>copy[language?.split('-')[0] as keyof typeof copy]??copy.en;
+

@@ -18,15 +18,26 @@ const id='[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}';
 const orgRoute=(prefix,actions)=>new RegExp('^/api/'+prefix+'/('+id+')/(?:'+actions+')$');
 const specs={
  profile:{handler:createAgencyProfileHandler,match:new RegExp('^/api/agency-profile/('+id+')(?:/worksite/'+id+')?/(?:context|settings)$')},
- worker:{handler:createWorkerEnrollmentHandler,match:new RegExp('^/api/worker-enrollment/(?:agency/('+id+')(?:/(?:invite|approve|provision|directory|cards|send-invitation))?|context|lookup|request|claim|email-invitations|accept-email-invitation|terms)$')},
+ worker:{handler:createWorkerEnrollmentHandler,match:new RegExp('^/api/worker-enrollment/(?:agency/('+id+')(?:/(?:invite|approve|provision|directory|cards|send-invitation|joins))?|context|lookup|request|claim|email-invitations|accept-email-invitation|terms)$')},
  timecards:{handler:createTimecardsHandler,match:orgRoute('timecards','context|archive|(?:read|history)/'+id)},
- factoryTimecards:{handler:createFactoryTimecardsHandler,match:orgRoute('factory-timecards','context|propose-placement|revoke-placement|read/'+id)},
+ factoryTimecards:{handler:createFactoryTimecardsHandler,match:orgRoute('factory-timecards','context|create|propose-placement|revoke-placement|read/'+id)},
  payroll:{handler:createPayslipsHandler,match:orgRoute('payslips','context|settings|group|group-member|rate|create|assign|save|issue|read/'+id)},
  names:{handler:createMemberNamesHandler,match:orgRoute('member-names','context|set')},
  account:{handler:createAccountHandler,match:/^\/api\/personal-account\/(?:agency-context|end-membership)$/},
  registration:{handler:createFactoryRegistrationHandler,match:/^\/api\/factory-registration\/(?:context|invite-factory|revoke-agency-invitation)$/,agencyOnly:true},
- team:{handler:createTeamHandler,match:orgRoute('team','context|read|message|invite-accountant|revoke-accountant')}
+ team:{handler:createTeamHandler,match:orgRoute('team','context|read|message|absence|update-plan|cancel|save-template|delete-template|invite-accountant|revoke-accountant')}
 };
+const agencyTeamActions=new Set(['context','read','message','invite-accountant','revoke-accountant']);
+const workerTeamActions=new Set(['context','read','message','absence','update-plan','cancel','save-template','delete-template']);
+function workerWorkspaceAction(name,pathname,method){
+ // Factory create is separately checked in its RPC against the worker's own
+ // active placement, connection and exact existing factory self-entry policy.
+ if(method==='POST')return name==='factoryTimecards'&&pathname.endsWith('/create');
+ if(method!=='GET')return false;
+ return name==='timecards'&&new RegExp('/(?:context|history/'+id+')$').test(pathname)
+  ||['factoryTimecards','names'].includes(name)&&pathname.endsWith('/context')
+  ||name==='payroll'&&new RegExp('/(?:context|read/'+id+')$').test(pathname);
+}
 const lanes=[...INTEGRATED_LANES.filter(l=>l.id!=='factory'),
  {id:'profile',role:'timeax_agency_profile_login',functions:[{signature:AGENCY_PROFILE_SIGNATURE,owner:'postgres'}],statements:[AGENCY_PROFILE_SQL],create:createAgencyProfileStore},
  {id:'team',role:'timeax_team_login',functions:[TEAM_FUNCTION],statements:[TEAM_SQL],create:createTeamStore}];
@@ -102,11 +113,19 @@ export async function assembleAgencyOperations(config,lane,{now=Date.now}={}){
     resolveSession:async request=>{
      const session=await resolveSession(request);
      if(session.state!=='verified')return session;
-     const organization=spec.match.exec(new URL(request.url).pathname)?.[1];
+     const pathname=new URL(request.url).pathname;
+     const organization=spec.match.exec(pathname)?.[1];
      // These routes already lock and verify the exact agency administrator in their RPC.
      if(!organization||name==='worker')return session;
      const scope=await access.get(session,organization);
-     return scope?.organization.kind==='agency'&&scope.membership.role==='agency_admin'&&await session.isActive()?session:{state:'anonymous'};
+     if(scope?.organization.kind!=='agency')return {state:'anonymous'};
+     const action=pathname.slice(pathname.lastIndexOf('/')+1);
+     if(scope.membership.role==='agency_admin')return (name!=='team'||agencyTeamActions.has(action))
+      &&!(name==='factoryTimecards'&&action==='create')&&await session.isActive()?session:{state:'anonymous'};
+     if(scope.membership.role==='worker'&&(name==='team'?workerTeamActions.has(action):workerWorkspaceAction(name,pathname,request.method))
+      &&await workerTerms?.accepted(session)===true&&await session.isActive())
+       return {...session,workspaceRole:'worker',workspaceMembershipId:scope.membership.id};
+     return {state:'anonymous'};
     }})];
   });
   return {enabled:[...ready.map(([name])=>name),...(provisioning?['workerProvisioning']:[]),...(workerTerms?['workerTerms']:[])],provisioning,workerPassword,workerSelfService:ready.some(([name])=>name==='worker'),find:path=>handlers.find(([match])=>match.test(path))?.[1]};

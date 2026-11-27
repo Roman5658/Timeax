@@ -131,12 +131,30 @@ BEGIN
   RAISE EXCEPTION 'worker terms required' USING ERRCODE='42501';
  END IF;
 
- IF p_action IN ('provision','create-card','list-cards','reserve-mail','complete-mail','directory-settings','directory-toggle') THEN
+ IF p_action IN ('provision','create-card','list-cards','reserve-mail','complete-mail','directory-settings','directory-toggle','join-events','read-join-event') THEN
   v_agency:=(p_data->>'agencyId')::uuid;
   IF p_action IN ('provision','create-card') THEN
    PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('timeax-worker-provision:'||v_agency::text,0));
   END IF;
   v_actor:=timeax_core.lock_active_agency_admin(p_issuer,p_subject,v_agency);
+  IF p_action='join-events' THEN
+   RETURN jsonb_build_object('unread',(SELECT count(*) FROM timeax_core.agency_worker_join_events e
+    WHERE e.agency_id=v_agency AND e.joined_at>=v_time-interval '30 days'
+     AND NOT EXISTS(SELECT 1 FROM timeax_core.agency_worker_join_reads r WHERE r.membership_id=e.membership_id AND r.reader_id=v_actor)),
+    'entries',coalesce((SELECT jsonb_agg(to_jsonb(x) ORDER BY x."joinedAt" DESC,x.id) FROM (
+     SELECT e.membership_id AS id,e.joined_at AS "joinedAt",p.display_name AS name,p.reference_no::text AS reference,
+      EXISTS(SELECT 1 FROM timeax_core.agency_worker_join_reads r WHERE r.membership_id=e.membership_id AND r.reader_id=v_actor) AS read
+     FROM timeax_core.agency_worker_join_events e LEFT JOIN timeax_core.member_display_names p ON p.organization_id=e.agency_id AND p.membership_id=e.membership_id
+     WHERE e.agency_id=v_agency AND e.joined_at>=v_time-interval '30 days' ORDER BY e.joined_at DESC,e.membership_id LIMIT 50
+    ) x),'[]'::jsonb));
+  END IF;
+  IF p_action='read-join-event' THEN
+   PERFORM 1 FROM timeax_core.agency_worker_join_events WHERE agency_id=v_agency AND membership_id=(p_data->>'id')::uuid
+    AND joined_at>=v_time-interval '30 days' FOR SHARE;
+   IF NOT FOUND THEN RAISE EXCEPTION 'event unavailable' USING ERRCODE='42501'; END IF;
+   INSERT INTO timeax_core.agency_worker_join_reads(agency_id,membership_id,reader_id) VALUES(v_agency,(p_data->>'id')::uuid,v_actor) ON CONFLICT DO NOTHING;
+   RETURN jsonb_build_object('state','read');
+  END IF;
   IF p_action='list-cards' THEN
    RETURN jsonb_build_object('cards',coalesce((SELECT jsonb_agg(jsonb_build_object('id',w.id,'email',w.pending_email,
     'firstName',w.first_name,'lastName',w.last_name,'worksiteId',w.worksite_id,'worksiteName',s.name,

@@ -95,3 +95,16 @@ test('agency cards save the selected site but only send to an address reserved f
  assert.deepEqual(sends,[{email,deliveryId:invitation,language:'pl'}]);
  assert.deepEqual(calls.map(x=>x[0]),['create-card','list-cards','reserve-mail','complete-mail']);
 });
+
+test('worker join notifications expose only the organization scoped by the authenticated agency operation',async()=>{
+ const calls=[];
+ const handle=createWorkerEnrollmentHandler({origin,store:{},resolveSession,now:()=>1,
+  provisioning:{async call(action,actor,payload){calls.push([action,actor,payload]);return action==='join-events'?{unread:1,entries:[]}:{state:'read'}}}});
+ const route='agency/'+org+'/joins';
+ assert.equal((await handle(req(route,undefined,false))).status,401);
+ assert.equal((await handle(req(route,{id:invitation,agencyId:org}))).status,400);
+ assert.equal((await handle(req(route))).status,200);
+ assert.equal((await handle(req(route,{id:invitation}))).status,200);
+ const principal={issuer:ISSUER,subject};
+ assert.deepEqual(calls,[['join-events',principal,{agencyId:org}],['read-join-event',principal,{agencyId:org,id:invitation}]]);
+});
