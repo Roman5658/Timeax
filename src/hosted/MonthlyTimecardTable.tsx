@@ -3,10 +3,12 @@ import {useTranslation} from 'react-i18next';
 import {minutesLabel} from './timecards';
 import {timecardBreakLabel,timecardTotals,timecardWorkerGroups,type TimecardReport,type ReportRow} from './timecard-document';
 import {agencyTimecardsCopy} from './agency-timecards-copy';
+import type {PayEstimates} from './agency-pay-estimate';
+import {TimecardPayEstimates} from './TimecardPayEstimates';
 import '../styles/hosted-monthly-timecard.css';
 
-type Props={snapshot:TimecardReport;membershipId?:string;sent?:boolean};
-export function MonthlyTimecardTable({snapshot,membershipId,sent=false}:Props){
+type Props={snapshot:TimecardReport;membershipId?:string;sent?:boolean;estimates?:PayEstimates};
+export function MonthlyTimecardTable({snapshot,membershipId,sent=false,estimates}:Props){
  const {t,i18n}=useTranslation(),mt=(key:string)=>t('monthlyTimesheets.'+key),tt=(key:string)=>t('timecards.'+key);
  const disclosureId=useId(),[open,setOpen]=useState<string[]>([]),[view,setView]=useState<'sheet'|'workers'>('sheet');
  const language=i18n.resolvedLanguage||'pl',copy=agencyTimecardsCopy(language);
@@ -44,6 +46,7 @@ export function MonthlyTimecardTable({snapshot,membershipId,sent=false}:Props){
   <div className="monthly-summary-grid">
    {headers.map((title,i)=><div key={title}><span>{title}</span><strong>{summary[i]}</strong></div>)}
   </div>
+  {snapshot.source==='internal-live'&&estimates&&<TimecardPayEstimates report={snapshot} estimates={estimates} membershipId={membershipId}/>}
   <p className="monthly-method-note">{preview?(absences===undefined?copy.absenceUnavailable:copy.onlyReports):copy.notInSnapshot}</p>
   <div className="form-actions" role="group" aria-label={mt('title')}>
    <button type="button" aria-pressed={view==='sheet'} className={'button button--small '+(view==='sheet'?'button--primary':'button--outline')} onClick={()=>setView('sheet')}>{copy.sheetView}</button>

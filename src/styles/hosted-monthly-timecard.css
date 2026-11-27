@@ -10,6 +10,13 @@ dialog.agency-book:has(.hosted-monthly-timecard){width:min(calc(100% - 1rem),70r
 .hosted-monthly-timecard .monthly-worker-table-wrap:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .hosted-monthly-timecard .monthly-record-head{cursor:default}
 .hosted-monthly-timecard .monthly-summary-grid{margin:0}
+.hosted-monthly-timecard__wages{display:grid;gap:.55rem;min-width:0}
+.hosted-monthly-timecard__wages h3,.hosted-monthly-timecard__wages h4{margin:0}
+.hosted-monthly-timecard__wages summary{cursor:pointer;display:flex;flex-wrap:wrap;justify-content:space-between;gap:.45rem;padding-block:.5rem;border-bottom:1px solid var(--line)}
+.hosted-monthly-timecard__wage-month{padding-block:.55rem}
+.hosted-monthly-timecard__wage-month p{margin:.35rem 0}
+.hosted-monthly-timecard__wage-month dl{display:flex;flex-wrap:wrap;gap:.45rem 1.25rem;margin:.4rem 0}
+.hosted-monthly-timecard__wage-month dd{margin:0;font-weight:700;font-variant-numeric:tabular-nums}
 .hosted-timesheet-grid .monthly-worker-table{min-width:59rem;font-variant-numeric:tabular-nums}
 .hosted-timesheet-grid .monthly-worker-table td:last-child{white-space:normal;min-width:11rem;overflow-wrap:anywhere}
 .hosted-timesheet-grid .monthly-worker-table tbody tr:nth-child(even){background:var(--surface-muted)}

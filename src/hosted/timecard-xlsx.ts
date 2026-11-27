@@ -1,4 +1,6 @@
 import ExcelJS from 'exceljs';
+import {estimatesForRows,type PayEstimates} from './agency-pay-estimate.ts';
+import type {PayEstimateCopy} from './pay-estimate-copy.ts';
 import {snapshotExportRows,timecardBreakLabel,timecardTotals,timecardWorkerGroups,type TimecardReport} from './timecard-document.ts';
 export {snapshotExportRows,type AgencyTimecardSnapshot,type TimecardReport} from './timecard-document.ts';
 
@@ -7,6 +9,7 @@ export type WorkbookCopy={
  comment:string;total:string;worksheet:string;missingName:string;reference:string;internal:string;factorySource:string;locale:string;
  scope:string;workerExtract:string;breakState:string;breakUnreported:string;breakNotTaken:string;breakPaid:string;breakUnpaid:string;
  weekday:string;agency:string;shifts:string;status:string;archived:string;received:string;absences:string;notInSnapshot:string;shiftLabel:string;preview?:{status:string;source:string;notice:string;total:string;recorded:string;absences?:string;absenceNote?:string;absenceUnavailable?:string};
+ wages?:PayEstimateCopy;
 };
 export const timecardFileName=(s:TimecardReport,membershipId?:string)=>
  'Timeax-'+(s.source==='internal-live'?'preview':s.source==='internal-agency'?'agency':'factory')+'-'+s.dateFrom+'-'+s.dateTo+'-'+(s.worksiteId.slice(0,8)||'all')
@@ -52,7 +55,7 @@ function setup(sheet:ExcelJS.Worksheet,widths:number[]){
  sheet.pageSetup={orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,margins:{left:.25,right:.25,top:.5,bottom:.5,header:.2,footer:.2}};
 }
 
-export function buildAgencyTimecardWorkbook(snapshot:TimecardReport,c:WorkbookCopy,membershipId?:string){
+export function buildAgencyTimecardWorkbook(snapshot:TimecardReport,c:WorkbookCopy,membershipId?:string,estimates?:PayEstimates){
  const picked=snapshotExportRows(snapshot,membershipId);
  const group=timecardWorkerGroups(picked.rows,c.missingName,c.reference,c.locale),totals=timecardTotals(picked.rows);
  const localeDate=new Intl.DateTimeFormat(c.locale,{weekday:'long',timeZone:'UTC'});
@@ -127,10 +130,36 @@ export function buildAgencyTimecardWorkbook(snapshot:TimecardReport,c:WorkbookCo
   for(const a of absences)for(const range of a.ranges){const row=sheet.addRow([a.name,a.worksiteName,dateValue(range.from),dateValue(range.to)]);fill(row,'FFE8DEFF',4);formatted(row,[3,4],'dd.mm.yyyy');}
   sheet.autoFilter={from:'A'+head,to:'D'+sheet.rowCount};
  }
+ // Wages must never be serialized into an archived, received or factory-shared timecard.
+ if(snapshot.source==='internal-live'&&c.wages&&estimates){
+  const labels=c.wages,allowed=estimatesForRows(picked.rows,estimates,membershipId);
+  if(allowed.length){
+   const names=new Map(group.map(person=>[person.id,person.name]));
+   const sheet=wb.addWorksheet(sheetName(labels.title,used));setup(sheet,[29,15,18,18,20,20,34,20,46]);
+   banner(sheet,labels.title,9,'title');banner(sheet,labels.private,9,'sub');
+   const header=headers(sheet,[labels.worker,labels.month,labels.hours,labels.rate,labels.gross,labels.netRate,labels.deductions,labels.net,labels.status]);
+   const amount=(cents:number|undefined)=>cents===undefined?'—':cents/100;
+   const currency='#,##0.00 "PLN"',formatMoney=new Intl.NumberFormat(c.locale,{style:'currency',currency:'PLN'});
+   for(const item of allowed){
+    for(const m of item.months){
+     const entry=sheet.addRow([names.get(item.workerId)??c.missingName,m.month,duration(m.paidMinutes),amount(m.rateCents),
+      m.basis==='gross'?amount(m.hourlyBaseCents):'—',m.basis==='net'?amount(m.hourlyBaseCents):'—',
+      m.deductions.map(d=>d.name+': '+formatMoney.format(d.cents/100)).join('; ')||'—',amount(m.netCents),labels[m.status]]);
+     fill(entry,xp.shift,9);formatted(entry,[3],'[h]:mm');formatted(entry,[4,5,6,8],currency);
+    }
+    if(item.months.length>1){
+     const summary=sheet.addRow([names.get(item.workerId)??c.missingName,'',null,null,null,null,null,amount(item.netCents),
+      item.netCents===undefined?labels.incomplete:labels.net]);
+     total(summary,9);formatted(summary,[8],currency);
+    }
+   }
+   sheet.autoFilter={from:'A'+header,to:'I'+sheet.rowCount};
+  }
+ }
  return wb;
 }
-export async function downloadAgencyTimecardWorkbook(snapshot:TimecardReport,copy:WorkbookCopy,membershipId?:string,signal?:AbortSignal){
- const bytes=await buildAgencyTimecardWorkbook(snapshot,copy,membershipId).xlsx.writeBuffer();
+export async function downloadAgencyTimecardWorkbook(snapshot:TimecardReport,copy:WorkbookCopy,membershipId?:string,signal?:AbortSignal,estimates?:PayEstimates){
+ const bytes=await buildAgencyTimecardWorkbook(snapshot,copy,membershipId,estimates).xlsx.writeBuffer();
  if(signal?.aborted)return;
  const blob=new Blob([new Uint8Array(bytes)],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),url=URL.createObjectURL(blob);
  const link=document.createElement('a');link.href=url;link.download=timecardFileName(snapshot,membershipId);

@@ -1,0 +1,16 @@
+.worker-pay-estimate__grid,.worker-pay-estimate__line {
+ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.65rem;
+}
+.worker-pay-estimate__grid > label,.worker-pay-estimate__line > label {min-width:0}
+.worker-pay-estimate__grid input,.worker-pay-estimate__grid select,.worker-pay-estimate__line input {width:100%;min-width:0}
+.worker-pay-estimate__deductions {min-width:0;margin:0;border:1px solid var(--line);border-radius:12px;padding:.8rem}
+.worker-pay-estimate__deductions legend {font-weight:650;padding-inline:.3rem}
+.worker-pay-estimate__deductions > .muted-copy {margin:0 0 .75rem}
+.worker-pay-estimate__line {grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) 44px;align-items:end;margin-block-end:.65rem}
+.worker-pay-estimate__line button {width:44px;min-height:44px;padding:0}
+.worker-pay-estimate__error > p {margin-block:0 .65rem}
+@media (max-width:520px) {
+ .worker-pay-estimate__grid {grid-template-columns:minmax(0,1fr)}
+ .worker-pay-estimate__line {grid-template-columns:minmax(0,1fr) 44px;border-block-end:1px solid var(--line);padding-block-end:.6rem}
+ .worker-pay-estimate__line > label:first-child {grid-column:1/-1}
+}

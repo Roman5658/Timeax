@@ -4,6 +4,7 @@ import {AgencyWorkerCardForm,PendingWorkerList,readWorkerCards,type WorkerCards}
 import {workerProvisionCopy} from './worker-provisioning-copy';
 import {AgencyBookDrawer} from './AgencyBookDrawer';
 import {AgencyWorkerActivity} from './AgencyWorkerActivity';
+import {WorkerPayEstimateSettings} from './WorkerPayEstimateSettings';
 import {agencyWorkerCopy} from './agency-workers-copy';
 import {factoryCall,parseSetupContext,type SetupContext} from './factory-enrollment';
 import {factoryHoursCall,parseFactoryHours,type FactoryHoursContext} from './factory-timecards';
@@ -11,7 +12,7 @@ import {memberNamesCall,useMemberNames} from './MemberNames';
 import {accountCall} from './worker-account';
 import {workerCall} from './worker-enrollment';
 
-type Props={organizationId:string;enrollmentEnabled:boolean;provisioningEnabled?:boolean;productionsEnabled:boolean;lifecycleEnabled:boolean;namesEnabled:boolean;factoryHoursEnabled?:boolean;timecardsEnabled?:boolean;absencesEnabled?:boolean;siteId?:string;initialSection?:'roster'|'applications'};
+type Props={organizationId:string;enrollmentEnabled:boolean;provisioningEnabled?:boolean;productionsEnabled:boolean;lifecycleEnabled:boolean;namesEnabled:boolean;factoryHoursEnabled?:boolean;timecardsEnabled?:boolean;absencesEnabled?:boolean;estimatesEnabled?:boolean;siteId?:string;initialSection?:'roster'|'applications'};
 type Application={application_id:string;claimed_at:string};
 type Member={membershipId:string;state:string;endedAt:string|null};
 type WorkersResponse={organizationId:string;workers:Member[]};
@@ -22,7 +23,7 @@ const uuid=(s:unknown)=>typeof s==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a
 const localDay=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Warsaw',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const validDay=(s:string)=>/^\d{4}-\d{2}-\d{2}$/.test(s)&&Number.isFinite(Date.parse(s+'T00:00:00Z'));
 
-export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisioningEnabled=false,productionsEnabled,lifecycleEnabled,namesEnabled,factoryHoursEnabled=false,timecardsEnabled=false,absencesEnabled=false,siteId,initialSection='roster'}:Props){
+export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisioningEnabled=false,productionsEnabled,lifecycleEnabled,namesEnabled,factoryHoursEnabled=false,timecardsEnabled=false,absencesEnabled=false,estimatesEnabled=false,siteId,initialSection='roster'}:Props){
  const {t,i18n}=useTranslation();
  const lang=(i18n.resolvedLanguage??'en').toLowerCase().split('-')[0];
  const strings=agencyWorkerCopy[lang as keyof typeof agencyWorkerCopy]??agencyWorkerCopy.en;
@@ -39,7 +40,7 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisionin
  const [workerCards,WC]=useState<WorkerCards>(),[cardsError,WE]=useState(false),[cardsRevision,WR]=useState(0);
  const [target,T]=useState(''),[source,From]=useState(''),[day,D]=useState(localDay);
  const [name,N]=useState(''),[confirmedName,CN]=useState(false),[confirmedEnd,CE]=useState(false);
- const [busy,B]=useState(false),[notice,U]=useState<CopyKey|'nameSaved'|'approved'>(),[error,E]=useState(false);
+ const [busy,B]=useState(false),[estimateBusy,setEstimateBusy]=useState(false),[notice,U]=useState<CopyKey|'nameSaved'|'approved'>(),[error,E]=useState(false);
  const pending=useRef(false),panel=useRef<HTMLElement>(null);
  const {context:names,state:nameState,label}=useMemberNames(namesEnabled?organizationId:undefined,revision);
  const scopedNames=names?.organizationId===organizationId?names:undefined;
@@ -126,7 +127,7 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisionin
   if(busy)return;reset();N(scopedNames?.workers.find(w=>w.membershipId===id)?.name??'');open({type:'worker',id});
  }
  async function run(task:()=>Promise<void>,done?:CopyKey|'nameSaved'|'approved'){
-  if(pending.current)return;
+  if(pending.current||estimateBusy)return;
   pending.current=true;B(true);U(undefined);E(false);
   try{await task();U(done)}catch{E(true)}finally{pending.current=false;B(false)}
  }
@@ -197,7 +198,7 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisionin
    {active.has(activityId)?<AgencyWorkerActivity scope={{organizationId,membershipId:activityId,siteId}} timecardsEnabled={timecardsEnabled} factoryHoursEnabled={factoryHoursEnabled} absencesEnabled={absencesEnabled}/>
     :<p role="status">{copy('rosterUnavailable')}</p>}
   </AgencyBookDrawer>}
-  {drawer&&drawer.type!=='activity'&&<AgencyBookDrawer title={drawer.type==='email'?provision.createAccount:drawer.type==='invite'?copy('add'):copy('settings')} closeLabel={copy('close')} busy={busy} onClose={dismiss}>
+  {drawer&&drawer.type!=='activity'&&<AgencyBookDrawer title={drawer.type==='email'?provision.createAccount:drawer.type==='invite'?copy('add'):copy('settings')} closeLabel={copy('close')} busy={busy||estimateBusy} onClose={dismiss}>
    {drawer.type==='email'?(drawer.cardId&&!workerCards?.cards.some(c=>c.id===drawer.cardId)
     ?<p role="status">{copy(cardsError?'rosterUnavailable':'load')}</p>
     :<AgencyWorkerCardForm key={drawer.cardId??'new'} organizationId={organizationId} sites={internalSites}
@@ -217,6 +218,8 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisionin
     })}</ul>}
     {scopedFactory?.placements.filter(a=>a.agencyId===organizationId&&a.membershipId===id&&a.state==='pending').map(a=><p key={a.id} className="muted-copy">{sites.find(s=>s.id===a.worksiteId)?.name} · {copy('pending')}</p>)}
     {active.has(id)&&<>
+     {estimatesEnabled&&<WorkerPayEstimateSettings key={organizationId+'/'+id} organizationId={organizationId} workerId={id}
+      disabled={busy} onSaving={setEstimateBusy}/>}
      {productionsEnabled&&scopedSetup&&<section className="agency-book-section">
       <h3>{moves.length?copy('move'):copy('assign')}</h3>
       {!sites.length?<p>{copy('emptySites')}</p>:<form className="auth-form" onSubmit={e=>{e.preventDefault();saveOptions()}}>

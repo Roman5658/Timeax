@@ -1,6 +1,7 @@
 import type {TFunction} from 'i18next';
 import type {WorkbookCopy} from './timecard-xlsx';
 import {agencyTimecardsCopy} from './agency-timecards-copy';
+import {payEstimateCopy} from './pay-estimate-copy';
 
 export function timecardWorkbookCopy(t:TFunction,locale:string,sent=false):WorkbookCopy{
  const tt=(k:string)=>t('timecards.'+k),m=(k:string)=>t('monthlyTimesheets.'+k),c=agencyTimecardsCopy(locale);
@@ -13,6 +14,7 @@ export function timecardWorkbookCopy(t:TFunction,locale:string,sent=false):Workb
   breakPaid:t('workflow.breakReport.paidChoice'),breakUnpaid:t('workflow.breakReport.unpaidChoice'),weekday:t('exports.colWeekday'),
   agency:t('workflow.role.agency'),shifts:m('shifts'),status:m('recordStatus.title'),archived:tt('archived'),received:t(sent?'factoryHours.sent':'factoryHours.received'),
   absences:m('absences'),notInSnapshot:c.notInSnapshot,shiftLabel:m('shift'),
+  wages:payEstimateCopy(locale),
   preview:{status:c.preview,source:c.liveSource,notice:c.liveNotice,total:c.previewTotal,recorded:tt('recorded'),absences:c.reportedAbsences,absenceNote:c.onlyReports,absenceUnavailable:c.absenceUnavailable}
  };
 }

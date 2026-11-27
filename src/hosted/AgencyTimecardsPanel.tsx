@@ -12,6 +12,9 @@ import {liveTimekeepingReport,type AgencyTimecardSnapshot,type TimecardReport} f
 import {timecardWorkbookCopy} from './timecard-workbook-copy';
 import {teamCall,type TeamContext} from './team-workflow';
 import {scopedReportedAbsences} from './live-timecard-absences';
+import {agencyPayEstimates,payEstimateScopeIsFullMonth} from './agency-pay-estimate';
+import {loadPayEstimateSettings,type PayEstimateSetting} from './pay-estimate-settings';
+import {payEstimateCopy} from './pay-estimate-copy';
 import '../styles/timecards.css';
 import '../styles/agency-hours.css';
 
@@ -19,8 +22,8 @@ type Source='internal'|'factory';
 type Copy=ReturnType<typeof agencyTimecardsCopy>;
 type DocumentRow={id:string;name:string;worksiteId:string;dateFrom:string;dateTo:string;paidMinutes:number;factoryName?:string;factoryId?:string};
 const uuid=(v:unknown):v is string=>typeof v==='string'&&/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(v);
-export function AgencyTimecardsPanel({organizationId,internalEnabled,factoryEnabled,initialSource='internal',reviewPanel}:{
-  organizationId:string; internalEnabled:boolean; factoryEnabled:boolean; initialSource?:Source;reviewPanel?:ReactNode;
+export function AgencyTimecardsPanel({organizationId,internalEnabled,factoryEnabled,initialSource='internal',reviewPanel,estimatesEnabled=false}:{
+  organizationId:string; internalEnabled:boolean; factoryEnabled:boolean; initialSource?:Source;reviewPanel?:ReactNode;estimatesEnabled?:boolean;
 }){
   const {t,i18n}=useTranslation(),c=agencyTimecardsCopy(i18n.language);
   const [selected,setSelected]=useState<Source>(initialSource);
@@ -33,13 +36,15 @@ export function AgencyTimecardsPanel({organizationId,internalEnabled,factoryEnab
       <button type="button" className={'button '+(source==='internal'?'button--primary':'button--outline')} aria-pressed={source==='internal'} disabled={!internalEnabled} onClick={()=>setSelected('internal')}>{c.internal}</button>
       <button type="button" className={'button '+(source==='factory'?'button--primary':'button--outline')} aria-pressed={source==='factory'} disabled={!factoryEnabled} onClick={()=>setSelected('factory')}>{c.factory}</button>
     </div>
-    <AgencySource key={organizationId+':'+source} organizationId={organizationId} source={source} c={c} reviewPanel={reviewPanel}/>
+    <AgencySource key={organizationId+':'+source} organizationId={organizationId} source={source} c={c} reviewPanel={reviewPanel} estimatesEnabled={estimatesEnabled}/>
   </section>;
 }
 
-function AgencySource({organizationId,source,c,reviewPanel}:{organizationId:string;source:Source;c:Copy;reviewPanel?:ReactNode}){
+function AgencySource({organizationId,source,c,reviewPanel,estimatesEnabled}:{organizationId:string;source:Source;c:Copy;reviewPanel?:ReactNode;estimatesEnabled:boolean}){
   const {t,i18n}=useTranslation(),tt=(k:string)=>t('timecards.'+k);
   const [team,setTeam]=useState<TeamContext>();
+  const [paySettings,setPaySettings]=useState<PayEstimateSetting[]>(),[payUnavailable,setPayUnavailable]=useState(false),[exportWages,setExportWages]=useState(false);
+  const wageCopy=payEstimateCopy(i18n.resolvedLanguage||i18n.language||'pl');
   const [data,setData]=useState<TimecardContext|FactoryHoursContext>(),[status,setStatus]=useState('checking'),[revision,setRevision]=useState(0);
   const [site,setSite]=useState(''),[worker,setWorker]=useState(''),[period,setPeriod]=useState(()=>agencyPeriodToday());
   const [search,setSearch]=useState(''),[days,setDays]=useState<readonly number[]>(weekdays),[detail,setDetail]=useState<string>();
@@ -76,6 +81,19 @@ function AgencySource({organizationId,source,c,reviewPanel}:{organizationId:stri
   const periodValid=bounds!==undefined;
   const internal=data&&'worksites' in data?data:undefined;
   const factory=data&&'sites' in data?data:undefined;
+  const canReadWages=estimatesEnabled&&source==='internal'&&internal?.role==='agency_admin';
+  useEffect(()=>{
+   if(!canReadWages){setPaySettings(undefined);setExportWages(false);return}
+   let controller:AbortController|undefined;
+   async function reloadWages(){
+    controller?.abort();const active=new AbortController();controller=active;
+    setPayUnavailable(false);setPaySettings(undefined);setExportWages(false);
+    try{const values=await loadPayEstimateSettings(organizationId,active.signal);if(!active.signal.aborted)setPaySettings(values)}
+    catch{if(!active.signal.aborted)setPayUnavailable(true)}
+   }
+   void reloadWages();window.addEventListener('timeax-pay-estimate-settings-changed',reloadWages);
+   return()=>{controller?.abort();window.removeEventListener('timeax-pay-estimate-settings-changed',reloadWages)};
+  },[organizationId,canReadWages,revision]);
   const baseScope={site,bounds,days,search,label,locale:i18n.language};
   const workers=agencyShiftGroups(internal?.shifts??[],{...baseScope,worker:''});
   const matchingWorkers=worker?workers.filter(group=>group.id===worker):workers;
@@ -94,6 +112,8 @@ function AgencySource({organizationId,source,c,reviewPanel}:{organizationId:stri
   const workerReport=internal&&detailGroup
    ?liveTimekeepingReport(internal,[detailGroup],bounds,c.selectSite,reportLabel,absences?.filter(a=>a.membershipId===detailGroup.id))
    :undefined;
+  const fullWageMonth=payEstimateScopeIsFullMonth({kind:period.kind,month:period.month,site,days,search});
+  const wageEstimates=canReadWages&&paySettings&&report?agencyPayEstimates(report,paySettings,fullWageMonth):undefined;
   // Don't silently apply screen-only employee/search/weekday filters to the whole site archive.
   const archiveBounds=bounds&&period.kind!=='year'?{from:bounds.from,to:[bounds.to,agencyPeriodToday().date].sort()[0]}:null;
   const archiveScope=!!archiveBounds&&archiveBounds.from<=archiveBounds.to&&days.length===weekdays.length&&!search.trim()&&!worker;
@@ -117,9 +137,10 @@ function AgencySource({organizationId,source,c,reviewPanel}:{organizationId:stri
     try{
       const data='rows' in target?target:await readDocument(target.id,controller,target);
       const {downloadAgencyTimecardWorkbook}=await import('./timecard-xlsx');
-      if(!controller.signal.aborted)await downloadAgencyTimecardWorkbook(data,timecardWorkbookCopy(t,i18n.resolvedLanguage||i18n.language||'pl'),undefined,controller.signal);
+      if(!controller.signal.aborted)await downloadAgencyTimecardWorkbook(data,timecardWorkbookCopy(t,i18n.resolvedLanguage||i18n.language||'pl'),undefined,controller.signal,
+       data.source==='internal-live'&&canReadWages&&exportWages?wageEstimates:undefined);
     }catch{if(!controller.signal.aborted)setExcelError(true)}
-    finally{if(pending.current===controller)pending.current=null;if(!controller.signal.aborted){setBusy(false);setExporting(false)}}
+    finally{if(pending.current===controller)pending.current=null;if(!controller.signal.aborted){setBusy(false);setExporting(false);setExportWages(false)}}
   }
   async function act(id:string|null){
     if(pending.current)return;
@@ -165,7 +186,7 @@ function AgencySource({organizationId,source,c,reviewPanel}:{organizationId:stri
       if(!controller.signal.aborted)setBusy(false);
     }
   }
-  const updateFilters=()=>{setConfirmed(false);setWorker('');setHistory(undefined);setDetail(undefined);setNotice('');setExcelError(false)};
+  const updateFilters=()=>{setConfirmed(false);setWorker('');setHistory(undefined);setDetail(undefined);setNotice('');setExcelError(false);setExportWages(false)};
   function shiftRow(row:TimecardShift){return <article className="notice-box timecards-row" key={row.id}>
     <strong>{row.worksiteName}</strong>
     <p>{row.data.localDate} &middot; {row.data.startTime}-{row.data.endTime} &middot; {tt('counted')}: <strong>{minutesLabel(row.data.paidMinutes)}</strong> &middot; {tt(row.state)}</p>
@@ -212,6 +233,8 @@ function AgencySource({organizationId,source,c,reviewPanel}:{organizationId:stri
          <button type="button" className="button button--primary" disabled={busy||!report} onClick={()=>{if(report){setSnapshot(report);setExcelError(false)}}}><ClipboardList size={17} aria-hidden="true"/>{c.timesheetPreview}</button>
          <button type="button" className="button button--outline" disabled={busy||!report} onClick={()=>{if(report)void exportExcel(report)}}><FileSpreadsheet size={17} aria-hidden="true"/>{exporting?c.exporting:c.exportVisible}</button>
         </div>
+        {canReadWages&&wageEstimates&&wageEstimates.size>0&&<label className="timecards-check"><input type="checkbox" checked={exportWages} disabled={busy} onChange={e=>setExportWages(e.target.checked)}/>{wageCopy.include}</label>}
+        {canReadWages&&payUnavailable&&<p role="status">{wageCopy.unavailable}</p>}
         <p>{report?c.liveNotice:c.exportUnavailable}</p>
         {!archiveSite&&workers.length>0&&<p>{c.siteRequired}</p>}
         {site&&!archiveScope&&internal?.shifts.some(s=>s.worksiteId===site&&s.state==='recorded')&&<p>{c.archiveFilters}</p>}
@@ -235,7 +258,7 @@ function AgencySource({organizationId,source,c,reviewPanel}:{organizationId:stri
           </li>)}
         </ul>
         {detailGroup&&workerReport&&<TimecardReportDrawer key={detailGroup.id} title={detailGroup.name} snapshot={workerReport}
-          lockedWorker={detailGroup.id} actionBusy={busy} onClose={()=>{setDetail(undefined);setHistory(undefined)}}
+          lockedWorker={detailGroup.id} estimates={wageEstimates} actionBusy={busy} onClose={()=>{setDetail(undefined);setHistory(undefined)}}
           extra={<details><summary>{tt('history')}</summary>
            <div className="agency-hours__rows">{detailGroup.rows.map(shiftRow)}</div>
            {notice&&<p role="alert">{tt(notice)}</p>}
@@ -252,7 +275,7 @@ function AgencySource({organizationId,source,c,reviewPanel}:{organizationId:stri
          <button type="button" className="button button--outline" disabled={busy} onClick={()=>void exportExcel(record)}><FileSpreadsheet size={17} aria-hidden="true"/>{c.exportDocument}</button>
         </div>
       </article>)}</div>
-      {snapshot&&<TimecardReportDrawer key={snapshot.source+snapshot.worksiteId+snapshot.dateFrom+snapshot.dateTo} snapshot={snapshot} onClose={()=>setSnapshot(undefined)}/>}
+      {snapshot&&<TimecardReportDrawer key={snapshot.source+snapshot.worksiteId+snapshot.dateFrom+snapshot.dateTo} snapshot={snapshot} estimates={snapshot.source==='internal-live'?wageEstimates:undefined} onClose={()=>setSnapshot(undefined)}/>}
     </>}
     {notice&&<p role={notice==='archivedNotice'?'status':'alert'}>{tt(notice)}</p>}
     <button type="button" className="button button--outline" disabled={busy||status==='checking'} onClick={()=>{setNotice('');setSnapshot(undefined);setHistory(undefined);setRevision(n=>n+1)}}>{tt('refresh')}</button>
