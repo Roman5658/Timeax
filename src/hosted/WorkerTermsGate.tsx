@@ -52,7 +52,7 @@ export function WorkerTermsGate({children,onSessionExpired}:{children:ReactNode;
  return <section className="notice-box" aria-label={c.title}>
   <h2>{c.title}</h2>
   {state==='required'?<><p>{c.intro}</p>{legal}<form className="auth-form" onSubmit={e=>void submit(e)}>
-   <label className="field-label"><span><input type="checkbox" checked={checked} onChange={e=>C(e.target.checked)} required disabled={busy}/> {t('hostedLegal.accept')}</span></label>
+   <label className="public-agreement"><input type="checkbox" checked={checked} onChange={e=>C(e.target.checked)} required disabled={busy}/>{t('hostedLegal.accept')}</label>
    <button type="submit" className="button button--primary" disabled={!checked||busy}>{c.confirm}</button>
   </form>{error&&<p role="alert">{c.unavailable}</p>}</>:<><p role="alert">{c[state]}</p>{legal}
    {state==='unavailable'&&<button type="button" className="button button--outline" onClick={()=>R(n=>n+1)}>{c.retry}</button>}

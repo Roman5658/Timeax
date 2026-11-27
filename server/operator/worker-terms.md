@@ -1,0 +1,13 @@
+# Worker terms receipts
+
+This release uses existing Timeax terms dated `2026-11-27`. The four rendered legal translations and contact address are archived as `src/shared/legal/hosted-terms-2026-11-27.json`. The receipt digest is the SHA-256 of `JSON.stringify(snapshot.document)` encoded as UTF-8, not of the file bytes. Do not edit a released snapshot: publish a new version and retain the old version's URL. The expected digest is `fb3399d1d8a5a9334310091bc247b810e189bbd92a7b2b682be890c099f2559e`.
+
+For approved delivery only:
+
+1. Confirm the existing managed provider issuer, worker principal helper, role preflight, and agency receipt columns. Apply `worker-terms.sql`, then `worker-connection.sql`, then `account-admin-worker-terms.sql`. No acceptance is created by these migrations.
+2. Set a new, separate credential for `timeax_worker_terms_login` and expose it only to the server as `TIMEAX_WORKER_TERMS_DB`. Pin the SHA-256 of `pg_get_functiondef` for `timeax_api.worker_terms(text,text,text,text)` in `TIMEAX_WORKER_TERMS_RPC_SHA256`. Recheck `timeax_core.worker_terms_current(text,text)` too. Preserve the current owner admin fingerprint before intentionally repinning `TIMEAX_ACCOUNT_ADMIN_RPC_SHA256` for the replacement `timeax_api.admin_accounts(text,uuid,text)`. Existing worker-connection version needs its own intended fingerprint.
+3. Verify first in disposable/synthetic scope: verified new user status asks for explicit acceptance, only current version accepted, same receipt on repeat, second login no new receipt, unconfirmed/unauthorized users cannot write, owner-only list includes evidence for the matching account. Do not send real OTPs or add real test accounts without the separate approved path. Public static rollout and database changes are not bundled into a local test failure recovery.
+
+For owner-list rollback, restore the exact previous `admin_accounts` function definition (`account-admin.sql` if unmodified) and restore its fingerprint. This leaves evidence untouched. Full release rollback must restore the previously deployed runtime and existing connection function plus their intended pins, not drop acceptance rows. If needed, the terms lane can be disabled separately by removing its server config only after a compatible runtime rollback; the current worker UI otherwise fails closed without it.
+
+The receipt contains only the user ID, document version, digest, server UTC instant, and checkbox method. It records agreement to the terms, not consent to processing or marketing. Worker account erasure cascades the receipt with the account; this change does not establish any longer independent claims-retention policy. The provider qualification, account-rights and commercial launch controls are separate decisions.
