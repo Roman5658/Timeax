@@ -4,6 +4,7 @@ import {createWorkspaceReadStore} from './workspace-read.server.mjs';
 const uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(v);
 export const validNip=v=>typeof v==='string'&&/^[0-9]{10}$/.test(v)&&[6,5,7,2,3,4,5,6,7].reduce((n,w,i)=>n+w*Number(v[i]),0)%11===Number(v[9]);
 const exact=(o,keys)=>o&&typeof o==='object'&&!Array.isArray(o)&&Object.keys(o).length===keys.length&&keys.every(k=>Object.hasOwn(o,k));
+const validName=(value,max)=>typeof value==='string'&&[...value.trim()].length>=1&&[...value.trim()].length<=max&&!/[\p{Cc}\p{Cf}@]/u.test(value);
 const reply=(status,body)=>Response.json(body,{status,headers:{'Cache-Control':'no-store, private',Vary:'Cookie','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});
 export const WORKER_SQL=Object.freeze({
  context:'SELECT timeax_api.worker_enrollment_context($1::text,$2::text) AS value',
@@ -27,7 +28,7 @@ export function createWorkerEnrollmentStore(lane){
  };
  return {call,workspace:createWorkspaceReadStore(lane)};
 }
-export function createWorkerEnrollmentHandler({origin,store=null,provisioning,workerTerms,requireWorkerTerms=false,resolveSession,now=Date.now}){
+export function createWorkerEnrollmentHandler({origin,store=null,provisioning,invitationMailer,workerTerms,requireWorkerTerms=false,resolveSession,now=Date.now}){
  const base=new URL(origin);if(base.origin!==origin||base.protocol!=='https:'||typeof resolveSession!=='function')throw Error('Guarded worker dependencies required');
  return async request=>{
   try{
@@ -56,7 +57,7 @@ export function createWorkerEnrollmentHandler({origin,store=null,provisioning,wo
     return reply(409,{error:'worker-terms-required'});
    }
    let result;
-   const agency=path.match(/^\/api\/worker-enrollment\/agency\/([0-9a-f-]+)(?:\/(invite|approve|provision|directory))?$/);
+   const agency=path.match(/^\/api\/worker-enrollment\/agency\/([0-9a-f-]+)(?:\/(invite|approve|provision|directory|cards|send-invitation))?$/);
    const workspace=path.match(/^\/api\/worker-enrollment\/workspace\/([0-9a-f-]+)$/);
    if(path==='/api/worker-enrollment/email-invitations'&&!mutate&&provisioning){
     result=await provisioning.call('list',actor);
@@ -68,12 +69,12 @@ export function createWorkerEnrollmentHandler({origin,store=null,provisioning,wo
     result={state:'verified',...rows[0].value};
    }else if(path==='/api/worker-enrollment/lookup'&&mutate){
     if(!exact(body,['nip'])||!validNip(body.nip))return reply(400,{error:'invalid-nip'});
-    const rows=await store.call('lookup',actor,body.nip);if(rows.length>1)throw Error();result={agency:rows[0]??(provisioning?(await provisioning.call('directory-lookup',actor,body)).agency:null)};
+    if(provisioning)result=await provisioning.call('directory-lookup',actor,body);
+    else return reply(503,{error:'worker-directory-unavailable'});
    }else if(path==='/api/worker-enrollment/request'&&mutate){
     if(!exact(body,['agencyId','nip'])||!uuid(body.agencyId)||!validNip(body.nip))return reply(400,{error:'invalid-request'});
-    const rows=provisioning
-     ?[(await provisioning.call('directory-request',actor,body)).application]
-     :await store.call('request',actor,body.agencyId,body.nip);
+    if(!provisioning)return reply(503,{error:'worker-directory-unavailable'});
+    const rows=[(await provisioning.call('directory-request',actor,body)).application];
     if(rows.length!==1||!uuid(rows[0]?.application_id))throw Error();result={application:rows[0]};
    }else if(path==='/api/worker-enrollment/claim'&&mutate){
     if(!exact(body,['code'])||typeof body.code!=='string'||!/^[0-9a-f]{64}$/.test(body.code))return reply(400,{error:'invalid-invitation'});
@@ -83,6 +84,23 @@ export function createWorkerEnrollmentHandler({origin,store=null,provisioning,wo
     if(rows.length!==1||!uuid(rows[0]?.application_id))throw Error();result={application:rows[0]};
    }else if(agency&&uuid(agency[1])){
     if(!agency[2]&&!mutate){result={applications:await store.call('queue',actor,agency[1])};}
+    else if(agency[2]==='cards'&&provisioning){
+     if(mutate){
+      const email=exact(body,['email','firstName','lastName','worksiteId'])&&normalizePublicEmail(body.email);
+      if(!email||!validName(body.firstName,59)||!validName(body.lastName,60)||(body.worksiteId!==null&&!uuid(body.worksiteId)))return reply(400,{error:'invalid-request'});
+      result=await provisioning.call('create-card',actor,{agencyId:agency[1],email,firstName:body.firstName.trim(),lastName:body.lastName.trim(),worksiteId:body.worksiteId});
+     }else result={...await provisioning.call('list-cards',actor,{agencyId:agency[1]}),mailEnabled:!!invitationMailer};
+    }else if(agency[2]==='send-invitation'&&mutate&&provisioning){
+     if(!exact(body,['cardId','language'])||!uuid(body.cardId)||!['pl','uk','ru','en'].includes(body.language))return reply(400,{error:'invalid-request'});
+     if(!invitationMailer)return reply(503,{error:'invitation-mail-unconfigured'});
+     const input={agencyId:agency[1],cardId:body.cardId,language:body.language};
+     const reservation=await provisioning.call('reserve-mail',actor,input);
+     if(reservation.state!=='reserved')return reply(reservation.state==='submitted'?200:409,{state:reservation.state});
+     if(!await active()||!normalizePublicEmail(reservation.email)||!uuid(reservation.deliveryId))return reply(403,{error:'not-permitted'});
+     const outcome=await invitationMailer.send({email:reservation.email,deliveryId:reservation.deliveryId,language:reservation.language});
+     if(outcome.status!=='submitted')return reply(502,{error:'invitation-mail-failed'});
+     result=await provisioning.call('complete-mail',actor,{...input,deliveryId:reservation.deliveryId});
+    }
     else if(agency[2]==='provision'&&mutate&&provisioning){
      const email=exact(body,['email'])&&normalizePublicEmail(body.email);
      if(!email)return reply(400,{error:'invalid-request'});

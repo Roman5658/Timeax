@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {AgencyWorkerProvisioning} from './AgencyWorkerProvisioning';
+import {AgencyWorkerCardForm,PendingWorkerList,readWorkerCards,type WorkerCards} from './AgencyWorkerCards';
 import {workerProvisionCopy} from './worker-provisioning-copy';
 import {AgencyBookDrawer} from './AgencyBookDrawer';
 import {agencyWorkerCopy} from './agency-workers-copy';
@@ -14,7 +14,7 @@ type Props={organizationId:string;enrollmentEnabled:boolean;provisioningEnabled?
 type Application={application_id:string;claimed_at:string};
 type Member={membershipId:string;state:string;endedAt:string|null};
 type WorkersResponse={organizationId:string;workers:Member[]};
-type UiDrawer={type:'invite'|'email'}|{type:'worker';id:string};
+type UiDrawer={type:'invite'}|{type:'email';cardId?:string}|{type:'worker';id:string};
 type CopyKey=keyof typeof agencyWorkerCopy.en;
 type WorkAssignment={worksiteId:string;startsAt:string;endsAt?:string|null};
 const uuid=(s:unknown)=>typeof s==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(s);
@@ -35,6 +35,7 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisionin
  const [failed,RF]=useState(false),[queueFailed,QF]=useState(false);
  const [filter,G]=useState(siteId??''),[query,Search]=useState('');
  const [drawer,open]=useState<UiDrawer>(),[invite,I]=useState<{code:string;link:string}>();
+ const [workerCards,WC]=useState<WorkerCards>(),[cardsError,WE]=useState(false),[cardsRevision,WR]=useState(0);
  const [target,T]=useState(''),[source,From]=useState(''),[day,D]=useState(localDay);
  const [name,N]=useState(''),[confirmedName,CN]=useState(false),[confirmedEnd,CE]=useState(false);
  const [busy,B]=useState(false),[notice,U]=useState<CopyKey|'nameSaved'|'approved'>(),[error,E]=useState(false);
@@ -44,6 +45,12 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisionin
  const scopedSetup=setup?.memberships.some(row=>row.organizationId===organizationId&&row.role==='agency_admin')?setup:undefined;
  const scopedFactory=factory?.organizationId===organizationId&&factory.role==='agency_admin'?factory:undefined;
  const scopedMembers=members?.organizationId===organizationId?members:undefined;
+ useEffect(()=>{
+  if(!provisioningEnabled||siteId)return;
+  const c=new AbortController();WE(false);
+  void workerCall(queuePath+'/cards',undefined,c.signal).then(readWorkerCards).then(v=>{if(!c.signal.aborted)WC(v)}).catch(()=>{if(!c.signal.aborted)WE(true)});
+  return()=>c.abort();
+ },[queuePath,cardsRevision,provisioningEnabled,siteId]);
 
  useEffect(()=>{
   const c=new AbortController();RF(false);
@@ -169,6 +176,7 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisionin
      <div><strong>{w.display}</strong><p className="muted-copy">{sites.filter(s=>w.assignments.some(a=>a.worksiteId===s.id)).map(s=>s.name).join(' · ')||copy('unassigned')}</p></div>
      <button type="button" className="button button--outline button--small" data-worker-settings={w.id} onClick={()=>selectWorker(w.id)}>{copy('options')}</button>
     </li>)}</ul></section>)}
+   {provisioningEnabled&&!siteId&&<PendingWorkerList value={workerCards} error={cardsError} onOpen={cardId=>{reset();open({type:'email',cardId});WR(n=>n+1)}}/>}
   </section>:<section className="dashboard-panel" aria-busy={enrollmentEnabled&&!applications&&!queueFailed}>
    <h2>{copy('applications')}</h2>
    {!enrollmentEnabled?<p>{copy('noPermission')}</p>:<>
@@ -184,8 +192,11 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisionin
   </div>
   {!drawer&&status}
   {drawer&&<AgencyBookDrawer title={drawer.type==='email'?provision.createAccount:drawer.type==='invite'?copy('add'):copy('settings')} closeLabel={copy('close')} busy={busy} onClose={dismiss}>
-   {drawer.type==='email'?<AgencyWorkerProvisioning organizationId={organizationId}/>:drawer.type==='invite'?<>
-    {provisioningEnabled&&<AgencyWorkerProvisioning organizationId={organizationId}/>}
+   {drawer.type==='email'?(drawer.cardId&&!workerCards?.cards.some(c=>c.id===drawer.cardId)
+    ?<p role="status">{copy(cardsError?'rosterUnavailable':'load')}</p>
+    :<AgencyWorkerCardForm key={drawer.cardId??'new'} organizationId={organizationId} sites={internalSites}
+      card={workerCards?.cards.find(c=>c.id===drawer.cardId)} mailEnabled={workerCards?.mailEnabled===true}
+      onSaved={cardId=>{open({type:'email',cardId});WR(n=>n+1)}}/>):drawer.type==='invite'?<>
     <p>{copy('inviteInfo')}</p>
     {!invite?<button type="button" className="button button--primary" disabled={busy} onClick={createInvite}>{t('workerEnrollment.createInvite')}</button>:
     <div className="notice-box"><p>{t('workerEnrollment.inviteCreated')}</p><label className="field-label">{t('workerEnrollment.inviteLink')}<textarea rows={2} readOnly value={invite.link}/></label>

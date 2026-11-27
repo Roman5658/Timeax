@@ -73,3 +73,25 @@ test('worker connection mutations derive identity from authenticated session and
   ['accept',{invitationId:invitation}],['directory-request',{agencyId:org,nip}],['claim-code',{code}]]);
  assert.ok(calls.every(x=>x.actor.issuer===ISSUER&&x.actor.subject===subject));
 });
+
+test('agency cards save the selected site but only send to an address reserved from a stored card',async()=>{
+ const calls=[],sends=[];
+ const app=createWorkerEnrollmentHandler({origin,resolveSession,now:()=>1,store:{},provisioning:{async call(action,actor,payload){
+  assert.equal(actor.subject,subject);calls.push([action,payload]);
+  if(action==='create-card')return {state:'prepared',cardId:invitation};
+  if(action==='list-cards')return {cards:[]};
+  if(action==='reserve-mail')return {state:'reserved',email,deliveryId:invitation,language:'pl'};
+  if(action==='complete-mail')return {state:'submitted'};
+  throw Error('unexpected');
+ }},invitationMailer:{async send(p){sends.push(p);return {status:'submitted'}}}});
+ const cards='agency/'+org+'/cards',send='agency/'+org+'/send-invitation';
+ const worker={firstName:' Alice ',lastName:'Example',worksiteId:org,email};
+ assert.equal((await app(req(cards,worker,false))).status,401);
+ assert.equal((await app(req(cards,{...worker,lastName:'x@example.test'}))).status,400);
+ assert.equal((await app(req(cards,worker))).status,200);
+ assert.deepEqual(await (await app(req(cards))).json(),{cards:[],mailEnabled:true});
+ assert.equal((await app(req(send,{cardId:invitation,email,language:'pl'}))).status,400);
+ assert.equal((await app(req(send,{cardId:invitation,language:'pl'}))).status,200);
+ assert.deepEqual(sends,[{email,deliveryId:invitation,language:'pl'}]);
+ assert.deepEqual(calls.map(x=>x[0]),['create-card','list-cards','reserve-mail','complete-mail']);
+});

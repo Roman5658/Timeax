@@ -56,7 +56,13 @@ BEGIN
   AND u.email IS NOT NULL AND NOT u.is_anonymous AND u.deleted_at IS NULL
   AND (u.banned_until IS NULL OR u.banned_until<=statement_timestamp()) FOR SHARE;
  IF NOT FOUND THEN RAISE EXCEPTION 'worker session unavailable' USING ERRCODE='42501'; END IF;
- PERFORM timeax_core.check_worker_principal(p_issuer,p_subject);
+ -- The managed postgres role cannot execute the legacy NIP owner's helper.
+ PERFORM 1 FROM timeax_core.identity_issuers WHERE issuer=p_issuer AND active FOR SHARE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'worker session unavailable' USING ERRCODE='42501'; END IF;
+ PERFORM 1 FROM timeax_core.identities WHERE issuer=p_issuer AND subject=p_subject FOR SHARE;
+ IF EXISTS(SELECT 1 FROM timeax_core.identities WHERE issuer=p_issuer AND subject=p_subject AND NOT active) THEN
+  RAISE EXCEPTION 'worker session unavailable' USING ERRCODE='42501';
+ END IF;
  IF p_action='accept' THEN
   INSERT INTO timeax_core.worker_terms_receipts(user_id,document_version,document_sha256)
     VALUES(v_user,v_document_version,v_hash) ON CONFLICT(user_id,document_version) DO NOTHING;

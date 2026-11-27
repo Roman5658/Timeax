@@ -17,7 +17,7 @@ const s={state:'verified',issuer:ISSUER,subject,emailConfirmed:true,isAnonymous:
 function req(route,body,isSignedIn=true){
  return new Request(origin+path+route,{method:body?'POST':'GET',headers:{origin,...(isSignedIn?{cookie:'fixture=true'}:{}),...(body?{'content-type':'application/json'}:{})},body:body&&JSON.stringify(body)});
 }
-test('hosted worker entry uses the scoped database lane and the session actor for both connection paths',async()=>{
+test('without the current directory lane NIP lookup fails closed instead of ignoring hidden agencies',async()=>{
  const calls=[];
  const bind=await assembleAgencyOperations(config,({role})=>({async preflight(){},async query(sql,args){
   if(role===WORKER_TERMS_ROLE){
@@ -39,14 +39,15 @@ test('hosted worker entry uses the scoped database lane and the session actor fo
  assert.equal(calls.length,0);
  assert.equal((await ops.find(path+'claim')(req('claim',{code,subject:'other'}))).status,400);
  assert.equal(calls.length,0);
- for(const [name,body] of [['context'],['lookup',{nip}],['request',{agencyId:org,nip}],['claim',{code}],['agency/'+org]]){
+ for(const [name,body] of [['context'],['claim',{code}],['agency/'+org]]){
   const r=await ops.find(path+name)(req(name,body));
   assert.equal(r.status,200);
   assert.match(r.headers.get('cache-control'),/no-store/);
  }
+ assert.equal((await ops.find(path+'lookup')(req('lookup',{nip}))).status,503);
+ assert.equal((await ops.find(path+'request')(req('request',{agencyId:org,nip}))).status,503);
  assert.deepEqual(calls,[
-  [WORKER_SQL.context,[ISSUER,subject]],[WORKER_SQL.lookup,[ISSUER,subject,nip]],
-  [WORKER_SQL.request,[ISSUER,subject,org,nip]],[WORKER_SQL.claim,[ISSUER,subject,code]],
+  [WORKER_SQL.context,[ISSUER,subject]],[WORKER_SQL.claim,[ISSUER,subject,code]],
   [WORKER_SQL.queue,[ISSUER,subject,org]]
  ]);
 });

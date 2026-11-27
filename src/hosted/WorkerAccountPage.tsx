@@ -2,6 +2,7 @@ import {useMemberNames} from './MemberNames';
 import {useCallback,useEffect,useState} from 'react';
 import {Link,useLocation} from 'react-router-dom';import {useTranslation} from 'react-i18next';
 import {RegistrationFrame} from '../components/PublicExperience';import {PrivateAccess} from './PrivateAccess';
+import {WorkerPasswordPanel} from './WorkerPasswordPanel';
 import {StagingSessionPanel} from '../modules/auth/pages/StagingSessionPanel';
 import {accountCall,parsePersonal,savePersonalExport,type PersonalAccount} from './worker-account';
 import {isWorkerLocal} from './worker-enrollment';import '../styles/worker-account.css';
@@ -19,6 +20,7 @@ export function WorkerAccountPage(){
  async function prepare(){await accountCall('begin-delete',{});reload()}
  return <RegistrationFrame title={tx(recovery?'recoveryTitle':reauth?'reauthTitle':'title')} lead={tx(recovery?'recoveryLead':'lead')}>
  <div className="personal-account" aria-busy={busy}>
+ {loc.pathname==='/account/settings'&&!closed&&<WorkerPasswordPanel/>}
  {recovery?<><p className="notice-box">{tx('proofBoundary')}</p>{requestId?<div role="status"><h2>{tx('requestSaved')}</h2><p>{tx('requestPending')}</p><code>{requestId}</code></div>:<form className="auth-form" onSubmit={e=>{e.preventDefault();void run(async()=>{const r=await accountCall('recovery-request',{contactEmail:email,reference}) as {status:string;requestId:string;accessChanged:boolean;mailSent:boolean};if(r.status!=='received-awaiting-independent-proof'||r.accessChanged||r.mailSent)throw Error();setRequestId(r.requestId);setEmail('');setReference('')})}}>
  <label className="field-label" htmlFor="recovery-email">{tx('contactEmail')}<input id="recovery-email" type="email" required maxLength={254} value={email} onChange={e=>setEmail(e.target.value)}/></label>
  <label className="field-label" htmlFor="recovery-reference">{tx('reference')}<textarea id="recovery-reference" required minLength={2} maxLength={200} rows={3} value={reference} onChange={e=>setReference(e.target.value)}/></label>

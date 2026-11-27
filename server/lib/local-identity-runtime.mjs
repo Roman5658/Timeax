@@ -2,6 +2,7 @@ import {ACCOUNT_ADMIN_ROUTE} from './account-admin.mjs';
 import {randomBytes} from 'node:crypto';
 import {SESSION_TTL_SECONDS} from './web-session-store.mjs';
 import {createPublicEmailRoutes} from './public-email-routes.mjs';
+import {createWorkerPasswordHandler,WORKER_PASSWORD_PATH} from './worker-password.server.mjs';
 import {createAgencyOnboardingRoutes} from './agency-onboarding.server.mjs';
 import {createPublicEmailProvider} from './public-email-provider.mjs';
 import {createAgencyPendingHandler} from './agency-pending.server.mjs';
@@ -9,7 +10,7 @@ import {createScopedPgLane} from './scoped-pg.mjs';
 import {createPendingStore,pendingStatements} from './pending-store.server.mjs';
 import {ISSUER} from './provider-adapters.mjs';
 const endpoint='/v1/session/timeax-email',logout='/api/timeax/auth/public/logout';
-const ttl=900;
+const ttl=900,workerPasswordProofMs=5*60_000;
 const loopback=/^http:\/\/127\.0\.0\.1:[1-9][0-9]{3,4}$/;
 const reply=(status,body,headers={})=>new Response(body===undefined?null:JSON.stringify(body),{status,headers:{
  'Content-Type':'application/json','Cache-Control':'private, no-store','Vary':'Cookie',...headers}});
@@ -29,9 +30,10 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
   throw Error('HTTPS Timeax signup must use the verified provider hook');
  const name=localLoopback?'timeax-loopback-email-identity':'__Host-timeax-email-identity';
  const cookieEnd='=; Max-Age=0; Path=/; '+(localLoopback?'':'Secure; ')+'HttpOnly; SameSite=Strict';
- const sessions=new Map(),removedSubjects=new Map();
+ const sessions=new Map(),removedSubjects=new Map(),workerProofs=new Map();
  function purge(){
   const current=now();
+  for(const [id,proof] of workerProofs)if(proof.expiresAt<=current)workerProofs.delete(id);
   for(const [id,s] of sessions)if(s.expiresAt<=current)sessions.delete(id);
   for(const [subject,until] of removedSubjects)if(until<=current)removedSubjects.delete(subject);
  }
@@ -44,19 +46,25 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
  async function issueIdentitySession(identity,credential=null,prior=null){
   purge();if(removedSubjects.has(identity.subject))throw Error('Account no longer exists');
   const id=randomBytes(32).toString('base64url');
+  const keepWorkerProof=()=>{
+   if(prior)workerProofs.delete(prior);
+   if(ops?.workerPassword&&credential&&['login','registration'].includes(identity.flow)&&workerProofs.size<1000)
+    workerProofs.set(id,{credential,expiresAt:now()+workerPasswordProofMs,busy:false,used:false});
+  };
   if(sessionStore&&['login','password'].includes(identity.flow)){
    if(prior&&!sessions.has(prior))await sessionStore.delete(prior);
    await sessionStore.put(id,identity);
    if(prior)sessions.delete(prior);
+   keepWorkerProof();
    return {id,maxAge:SESSION_TTL_SECONDS};
   }
   if(sessions.size>=1000&&!sessions.has(prior))throw Error('Session capacity reached');
   if(prior){if(!sessions.has(prior))await sessionStore?.delete(prior);sessions.delete(prior)}
-  sessions.set(id,{...identity,credential,expiresAt:now()+ttl*1000});return {id,maxAge:ttl};
+  sessions.set(id,{...identity,credential,expiresAt:now()+ttl*1000});keepWorkerProof();return {id,maxAge:ttl};
  }
  let ops;
  const auth=createPublicEmailRoutes({origin,provider,otpLength,tagKey:randomBytes(32),localLoopback,now,admitSend,
-  retainPasswordSetup:onboardingStore!==null,maxSessionAge:sessionStore?SESSION_TTL_SECONDS:ttl,
+  retainPasswordSetup:onboardingStore!==null,retainWorkerPassword:()=>Boolean(ops?.workerPassword),maxSessionAge:sessionStore?SESSION_TTL_SECONDS:ttl,
   allowNewWorkerIdentity:email=>ops?.provisioning?.hasPending(email)??false,issueIdentitySession,readSessionId:request=>idFrom(request,name)
  });
  const onboarding=onboardingStore&&createAgencyOnboardingRoutes({origin,now,provider,store:onboardingStore,
@@ -68,13 +76,17 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
   isActive:async(request,session)=>{const id=idFrom(request,name);if(session.expiresAt<=now()||request.signal.aborted||removedSubjects.has(session.subject))return false;
    const local=sessions.get(id);if(local)return local===session;
    const stored=await sessionStore?.get(id);return stored?.subject===session.subject&&!request.signal.aborted},
-  rotateOnComplete:Boolean(sessionStore),
+  rotateOnComplete:Boolean(sessionStore),isWorkerAccount:identity=>ops?.workerPassword?.(identity)??false,
  });
  const workspace=onboarding&&workspaceFactory?.(resolve);
  const productions=onboarding&&agencyProductionsFactory?.(resolve);
  ops=onboarding&&agencyOperationsFactory?.(resolve);
+ const workerPassword=ops?.workerPassword&&createWorkerPasswordHandler({origin,now,provider,resolveSession:resolve,
+  eligible:async identity=>await onboardingStore.get(identity)===null&&await ops.workerPassword(identity)===true,
+  getProof:request=>workerProofs.get(idFrom(request,name))});
  const admin=accountAdminFactory?.(subject=>{
   removedSubjects.set(subject,now()+ttl*1000);
+  for(const [id,proof] of workerProofs)if(proof.credential.subject===subject)workerProofs.delete(id);
   for(const [id,s] of sessions)if(s.issuer===ISSUER&&s.subject===subject)sessions.delete(id);
  });
  const agency=createAgencyPendingHandler({origin,issuer:ISSUER,sessionResolver:resolve,store:pendingStore,now,localLoopback,publicOrigin:!localLoopback});
@@ -83,7 +95,7 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
   if(!localLoopback&&url.pathname==='/hooks/before-user-created')return signupHook.handler(request);
   if(url.origin!==origin||url.search||url.hash||site!==null&&site!=='same-origin'||(request.method==='POST'?from!==origin:from!==null&&from!==origin))
    return reply(403,{error:'not-permitted'});
-  const service=onboarding?{selfService:true,agencyProductions:Boolean(productions),...(ops?{agencyOperations:ops.enabled,workerSelfService:ops.workerSelfService===true}:{})}:{};
+  const service=onboarding?{selfService:true,agencyProductions:Boolean(productions),...(ops?{agencyOperations:ops.enabled,workerSelfService:ops.workerSelfService===true,workerPassword:Boolean(workerPassword)}:{})}:{};
   if(url.pathname===endpoint){
    if(request.method!=='GET')return reply(405,{error:'not-allowed'});
    let s;try{s=await resolve(request)}catch{return reply(503,{error:'service-unavailable'})}
@@ -97,9 +109,10 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
    if(request.method!=='POST')return reply(405,{error:'not-allowed'});
    const id=idFrom(request,name);
    try{if(id&&!sessions.has(id))await sessionStore?.delete(id)}catch{return reply(503,{error:'service-unavailable'})}
-   sessions.delete(id);
+   sessions.delete(id);workerProofs.delete(id);
    return reply(204,undefined,{'Set-Cookie':name+cookieEnd});
   }
+  if(workerPassword&&url.pathname===WORKER_PASSWORD_PATH)return workerPassword(request);
   if(onboarding&&onboarding.matches(url.pathname))return onboarding.handler(request);
   if(workspace&&url.pathname.startsWith('/api/workspace-access/'))return workspace(request);
   if(productions&&url.pathname.startsWith('/api/factory-setup/'))return productions(request);

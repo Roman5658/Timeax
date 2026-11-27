@@ -1,5 +1,6 @@
 import {WorkerTermsGate} from './WorkerTermsGate';
 import {AgencyProfile} from './AgencyProfile';
+import {AgencyNipVisibility} from './AgencyWorkerCards';
 import {AgencyWorkersPanel} from './AgencyWorkersPanel';
 import {AgencyTimecardsPanel} from './AgencyTimecardsPanel';
 import {AgencyProductions} from './AgencyProductions';
@@ -132,6 +133,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
     {publicAgency&&section!=='home'&&section!=='setup'&&!directory&&!unifiedHours&&!sectionReady&&<p className="notice-box" role="status">{t('agencyProductions.moduleNotEnabled')}</p>}
     {uses('team')&&(['messages','schedule','templates','absence','accountants'] as string[]).includes(section)&&<TeamPanel organizationId={org} section={section as TeamSection}/>}
     {section==='settings'&&agencyProfile?.ops.includes('profile')&&<AgencyProfile key={org} organizationId={org} onSaved={setAgencyName}/>}
+    {section==='settings'&&publicAgency&&uses('workerProvisioning')&&<AgencyNipVisibility key={org} organizationId={org}/>}
     {section==='home'&&<>
      <section className="dashboard-panel">
       <div className="panel-heading"><h2>{t('workspaceRead.worksites')}</h2></div>

@@ -25,6 +25,8 @@ const errors=['invalid-credentials','invalid-nip','invalid-name','invalid-passwo
 export function SelfServiceAgencyStep({existing}:{existing:boolean}){
  const {t,i18n}=useTranslation(),copy=workerRegistrationCopy(i18n.resolvedLanguage),navigate=useNavigate(),loc=useLocation();
  const returnTo=typeof loc.state?.returnTo==='string'?loc.state.returnTo:'';
+ const workerPasswordReauth=existing&&loc.state?.workerPasswordReauth===true;
+ const preferEmailCode=existing&&new URLSearchParams(loc.search).get('method')==='code';
  const client=useMemo(()=>createWorkingRegistrationClient(location.origin,fetch.bind(window),existing?'existing':'enrollment'),[existing]);
  const [stage,setStage]=useState<Stage>('check'),[needsPassword,setNeedsPassword]=useState(true),[email,setEmail]=useState(''),[name,setName]=useState(''),[nip,setNip]=useState(''),[password,setPassword]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [workerReady,setWorkerReady]=useState(false);
@@ -47,6 +49,7 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
    setWorkerReady(true);
    try{const member=enrollmentContext(await workerCall('context',undefined,signal)).memberships.find(m=>m.role==='worker');
     if(signal.aborted)return;
+    if(member&&workerPasswordReauth){navigate('/account/settings',{replace:true});return;}
     if(member&&scope.workerProvisioning){
      try{
       if(emailInvitations(await workerCall('email-invitations',undefined,signal)).length){
@@ -59,7 +62,7 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
    }catch{if(signal.aborted)return}
   }
   setStage('destinations');
- },[client,navigate]);
+ },[client,navigate,workerPasswordReauth]);
  const refresh=useCallback(async(reopening=false)=>{
   if(controller.current)return;
   const c=new AbortController();controller.current=c;
@@ -68,7 +71,7 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
    if(c.signal.aborted)return;
    if(!context){setStage('unavailable');return;}
    setWorkerReady(context.workerSelfService===true);
-   if(context.state!=='verified'){setStage(old=>old==='code'?'code':existing?'password':'code');return;}
+   if(context.state!=='verified'){setStage(old=>old==='code'||workerPasswordReauth||preferEmailCode?'code':existing?'password':'code');return;}
    if(existing){
     try{const state=await call(setup,c.signal);if(c.signal.aborted)return;
      if(state?.state==='ready'){accept(state);return;}
@@ -81,7 +84,7 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
    if(!c.signal.aborted)accept(state,reopening);
   }catch(e){if(!c.signal.aborted){setError(e instanceof Error?e.message:'unavailable');setStage('unavailable');}}
   finally{if(controller.current===c)controller.current=null;}
- },[accept,client,destinations,existing]);
+ },[accept,client,destinations,existing,preferEmailCode,workerPasswordReauth]);
  useEffect(()=>{void refresh(true);return()=>{controller.current?.abort();controller.current=null;}},[refresh]);
  async function submit(e:FormEvent){
   e.preventDefault();
