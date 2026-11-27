@@ -100,7 +100,7 @@
 .enrollment-disclosure { border-top:1px solid var(--line); margin-top:20px; padding-top:16px; font-size:12px; color:var(--muted-strong); line-height:1.65; }
 .enrollment-disclosure summary { cursor:pointer; padding:8px 0; }
 .enrollment-card .registration-error { color:#b63c4c; font-size:13px; line-height:1.5; margin:0; }
-:root[data-theme="dark"] .enrollment-card .registration-error { color:#ffb8bd; }
+:root:is([data-theme="dark"],[data-theme="neon"]) .enrollment-card .registration-error { color:#ffb8bd; }
 .enrollment-card [aria-invalid="true"] { border-color:#b63c4c; }
 @media(max-width:1000px) {
  .public-header-inner { gap:16px; } .public-desktop-nav { display:none; }

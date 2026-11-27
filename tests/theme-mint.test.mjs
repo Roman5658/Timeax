@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { isThemeName, readThemePreference, saveThemePreference, themes, themeStorageKey } from '../src/app/theme-preference.ts';
 
 test('Color themes are optional; legacy themes and the system default are preserved', () => {
-  assert.deepEqual(themes, ['light','dark','mint','turquoise','pink']);
+  assert.deepEqual(themes, ['light','dark','mint','turquoise','pink','neon']);
   assert.equal(readThemePreference(undefined, false), 'light');
   assert.equal(readThemePreference(undefined, true), 'dark');
   assert.equal(readThemePreference({getItem: () => 'unknown'}, false), 'light');
@@ -17,7 +17,7 @@ test('Color themes are optional; legacy themes and the system default are preser
 test('each explicit theme switches and survives reopening with the existing storage key', () => {
   const state = new Map();
   const storage = {setItem: (key, value) => state.set(key, value), getItem: (key) => state.get(key) ?? null};
-  for (const theme of ['dark','mint','turquoise','pink','light','mint']) {
+  for (const theme of ['dark','mint','turquoise','pink','neon','light','mint']) {
     saveThemePreference(storage, theme);
     assert.equal(state.size, 1);
     assert.equal(state.get(themeStorageKey), theme);
@@ -58,5 +58,20 @@ test('major Mint text, status, button, focus, and form boundary color pairs meet
   for (const lang of ['en','pl','ru','uk']) {
     const locale = JSON.parse(fs.readFileSync(new URL(`../src/i18n/locales/${lang}.json`, import.meta.url), 'utf8'));
     assert.ok(locale.common.mint);
+  }
+});
+
+test('Neon preserves text, buttons, and focus contrast with its blue palette', () => {
+  const css = fs.readFileSync(new URL('../src/styles/theme-neon.css', import.meta.url), 'utf8');
+  const values = Object.fromEntries([...css.matchAll(/(--[a-z-]+):\s*(#[\da-f]{6});/gi)].map(([,key,color])=>[key,color]));
+  for (const [a,b,min] of [
+    ['--ink','--surface',4.5], ['--muted','--surface',4.5],
+    ['--accent','--surface',4.5], ['--neon-ink','--accent',4.5],
+    ['--neon-ink','--neon-hover',4.5], ['--line-strong','--surface',3],
+    ['--theme-focus','--surface',3],
+  ]) assert.ok(contrast(values[a],values[b])>=min,a+' / '+b);
+  for(const lang of ['en','pl','ru','uk']){
+    const strings=JSON.parse(fs.readFileSync(new URL('../src/i18n/locales/'+lang+'.json',import.meta.url),'utf8'));
+    assert.ok(strings.common.neon);
   }
 });

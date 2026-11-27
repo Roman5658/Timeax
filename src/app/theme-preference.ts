@@ -1,4 +1,4 @@
-export const themes = ["light", "dark", "mint", "turquoise", "pink"] as const;
+export const themes = ["light", "dark", "mint", "turquoise", "pink", "neon"] as const;
 export type ThemeName = typeof themes[number];
 export const themeStorageKey = "timeax-theme";
 
