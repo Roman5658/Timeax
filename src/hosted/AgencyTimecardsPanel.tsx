@@ -3,7 +3,6 @@ import {ClipboardList,FileSpreadsheet} from 'lucide-react';
 import {Link} from 'react-router-dom';
 import {useTranslation} from 'react-i18next';
 import {useMemberNames} from './MemberNames';
-import {AgencyBookDrawer} from './AgencyBookDrawer';
 import {agencyPeriodToday,agencyPeriodBounds,agencyPeriodOverlaps,agencyShiftGroups,weekdays,type AgencyPeriodKind} from './agency-hours-scope';
 import {TimecardReportDrawer} from './TimecardReportDrawer';
 import {agencyTimecardsCopy} from './agency-timecards-copy';
@@ -88,9 +87,13 @@ function AgencySource({organizationId,source,c,reviewPanel}:{organizationId:stri
     .sort((a,b)=>b.dateTo.localeCompare(a.dateTo)||a.name.localeCompare(b.name,i18n.language));
   const scopedNames=useMemo(()=>new Map(names?.workers.filter(w=>w.organizationId===organizationId).map(w=>[w.membershipId,w])),[names,organizationId]);
   const absences=internal?scopedReportedAbsences(team,{organizationId,membershipId:internal.membershipId,site,worker,bounds,days,search,label,language:i18n.language})?.map(a=>({...a,name:label(a.membershipId)})):undefined;
-  const report=internal?liveTimekeepingReport(internal,matchingWorkers,bounds,c.selectSite,id=>{
-   const entry=scopedNames.get(id);return entry?{...entry,source:'current'}:undefined;
-  },absences):undefined;
+  const reportLabel=(id:string)=>{
+   const entry=scopedNames.get(id);return entry?{...entry,source:'current' as const}:undefined;
+  };
+  const report=internal?liveTimekeepingReport(internal,matchingWorkers,bounds,c.selectSite,reportLabel,absences):undefined;
+  const workerReport=internal&&detailGroup
+   ?liveTimekeepingReport(internal,[detailGroup],bounds,c.selectSite,reportLabel,absences?.filter(a=>a.membershipId===detailGroup.id))
+   :undefined;
   // Don't silently apply screen-only employee/search/weekday filters to the whole site archive.
   const archiveBounds=bounds&&period.kind!=='year'?{from:bounds.from,to:[bounds.to,agencyPeriodToday().date].sort()[0]}:null;
   const archiveScope=!!archiveBounds&&archiveBounds.from<=archiveBounds.to&&days.length===weekdays.length&&!search.trim()&&!worker;
@@ -231,11 +234,12 @@ function AgencySource({organizationId,source,c,reviewPanel}:{organizationId:stri
            <button type="button" className="button button--outline" disabled={busy} onClick={()=>{setDetail(group.id);setHistory(undefined)}}>{tt('open')}</button>
           </li>)}
         </ul>
-        {detailGroup&&<AgencyBookDrawer title={detailGroup.name} closeLabel={tt('close')} busy={busy} onClose={()=>{setDetail(undefined);setHistory(undefined)}}>
-          <p>{tt('counted')}: <strong>{minutesLabel(detailGroup.paidMinutes)}</strong></p>
-          <div className="agency-hours__rows">{detailGroup.rows.map(shiftRow)}</div>
-          {notice&&<p role="alert">{tt(notice)}</p>}
-        </AgencyBookDrawer>}
+        {detailGroup&&workerReport&&<TimecardReportDrawer key={detailGroup.id} title={detailGroup.name} snapshot={workerReport}
+          lockedWorker={detailGroup.id} actionBusy={busy} onClose={()=>{setDetail(undefined);setHistory(undefined)}}
+          extra={<details><summary>{tt('history')}</summary>
+           <div className="agency-hours__rows">{detailGroup.rows.map(shiftRow)}</div>
+           {notice&&<p role="alert">{tt(notice)}</p>}
+          </details>}/>}
 
       </>}
       <div className="agency-hours__heading"><h2>{source==='internal'?c.archive:c.received}</h2></div>

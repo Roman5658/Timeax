@@ -1,4 +1,4 @@
-dialog.agency-book:has(.hosted-monthly-timecard){width:min(100%,60rem)}
+dialog.agency-book:has(.hosted-monthly-timecard){width:min(calc(100% - 1rem),70rem)}
 .hosted-monthly-timecard{display:grid;gap:.8rem;min-width:0}
 .hosted-monthly-timecard__export{display:flex;align-items:end;gap:.85rem;flex-wrap:wrap;margin-block-end:1rem}
 .hosted-monthly-timecard__export label{min-width:min(100%,18rem)}
