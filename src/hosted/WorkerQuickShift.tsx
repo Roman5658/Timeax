@@ -42,7 +42,7 @@ export function WorkerQuickShift({organizationId,source,day,template,onClose,onS
      breakStatus:draft.breakStatus,breakTreatment:draft.breakTreatment,breakMinutes:minutes}) as {id?:unknown;revision?:unknown;saved?:unknown};
     if(result.saved!==true||!uuid(result.id)||typeof result.revision!=='number'||!Number.isSafeInteger(result.revision)||result.revision<1)throw Error('uncertain');
     window.dispatchEvent(new Event('timeax-timecards-changed'));onSaved(draft.localDate);
-   }catch(e){const message=(e as Error).message;setNotice(['login','denied','invalid','conflict','period-closed','assignment-required'].includes(message)?message:'uncertain')}
+   }catch(e){const message=(e as Error).message;setNotice(['login','denied','invalid','conflict','period-closed','assignment-required','outside-assignment-period'].includes(message)?message:'uncertain')}
    finally{pending.current=false;setBusy(false)}
   }}>
    <label className="field-label"><span>{t('workflow.fields.date')}</span><input type="date" required disabled={busy} value={draft.localDate} onChange={e=>update(x=>({...x,localDate:e.target.value}))}/></label>
@@ -60,7 +60,7 @@ export function WorkerQuickShift({organizationId,source,day,template,onClose,onS
     <span><small>{t('workflow.fields.breakDuration')}</small><strong>{draft.breakStatus==='taken'?minutesLabel(minutes):t('workflow.breakReport.none')}</strong></span>
     <span><small>{t('workflow.fields.paid')}</small><strong>{valid?minutesLabel(gross-minutes):'—'}</strong></span>
    </div>
-   {notice&&<p className="notice-box field-label--wide" role="alert">{notice==='assignment-required'?copy.assignmentChanged:t('timecards.'+notice)}</p>}
+   {notice&&<p className="notice-box field-label--wide" role="alert">{notice==='assignment-required'?copy.assignmentChanged:notice==='outside-assignment-period'?copy.outsideAssignment:t('timecards.'+notice)}</p>}
    <div className="form-actions field-label--wide">
     <button type="submit" className="button button--primary" disabled={busy||!valid}>{t('workflow.worker.submitShift')}</button>
     <button type="button" className="button button--quiet" disabled={busy} onClick={requestClose}>{t('common.cancel')}</button>

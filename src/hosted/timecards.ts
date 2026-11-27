@@ -8,7 +8,7 @@ export type Snapshot={version:1;source:'internal-agency';status:'archived';organ
 export async function timecardCall(org:string,action:string,body?:unknown,signal?:AbortSignal):Promise<unknown>{
  if(location.protocol!=='https:'&&!isWorkerLocal())throw Error('unavailable');
  const r=await fetch('/api/timecards/'+org+'/'+action,{method:body===undefined?'GET':'POST',credentials:'same-origin',cache:'no-store',redirect:'error',signal,headers:body===undefined?{Accept:'application/json'}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
- if(!r.ok){const v=await r.json().catch(()=>({}));throw Error(r.status===401?'login':r.status===403?'denied':['invalid','conflict','period-closed','assignment-required'].includes(v.error)?v.error:'uncertain')}
+ if(!r.ok){const v=await r.json().catch(()=>({}));throw Error(r.status===401?'login':r.status===403?'denied':r.status===409&&action==='create'&&v.error==='outside-assignment-period'?v.error:['invalid','conflict','period-closed','assignment-required'].includes(v.error)?v.error:'uncertain')}
  if(r.headers.get('content-type')?.split(';')[0]!=='application/json')throw Error('unavailable');return r.json();
 }
 const id=(x:unknown)=>typeof x==='string'&&/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(x);

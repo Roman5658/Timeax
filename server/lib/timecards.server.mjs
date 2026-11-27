@@ -61,7 +61,16 @@ export function createTimecardsHandler({origin,resolveSession,store=null,now=Dat
     ||!Array.isArray(context.worksites)||!context.worksites.some(w=>w?.id===value.worksiteId&&w?.manualEntry===true)||!await active())
      return reply(403,{error:'denied'});
   }
-  const result=await store.invoke(actor,action,{...value,organizationId,...(recordId?{id:recordId}:{})});
+  let result;
+  try {
+   result=await store.invoke(actor,action,{...value,organizationId,...(recordId?{id:recordId}:{})});
+  } catch(e) {
+   // Translate only the known assignment guard after a verified worker create.
+   // Other permission errors stay generic; no database diagnostics are sent.
+   if(s.workspaceRole==='worker'&&action==='create'&&e?.code==='42501'&&e.message==='Active assignment required'&&await active())
+    return reply(409,{error:'outside-assignment-period'});
+   throw e;
+  }
   if(!await active())return reply(401,{error:'login'});
   if(s.workspaceRole==='worker'&&action==='create'&&(!id(result?.id)||!Number.isSafeInteger(result?.revision)||result.revision<1||result?.saved!==true))return reply(503,{error:'unavailable'});
   return reply(200,result);
