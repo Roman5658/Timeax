@@ -13,6 +13,7 @@
     "service-unavailable": "Nie udało się kontynuować. Spróbuj ponownie."
   },
   "publicSignup": {
+    "agencyEmailUse": "Na ten adres wyślemy kod potwierdzający. Jeśli wystawimy faktury, wyślemy je na ten sam adres.",
     "retry": "Spróbuj ponownie",
     "saved": "Dane agencji zapisano. Konto agencji nie zostało jeszcze utworzone.",
     "emailUse": "Na ten adres wyślemy kod. Adres służy do potwierdzenia konta, nie do wysyłania reklam.",

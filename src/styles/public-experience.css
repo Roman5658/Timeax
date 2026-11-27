@@ -159,7 +159,8 @@
 }
 .auth-book .auth-book-content { width:100%; max-width:none; box-shadow:none; border:0; border-radius:0; background:transparent; padding:48px 35px 36px; }
 .auth-book .auth-book-close { position:absolute; top:12px; right:12px; z-index:1; width:44px; height:44px; }
-.auth-book #auth-book-title:focus { outline:none; }
+.auth-book :is(#auth-book-title,#legal-sheet-title):focus { outline:none; }
+.auth-legal-sheet .public-policy h1 { margin-bottom:18px; }
 @keyframes auth-page-turn {
  from { transform:perspective(1050px) translateX(85%) rotateY(-48deg); }
  to { transform:perspective(1050px) translateX(0) rotateY(0); }

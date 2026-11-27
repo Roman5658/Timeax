@@ -2,6 +2,7 @@ import {SelfServiceAgencyStep} from './SelfServiceAgencyStep';
 import {TeamStandalone,AccountantInvitePage,type TeamSection} from './TeamWorkflow';
 import {HostedCabinetRoute} from './HostedCabinet';
 import {OwnerQaPage,OwnerQaLink} from './OwnerQaPage';
+import {HostedLegalSheet} from "./HostedLegalSheet";
 import {HostedTermsPage} from "./HostedTermsPage";
 import {HostedPrivacyPage} from './HostedPrivacyPage';
 import {WorkerAccountPage} from './WorkerAccountPage';
@@ -14,7 +15,7 @@ import {useCallback,useEffect,useLayoutEffect,useMemo,useRef,useState} from "rea
 import {Link,useLocation,useNavigate} from "react-router-dom";
 import {useTranslation} from "react-i18next";
 import {X} from "lucide-react";
-import {AuthPanelContext, RegistrationChoices, RegistrationFrame, RegistrationProgress} from "../components/PublicExperience";
+import {AuthPanelContext, LegalSheetContext, type LegalDocument, RegistrationChoices, RegistrationFrame, RegistrationProgress} from "../components/PublicExperience";
 import {StartPage} from "../modules/auth/pages/HostedStartPage";
 import {StagingSessionPanel} from "../modules/auth/pages/StagingSessionPanel";
 import {createRegistrationTransport,validateAgencyDraft,type RegistrationState} from "../modules/auth/registration/agency-registration";
@@ -88,6 +89,11 @@ function CanonicalAgencyStep({existing}:{existing:boolean}){
 function PublicAuthPanel({pathname,closing,onClosed}:{pathname:string;closing:boolean;onClosed:()=>void}){
  const dialog=useRef<HTMLDialogElement>(null), previous=useRef<HTMLElement|null>(null);
  const {t}=useTranslation(),navigate=useNavigate();
+ const [legal,setLegal]=useState<{kind:LegalDocument;opener:HTMLAnchorElement}|null>(null);
+ const openLegal=useCallback((kind:LegalDocument,opener:HTMLAnchorElement)=>setLegal({kind,opener}),[]);
+ const closeLegal=useCallback(()=>setLegal(null),[]);
+ const shownLegal=legal&&legal.opener.isConnected&&!closing?legal:null;
+ useEffect(()=>{if(closing)setLegal(null)},[closing]);
  useEffect(()=>{
   const node=dialog.current;
   if(!node)return;
@@ -116,12 +122,13 @@ function PublicAuthPanel({pathname,closing,onClosed}:{pathname:string;closing:bo
   onAnimationEnd={e=>{if(closing&&e.target===e.currentTarget&&e.animationName==="auth-page-unturn")onClosed()}}
   onClick={e=>{if(e.target===e.currentTarget){const r=e.currentTarget.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)close()}}}>
   <button type="button" className="icon-button auth-book-close" aria-label={t("common.backHome")} aria-disabled={closing} onClick={close}><X size={20}/></button>
-  <div inert={closing}><AuthPanelContext.Provider value>
+  <div inert={closing}><AuthPanelContext.Provider value><LegalSheetContext.Provider value={openLegal}>
    {pathname==="/register"?<RegistrationChoices/>:<RegistrationFrame back={existing?"/":"/register"}
      title={t(existing?"common.login":"closedHosted.registerTitle")} lead="">
      <CanonicalAgencyStep key={pathname} existing={existing}/>
    </RegistrationFrame>}
-  </AuthPanelContext.Provider></div>
+  </LegalSheetContext.Provider></AuthPanelContext.Provider></div>
+  {shownLegal&&<HostedLegalSheet kind={shownLegal.kind} opener={shownLegal.opener} onClosed={closeLegal}/>}
  </dialog>;
 }
 function PublicLanding({pathname}:{pathname:string}){

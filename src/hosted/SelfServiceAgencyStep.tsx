@@ -1,7 +1,7 @@
 import {useCallback,useEffect,useMemo,useRef,useState,type FormEvent} from 'react';
 import {Link,useNavigate} from 'react-router-dom';
 import {useTranslation} from 'react-i18next';
-import {RegistrationProgress} from '../components/PublicExperience';
+import {LegalLink,RegistrationProgress} from '../components/PublicExperience';
 import {StagingSessionPanel} from '../modules/auth/pages/StagingSessionPanel';
 import {createWorkingRegistrationClient,validEmail} from '../modules/auth/registration/contract/registration-client';
 
@@ -79,15 +79,11 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
   }catch{if(!c.signal.aborted)setError('service-unavailable');}
   finally{if(controller.current===c){controller.current=null;setBusy(false);}}
  }
- const documents=<div className="public-legal-links">
-  <a href={'/terms/'+termsVersion} target="_blank" rel="noopener noreferrer">{t('hostedLegal.termsLink')}</a>
-  <a href="/privacy" target="_blank" rel="noopener noreferrer">{t('hostedPrivacy.link')}</a>
- </div>;
+ const termsHref='/terms/'+termsVersion;
  return <>
   {!existing&&<RegistrationProgress twoSteps current={stage==='details'?1:0}/>}
   {stage==='check'&&<p role="status">{t('closedHosted.checking')}</p>}
-  {stage==='code'&&!existing&&documents}
-  {stage==='code'&&<StagingSessionPanel guided simple signup={!existing} purpose={existing?'existing':'enrollment'} onChanged={()=>void refresh()}/>}
+  {stage==='code'&&<StagingSessionPanel guided simple signup={!existing} termsHref={existing?undefined:termsHref} purpose={existing?'existing':'enrollment'} onChanged={()=>void refresh()}/>}
   {stage==='unavailable'&&(error==='registration-required'?
    <button type="button" className="button button--primary" disabled={busy} onClick={()=>void restartRegistration()}>{t('publicExperience.create')}</button>:
    <button type="button" className="button button--outline" onClick={()=>void refresh()}>{t('publicSignup.retry')}</button>)}
@@ -97,7 +93,10 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
    {stage==='details'&&<>
     <label className="field-label">{t('agencyRegistration.nameLabel')}<input autoComplete="organization" value={name} onChange={e=>setName(e.target.value)} disabled={busy} required minLength={2} maxLength={120}/></label>
     <label className="field-label">{t('agencyRegistration.nipLabel')}<input inputMode="numeric" value={nip} onChange={e=>setNip(e.target.value)} disabled={busy} maxLength={24}/></label>
-    {documents}
+    <div className="public-legal-links">
+     <LegalLink kind="terms" to={termsHref}/>
+     <LegalLink kind="privacy" to="/privacy#privacy-access"/>
+    </div>
     <label className="public-agreement"><input type="checkbox" required checked={termsAccepted} disabled={busy} onChange={e=>setTermsAccepted(e.target.checked)}/>{t('hostedLegal.accept')}</label>
    </>}
    <button className="button button--primary button--full" disabled={busy}>{t(stage==='password'?'common.login':'selfService.open')}</button>

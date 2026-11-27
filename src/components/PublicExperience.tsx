@@ -39,6 +39,18 @@ export function PublicFooter() {
   </footer>;
 }
 export const AuthPanelContext = createContext(false);
+export type LegalDocument = "terms" | "privacy";
+export const LegalSheetContext = createContext<((kind: LegalDocument, opener: HTMLAnchorElement) => void) | null>(null);
+
+export function LegalLink({ kind, to }: { kind: LegalDocument; to: string }) {
+  const { t } = useTranslation();
+  const open = useContext(LegalSheetContext);
+  return <Link to={to} onClick={event => {
+    if (!open || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    open(kind, event.currentTarget);
+  }}>{t(kind === "terms" ? "hostedLegal.termsLink" : "hostedPrivacy.link")}</Link>;
+}
 export function RegistrationFrame({ children, title, lead, back = "/register" }: { children: ReactNode; title: string; lead: string; back?: string }) {
   const { t } = useTranslation();
   const inPanel=useContext(AuthPanelContext);

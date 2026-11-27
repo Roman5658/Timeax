@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { LegalLink } from "../../../components/PublicExperience";
 import { useTranslation } from "react-i18next";
 import { createWorkingRegistrationClient, isEmailIdentityOrigin, validEmail, validOtp, type AccessContext } from "../registration/contract/registration-client";
 
-export function StagingSessionPanel({ onChanged, purpose = "enrollment", audience = "agency", guided = false, signup = false, simple = signup }: { simple?: boolean; signup?: boolean; guided?: boolean; onChanged: () => void; purpose?: "enrollment" | "existing"; audience?: "agency" | "worker" | "workspace" }) {
+export function StagingSessionPanel({ onChanged, purpose = "enrollment", audience = "agency", guided = false, signup = false, simple = signup, termsHref }: { termsHref?: string; simple?: boolean; signup?: boolean; guided?: boolean; onChanged: () => void; purpose?: "enrollment" | "existing"; audience?: "agency" | "worker" | "workspace" }) {
   const { t } = useTranslation();
   const emailIdentity=isEmailIdentityOrigin(window.location.origin);
   const client = useMemo(() => window.location.protocol === "https:" || emailIdentity ? createWorkingRegistrationClient(window.location.origin, window.fetch.bind(window), purpose) : undefined, [purpose,emailIdentity]);
@@ -70,9 +70,14 @@ export function StagingSessionPanel({ onChanged, purpose = "enrollment", audienc
     {!guided&&<p className="muted-copy">{sessionText("scope")}</p>}
     {!verified && <form className="auth-form" onSubmit={submit} aria-busy={busy}>
       {!guided&&<p className="muted-copy">{t("publicExperience.codePurpose")}</p>}
-      <p className="muted-copy" id="enrollment-privacy">{!simple&&<>{t("hostedPrivacy.beforeEmail")}{" "}</>}<Link to={simple?"/privacy#privacy-access":"/privacy"}>{t("hostedPrivacy.link")}</Link></p>
+      {termsHref&&<p className="muted-copy" id="agency-email-use">{t("publicSignup.agencyEmailUse")}</p>}
+      <div className={simple?"public-legal-links":"muted-copy"} id="enrollment-privacy">
+        {!simple&&<>{t("hostedPrivacy.beforeEmail")}{" "}</>}
+        {termsHref&&<LegalLink kind="terms" to={termsHref}/>}
+        <LegalLink kind="privacy" to={simple?"/privacy#privacy-access":"/privacy"}/>
+      </div>
       <label className="field-label" htmlFor="enrollment-email"><span>{sessionText("email")}</span>
-        <input id="enrollment-email" aria-describedby="enrollment-privacy" type="email" autoComplete="email" maxLength={254} value={email} disabled={busy} onChange={e => setEmail(e.target.value)} required={!emailIdentity || !scope?.capabilities.verify} />
+        <input id="enrollment-email" aria-describedby={termsHref?"agency-email-use":"enrollment-privacy"} type="email" autoComplete="email" maxLength={254} value={email} disabled={busy} onChange={e => setEmail(e.target.value)} required={!emailIdentity || !scope?.capabilities.verify} />
       </label>
       {scope?.capabilities.verify && <label className="field-label" htmlFor="enrollment-code"><span>{sessionText("code")}</span>
         <input id="enrollment-code" inputMode="numeric" autoComplete="one-time-code" pattern={"[0-9]{" + otpLength + "}"} minLength={otpLength} maxLength={otpLength} value={code} disabled={busy} onChange={e => setCode(e.target.value)} required={!emailIdentity || !scope?.capabilities.verify} />
