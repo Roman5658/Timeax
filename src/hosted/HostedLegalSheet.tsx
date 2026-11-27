@@ -27,6 +27,7 @@ export function HostedLegalSheet({kind,opener,onClosed}:{kind:LegalDocument;open
  },[closing,onClosed]);
  return <dialog ref={dialog} className={`auth-book enrollment-card auth-legal-sheet${closing?" is-closing":""}`}
   aria-labelledby="legal-sheet-title"
+  onKeyDown={event=>{if(event.key==="Escape"){event.preventDefault();event.stopPropagation();close()}}}
   onCancel={event=>{event.preventDefault();event.stopPropagation();close()}}
   onAnimationEnd={event=>{if(closing&&event.target===event.currentTarget&&event.animationName==="auth-page-unturn")onClosed()}}
   onClick={event=>{if(event.target===event.currentTarget){const r=event.currentTarget.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)close()}}}>

@@ -118,7 +118,7 @@ function PublicAuthPanel({pathname,closing,onClosed}:{pathname:string;closing:bo
  },[closing,onClosed]);
  const close=()=>{if(!closing)navigate("/",{replace:true})};
  const existing=pathname==="/login";
- return <dialog ref={dialog} className={`auth-book enrollment-card${closing?" is-closing":""}`} aria-labelledby="auth-book-title" onCancel={e=>{e.preventDefault();close()}}
+ return <dialog ref={dialog} className={`auth-book enrollment-card${closing?" is-closing":""}`} aria-labelledby="auth-book-title" onCancel={e=>{e.preventDefault();if(!shownLegal&&e.target===e.currentTarget)close()}}
   onAnimationEnd={e=>{if(closing&&e.target===e.currentTarget&&e.animationName==="auth-page-unturn")onClosed()}}
   onClick={e=>{if(e.target===e.currentTarget){const r=e.currentTarget.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)close()}}}>
   <button type="button" className="icon-button auth-book-close" aria-label={t("common.backHome")} aria-disabled={closing} onClick={close}><X size={20}/></button>
