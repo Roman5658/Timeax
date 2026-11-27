@@ -5,15 +5,15 @@ import {RegistrationFrame} from '../components/PublicExperience';import {Staging
 import {factoryHoursCall,parseFactoryHours,parseFactorySnapshot,factorySnapshotCsv,type FactoryHoursContext,type FactoryShift,type FactorySnapshot} from './factory-timecards';
 import '../styles/timecards.css';import '../styles/worker-enrollment.css';
 const yesterday=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Warsaw',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(Date.now()-86400000));
-export function FactoryTimecardsPanel({organizationId,revision=0,archiveOnly=false}:{organizationId:string;revision?:number;archiveOnly?:boolean}){
+export function FactoryTimecardsPanel({organizationId,revision=0,archiveOnly=false,placementOnly=false,placementSiteId}:{organizationId:string;revision?:number;archiveOnly?:boolean;placementOnly?:boolean;placementSiteId?:string}){
  const {t}=useTranslation(),tx=(k:string)=>t('factoryHours.'+k),tt=(k:string)=>t('timecards.'+k);
  const [context,setContext]=useState<FactoryHoursContext>(),[status,setStatus]=useState('checking'),[refresh,setRefresh]=useState(0),[busy,setBusy]=useState(false),[notice,setNotice]=useState('');
  const {label,organizationLabel}=useMemberNames(organizationId,revision+refresh);
- const [site,setSite]=useState(''),[worker,setWorker]=useState(''),[agency,setAgency]=useState(''),[mode,setMode]=useState<'self'|'attendance'>('self'),[date,setDate]=useState(yesterday),[start,setStart]=useState('08:00'),[end,setEnd]=useState('16:00'),[pause,setPause]=useState(0),[paid,setPaid]=useState(false),[comment,setComment]=useState(''),[note,setNote]=useState(''),[editing,setEditing]=useState<FactoryShift>(),[from,setFrom]=useState(yesterday),[to,setTo]=useState(yesterday),[confirmed,setConfirmed]=useState(false),[assignmentStart,setAssignmentStart]=useState(new Date().toISOString().slice(0,10)),[snapshot,setSnapshot]=useState<FactorySnapshot>(),[history,setHistory]=useState<{action:string;note:string;after:FactoryShift}[]>();
+ const [site,setSite]=useState(placementSiteId??''),[worker,setWorker]=useState(''),[agency,setAgency]=useState(''),[mode,setMode]=useState<'self'|'attendance'>('self'),[date,setDate]=useState(yesterday),[start,setStart]=useState('08:00'),[end,setEnd]=useState('16:00'),[pause,setPause]=useState(0),[paid,setPaid]=useState(false),[comment,setComment]=useState(''),[note,setNote]=useState(''),[editing,setEditing]=useState<FactoryShift>(),[from,setFrom]=useState(yesterday),[to,setTo]=useState(yesterday),[confirmed,setConfirmed]=useState(false),[assignmentStart,setAssignmentStart]=useState(new Date().toISOString().slice(0,10)),[snapshot,setSnapshot]=useState<FactorySnapshot>(),[history,setHistory]=useState<{action:string;note:string;after:FactoryShift}[]>();
  const op=useRef(crypto.randomUUID()),pending=useRef(false),dirty=()=>{op.current=crypto.randomUUID();setNotice('')};
  useEffect(()=>{const c=new AbortController();setContext(undefined);setStatus('checking');void factoryHoursCall(organizationId,'context',undefined,c.signal).then(v=>parseFactoryHours(v,organizationId)).then(v=>{if(!c.signal.aborted){setContext(v);setStatus('ready')}}).catch(e=>{if(!c.signal.aborted)setStatus(['login','denied'].includes(e.message)?e.message:'unavailable')});return()=>c.abort()},[organizationId,revision,refresh]);
  useEffect(()=>{setSnapshot(undefined);setHistory(undefined);setEditing(undefined)},[organizationId,revision]);
- const chosen=context?.sites.find(s=>s.id===site),leader=context?.role==='team_leader',own=context?.role==='worker';
+ const activeSite=placementOnly?placementSiteId??'':site,chosen=context?.sites.find(s=>s.id===activeSite),leader=context?.role==='team_leader',own=context?.role==='worker';
  useEffect(()=>{if(chosen)setMode(chosen.mode??'self')},[chosen?.id,chosen?.mode,chosen?.modeRevision]);
  const rows=context?.assignments.filter(a=>a.worksiteId===site)??[];
  const canWrite=editing?((own&&editing.source==='self')||(leader&&editing.source==='attendance')):chosen&&(own&&chosen.mode==='self'||leader&&chosen.mode==='attendance');
@@ -26,6 +26,22 @@ export function FactoryTimecardsPanel({organizationId,revision=0,archiveOnly=fal
  }catch(e){setNotice((e as Error).message||'uncertain');setRefresh(n=>n+1)}finally{pending.current=false;setBusy(false)}}
  const chooseSite=<label className="field-label">{tt('site')}<select value={site} disabled={busy||!!editing} onChange={e=>{setSite(e.target.value);setWorker('');setAgency('');setConfirmed(false);dirty()}}><option value="">{tt('choose')}</option>{context?.sites.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>;
  function edit(s:FactoryShift){setEditing(s);setSite(s.worksite_id);setWorker(s.membership_id);setDate(s.data.localDate);setStart(s.data.startTime);setEnd(s.data.endTime);setPause(s.data.breakMinutes);setPaid(s.data.breakTreatment==='paid');setComment(s.data.comment);setNote('');dirty()}
+ if(placementOnly)return <section className="worker-enrollment timecards" aria-busy={busy}>
+  <h3>{tx('placement')}</h3>
+  {!context?<p role="status">{tt(status)}</p>:context.role!=='agency_admin'?<p role="status">{tt('denied')}</p>:!chosen?<p role="status">{tt('noAssignment')}</p>:<>
+   <form className="auth-form" onSubmit={e=>{e.preventDefault();if(!worker||!assignmentStart)return;void act('propose-placement',{worksiteId:activeSite,membershipId:worker,startsAt:assignmentStart+'T00:00:00.000Z'})}}>
+    <label className="field-label">{tt('workerRef')}<select required value={worker} disabled={busy} onChange={e=>setWorker(e.target.value)}><option value="">{tt('choose')}</option>{context.workers.filter(w=>w.agencyId===organizationId).map(w=><option key={w.membershipId} value={w.membershipId}>{label(w.membershipId)}</option>)}</select></label>
+    <label className="field-label">{tx('starts')}<input type="date" required value={assignmentStart} disabled={busy} onChange={e=>setAssignmentStart(e.target.value)}/></label>
+    <button className="button button--primary" disabled={busy||!worker||!assignmentStart}>{tx('propose')}</button>
+   </form>
+   {context.placements.filter(p=>p.worksiteId===activeSite&&p.agencyId===organizationId).map(p=><article className="notice-box timecards-row" key={p.id}>
+    <strong>{label(p.membershipId)}</strong><p>{tx(p.state)} · {new Date(p.startsAt).toLocaleDateString()}</p>
+    {p.state!=='revoked'&&<button type="button" className="button button--outline" disabled={busy} onClick={()=>void act('revoke-placement',{worksiteId:activeSite,id:p.id})}>{tx('revoke')}</button>}
+   </article>)}
+  </>}
+  {notice&&<p role={notice==='saved'?'status':'alert'}>{notice==='saved'?tx('saved'):tt(['login','denied','invalid','conflict','period-closed'].includes(notice)?notice:'uncertain')}</p>}
+  <button type="button" className="button button--outline" disabled={busy||status==='checking'} onClick={()=>setRefresh(n=>n+1)}>{tt('refresh')}</button>
+ </section>;
  return <section className="worker-enrollment timecards" aria-busy={busy}><h2>{tx(archiveOnly?'received':'title')}</h2>
  {!context?<p role="status">{tt(status)}</p>:<>
  {!archiveOnly&&<><p className="notice-box">{tx(context.role)}</p>{chooseSite}

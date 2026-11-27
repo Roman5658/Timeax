@@ -8,3 +8,8 @@
   animation:timeax-book-window .32s cubic-bezier(.2,.75,.25,1) backwards;
  }
 }
+
+.agency-site-list { list-style:none; padding:0; display:grid; gap:.65rem; }
+.agency-site-list .button { width:100%; justify-content:space-between; gap:1rem; text-align:start; }
+.agency-site-list .button span { font-size:.85em; font-weight:400; }
+.agency-site-panel details > summary { cursor:pointer; }

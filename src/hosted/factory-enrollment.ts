@@ -3,7 +3,7 @@ export type SetupMembership={id:string;organizationId:string;name:string;kind:'a
 export type SetupSite={id:string;name:string;ownerId:string;ownerKind:'agency'|'factory';organizationId:string;role:string};
 export type SetupConnection={id:string;factoryId:string;factoryName:string;agencyId:string;agencyName:string;worksiteId:string;worksiteName:string;state:'pending'|'active'|'rejected'|'revoked'};
 export type SetupInvitation={id:string;factoryId:string;worksiteId:string;expiresAt:string;state:string};
-export type SetupAssignment={membershipId:string;worksiteId:string;organizationId:string;startsAt:string;state:string;role:string};
+export type SetupAssignment={membershipId:string;worksiteId:string;organizationId:string;startsAt:string;endsAt?:string|null;state:string;role:string};
 export type SetupContext={memberships:SetupMembership[];worksites:SetupSite[];connections:SetupConnection[];workers:{id:string;organizationId:string}[];invitations:SetupInvitation[];assignments:SetupAssignment[]};
 export async function factoryCall(action:string,body?:unknown,signal?:AbortSignal):Promise<unknown>{
  if(location.protocol!=='https:'&&!isWorkerLocal())throw Error('unavailable');

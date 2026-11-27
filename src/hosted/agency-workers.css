@@ -1,0 +1,41 @@
+.agency-worker-panel { display:grid; gap:1rem }
+.agency-worker-tabs { display:flex; flex-wrap:wrap; gap:.55rem }
+.agency-worker-add { margin-inline-start:auto }
+.agency-worker-filter { display:grid; gap:.8rem; grid-template-columns:repeat(2,minmax(0,1fr)); margin-block-end:1rem }
+.agency-worker-group { margin-top:1rem }
+.agency-worker-group h3 { margin-block:.75rem .35rem }
+.agency-worker-group ul,.agency-worker-applications { list-style:none; margin:0; padding:0 }
+.agency-worker-group li,.agency-worker-applications li { display:flex; align-items:center; justify-content:space-between; gap:.75rem; border-block-start:1px solid var(--line); padding:.7rem 0 }
+.agency-worker-group li p,.agency-worker-applications li p { margin:.25rem 0 0 }
+.agency-worker-applications code { overflow-wrap:anywhere }
+.agency-worker-status { display:flex; gap:.65rem; flex-wrap:wrap; align-items:center }
+.agency-book { position:fixed; inset:0 0 0 auto; margin:0; width:min(100%,560px); max-width:none; height:100%; max-height:none; overflow:auto; overscroll-behavior:contain; border:1px solid var(--line); border-radius:20px 0 0 20px; padding:0; background:var(--surface); color:var(--ink); box-shadow:-20px 0 65px rgb(0 0 0 / .26); transform-origin:right center }
+.agency-book::backdrop { background:rgb(12 22 36 / .54) }
+.agency-book[open] { animation:agency-book-open .36s cubic-bezier(.2,.75,.25,1) both }
+.agency-book.agency-book--closing[open] { animation:agency-book-close .28s cubic-bezier(.4,0,.8,.32) both }
+.agency-book header { display:flex; position:sticky; top:0; z-index:1; justify-content:space-between; align-items:center; gap:1rem; background:var(--surface); border-block-end:1px solid var(--line); padding:1rem 1.35rem }
+.agency-book header h2 { margin:0; font-size:1.25rem; overflow-wrap:anywhere }
+.agency-book header button { min-width:44px; min-height:44px; padding:0; font-size:1.4rem }
+.agency-book__body { padding:1.25rem 1.35rem 2rem }
+.agency-book__body > :first-child { margin-top:0 }
+.agency-book-section { border-block-start:1px solid var(--line); padding-block-start:1rem; margin-block-start:1.2rem }
+.agency-book-section h3 { margin-block:0 .7rem }
+.agency-worker-person { font-size:1.1rem; font-weight:650 }
+.agency-worker-placement-list { margin-block:.65rem 1rem }
+@keyframes agency-book-open {
+ from { transform:perspective(1050px) translateX(74%) rotateY(-46deg); opacity:.65 }
+ to { transform:none; opacity:1 }
+}
+@keyframes agency-book-close {
+ from { transform:none; opacity:1 }
+ to { transform:perspective(1050px) translateX(74%) rotateY(-46deg); opacity:.65 }
+}
+@media (max-width:640px) {
+ .agency-worker-filter { grid-template-columns:1fr }
+ .agency-worker-add { margin-inline-start:0 }
+ .agency-book { border-radius:0 }
+ .agency-worker-group li,.agency-worker-applications li { flex-wrap:wrap }
+}
+@media (prefers-reduced-motion:reduce) {
+ .agency-book[open],.agency-book.agency-book--closing[open] { animation:none }
+}

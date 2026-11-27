@@ -15,7 +15,15 @@ export const WORKER_SQL=Object.freeze({
 });
 export function createWorkerEnrollmentStore(lane){
  if(typeof lane?.query!=='function')throw Error('Worker RPC lane missing');
- const call=async(key,actor,...args)=>(await lane.query(WORKER_SQL[key],[actor.issuer,actor.subject,...args])).rows;
+ const call=async(key,actor,...args)=>{
+  const run=()=>lane.query(WORKER_SQL[key],[actor.issuer,actor.subject,...args]);
+  try{return (await run()).rows}catch(e){
+   // A burst of cabinet reads can briefly saturate a scoped pool. Never retry a write.
+   if(key!=='queue'||!['53300','57P03','08006','ECONNRESET','ETIMEDOUT'].includes(e?.code))throw e;
+   await new Promise(resolve=>setTimeout(resolve,160));
+   return (await run()).rows;
+  }
+ };
  return {call,workspace:createWorkspaceReadStore(lane)};
 }
 export function createWorkerEnrollmentHandler({origin,store=null,resolveSession,now=Date.now}){

@@ -1,0 +1,16 @@
+.agency-hours{display:grid;gap:18px;min-width:0}
+.agency-hours__sources,.agency-hours__heading{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.agency-hours__heading{justify-content:space-between}
+.agency-hours__heading h2{margin:0}
+.agency-hours__source{margin:0;max-width:none}
+.agency-hours__filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:12px;align-items:end}
+.agency-hours__filters .field-label{min-width:0}
+.agency-hours__rows{display:grid;gap:8px;max-block-size:36rem;overflow:auto;margin-block:4px}
+.agency-hours__rows .notice-box{margin:0}
+.agency-hours__rows .timecards-row .button{justify-self:start}
+.agency-hours__document{margin:auto;box-sizing:border-box;width:min(43rem,calc(100% - 24px));max-height:calc(100dvh - 24px);overflow:auto}
+.agency-hours__document:not([open]){display:none}
+.agency-hours__document .agency-hours__rows{max-block-size:45vh}
+.agency-hours__document .timecards-actions{margin-top:12px}
+@media(max-width:560px){.agency-hours__sources .button{flex:1 1 140px}}
+

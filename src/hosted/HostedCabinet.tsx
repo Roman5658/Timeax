@@ -1,10 +1,12 @@
 import {AgencyProfile} from './AgencyProfile';
+import {AgencyWorkersPanel} from './AgencyWorkersPanel';
+import {AgencyTimecardsPanel} from './AgencyTimecardsPanel';
 import {AgencyProductions} from './AgencyProductions';
 import {TeamBell,TeamPanel,type TeamSection} from './TeamWorkflow';
 
 import { Building2, CalendarDays, ClipboardList, LayoutDashboard, Menu, Settings2, UsersRound, X } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { BrandMark } from '../components/BrandMark';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
@@ -85,6 +87,10 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
  const home=t(agency?'nav.agencyHome':'nav.workerHome');
  const heading=menu.find(entry=>entry.section===section)?.label??menu[0].label;
  const org=access.organization.id;
+ const [agencySearch]=useSearchParams();
+ const unifiedHours=publicAgency&&(section==='timecards'||section==='factory-timecards');
+ const directory=publicAgency&&section==='workers';
+ const visibleMenu=menu.filter(entry=>(entry.section!=='settings'||publicAgency)&&(!publicAgency||entry.section!=='factory-timecards'));
  const {label,organizationLabel}=useMemberNames(agency?undefined:org);
  useEffect(()=>{
   if(!menuOpen)return;
@@ -99,9 +105,9 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
    <button className="portal-mobile-close" type="button" aria-label={t('common.closeMenu')} onClick={()=>setMenuOpen(false)}><X size={18}/></button>
    <div className="sidebar-divider"/>
    <nav className="portal-nav" aria-label={home}>
-    {menu.filter(entry=>entry.section!=='settings'||publicAgency).map(({section:id,label,group,Icon},index)=><Fragment key={id}>
-     {group!==menu[index-1]?.group&&<div className="portal-nav-group-label">{t('nav.groups.'+group)}</div>}
-     <Link className={'portal-nav-link'+(id===section?' is-active':'')} aria-current={id===section?'page':undefined} to={route(id)} onClick={()=>setMenuOpen(false)}><Icon size={17} aria-hidden="true"/><span>{t(label)}</span></Link>
+    {visibleMenu.map(({section:id,label,group,Icon},index)=><Fragment key={id}>
+     {group!==visibleMenu[index-1]?.group&&<div className="portal-nav-group-label">{t('nav.groups.'+group)}</div>}
+     <Link className={'portal-nav-link'+(id===section||unifiedHours&&id==='timecards'?' is-active':'')} aria-current={id===section||unifiedHours&&id==='timecards'?'page':undefined} to={route(id)} onClick={()=>setMenuOpen(false)}><Icon size={17} aria-hidden="true"/><span>{t(label)}</span></Link>
     </Fragment>)}
     {!agency&&<><div className="portal-nav-group-label">{t('nav.groups.account')}</div><Link className="portal-nav-link" to="/account"><Settings2 size={17} aria-hidden="true"/><span>{t('nav.profile')}</span></Link><Link className="portal-nav-link" to="/register/worker"><Building2 size={17} aria-hidden="true"/><span>{t('workerEnrollment.join')}</span></Link></>}
    </nav>
@@ -119,21 +125,23 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
     {!agency&&<CabinetSignOut/>}<LanguageSwitcher compact/><ThemeToggle/></div>
    </header>
    <main className="portal-content">
-    <PageHeading eyebrow={!agency?organizationLabel(access.membership.id):undefined} title={t(heading)} />
-    {publicAgency&&section!=='home'&&section!=='setup'&&!sectionReady&&<p className="notice-box" role="status">{t('agencyProductions.moduleNotEnabled')}</p>}
+    <PageHeading eyebrow={!agency?organizationLabel(access.membership.id):undefined} title={t(unifiedHours?'nav.timekeeping':heading)} />
+    {publicAgency&&section!=='home'&&section!=='setup'&&!directory&&!unifiedHours&&!sectionReady&&<p className="notice-box" role="status">{t('agencyProductions.moduleNotEnabled')}</p>}
     {uses('team')&&(['messages','schedule','templates','absence','accountants'] as string[]).includes(section)&&<TeamPanel organizationId={org} section={section as TeamSection}/>}
     {section==='settings'&&agencyProfile?.ops.includes('profile')&&<AgencyProfile key={org} organizationId={org} onSaved={setAgencyName}/>}
     {section==='home'&&<>
      <section className="dashboard-panel">
       <div className="panel-heading"><h2>{t('workspaceRead.worksites')}</h2></div>
-      {access.worksites.length?<ul className="factory-summary-list hosted-site-list">{access.worksites.map(site=><li className="factory-summary-row" key={site.id}><span className="factory-summary-icon"><Building2 size={16} aria-hidden="true"/></span><strong>{site.name}</strong></li>)}</ul>:<p>{t('workspaceRead.empty')}</p>}
+      {access.worksites.length?<ul className="factory-summary-list hosted-site-list">{access.worksites.map(site=><li className="factory-summary-row" key={site.id}><span className="factory-summary-icon"><Building2 size={16} aria-hidden="true"/></span><strong>{publicAgency?<Link to={root+'/setup?site='+site.id}>{site.name}</Link>:site.name}</strong></li>)}</ul>:<p>{t('workspaceRead.empty')}</p>}
      </section>
      <div className="form-actions agency-overview-actions">{menu.filter(x=>x.section==='timecards'||x.section==='payslips'||x.section==='workers').map(x=><Link key={x.section} className="button button--outline button--small" to={route(x.section)}>{t(x.label)}</Link>)}</div>
     </>}
-    {uses('worker')&&section==='workers'&&<AgencyWorkerPanel organizationId={org} verifiedAgency={publicAgency} namesEnabled={uses('names')} lifecycleEnabled={uses('account')}/> }
-    {section==='setup'&&(publicAgency?<AgencyProductions key={org} organizationId={org} initialSites={access.worksites} enabled={agencyProfile?.productions===true} factoryInvites={uses('registration')} namesEnabled={uses('names')}/>:loadModules?<FactorySetupPanel organizationId={org}/>:null)}
-    {uses('timecards')&&section==='timecards'&&<TimecardsPanel organizationId={org} includeFactoryArchive={uses('factoryTimecards')}/> }
-    {uses('factoryTimecards')&&section==='factory-timecards'&&<FactoryTimecardsPanel organizationId={org}/>}
+    {directory&&<AgencyWorkersPanel key={org+(agencySearch.get('site')??'')} organizationId={org} siteId={agencySearch.get('site')??undefined} initialSection={agencySearch.get('tab')==='applications'?'applications':'roster'} enrollmentEnabled={uses('worker')} productionsEnabled={agencyProfile?.productions===true} factoryHoursEnabled={uses('factoryTimecards')} namesEnabled={uses('names')} lifecycleEnabled={uses('account')}/>}
+    {!directory&&uses('worker')&&section==='workers'&&<AgencyWorkerPanel organizationId={org} verifiedAgency={publicAgency} namesEnabled={uses('names')} lifecycleEnabled={uses('account')}/> }
+    {section==='setup'&&(publicAgency?<AgencyProductions key={org} organizationId={org} initialSites={access.worksites} enabled={agencyProfile?.productions===true} factoryInvites={uses('registration')} namesEnabled={uses('names')} placementsEnabled={uses('factoryTimecards')}/>:loadModules?<FactorySetupPanel organizationId={org}/>:null)}
+    {unifiedHours&&<AgencyTimecardsPanel key={section} organizationId={org} internalEnabled={uses('timecards')} factoryEnabled={uses('factoryTimecards')} initialSource={section==='factory-timecards'?'factory':'internal'}/>}
+    {!unifiedHours&&uses('timecards')&&section==='timecards'&&<TimecardsPanel organizationId={org} includeFactoryArchive={uses('factoryTimecards')}/> }
+    {!unifiedHours&&uses('factoryTimecards')&&section==='factory-timecards'&&<FactoryTimecardsPanel organizationId={org}/>}
     {uses('payroll')&&section==='payslips'&&<PayslipsPanel organizationId={org}/>}
    </main>
   </div>

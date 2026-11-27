@@ -1,8 +1,9 @@
 import {useCallback,useEffect,useState} from 'react';
 import {isWorkerLocal} from './worker-enrollment';
 export type TeamEntry={id:string;kind:'message'|'absence'|'schedule';siteId:string|null;payload:Record<string,string|number>;state:string;revision:number;sender:string;outgoing:boolean;read:boolean;createdAt:string;recipientCount:number|null;recipients:string[]};
+export type AgencyPlan={id:string;siteId:string;localDate:string;startTime:string;endTime:string;state:string;recipients:string[]};
 export type ShiftTemplate={id:string;name:string;revision:number;data:{startTime:string;endTime:string;breakMinutes:number;breakTreatment:'paid'|'unpaid'}};
-export type TeamContext={organizationId:string;membershipId:string;role:string;unread:number;sites:{id:string;name:string;canPlan:boolean}[];recipients:{id:string;role:string;organizationName:string;organizationId:string;worksiteIds:string[]}[];entries:TeamEntry[];templates:ShiftTemplate[];invitations:{id:string;email:string;state:string;expiresAt:string}[]};
+export type TeamContext={organizationId:string;membershipId:string;role:string;unread:number;sites:{id:string;name:string;canPlan:boolean}[];recipients:{id:string;role:string;organizationName:string;organizationId:string;worksiteIds:string[]}[];entries:TeamEntry[];agencySchedule?:AgencyPlan[];templates:ShiftTemplate[];invitations:{id:string;email:string;state:string;expiresAt:string}[]};
 export async function teamCall(org:string|undefined,action:string,body?:unknown,signal?:AbortSignal){
  if(location.protocol!=='https:'&&!isWorkerLocal())throw Error('closed');
  const r=await fetch('/api/team/'+(org?org+'/':'')+action,{method:body===undefined?'GET':'POST',credentials:'same-origin',cache:'no-store',redirect:'error',signal,headers:body===undefined?{Accept:'application/json'}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});

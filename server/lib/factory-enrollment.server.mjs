@@ -5,6 +5,7 @@ export function createFactorySetupStore(lane){if(typeof lane?.query!=='function'
 const uuid=x=>typeof x==='string'&&/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(x);
 const fields={
  'create-site':['organizationId','name','operationId'],'assign-internal':['worksiteId','membershipId','startsAt'],
+ 'rename-site':['worksiteId','name'],'transfer-internal':['worksiteId','fromWorksiteId','membershipId','startsAt'],
  'request-connection':['worksiteId','agencyNip'],'approve-connection':['id','confirmed'],'decline-connection':['id'],
  'revoke-connection':['id'],'invite-leader':['worksiteId','startsAt'],'revoke-invitation':['id'],
  'claim-leader':['code'],'revoke-assignment':['worksiteId','membershipId']
@@ -29,7 +30,7 @@ export function createFactorySetupHandler({origin,resolveSession,store=null,agen
    const url=new URL(request.url),match=url.pathname.match(/^\/api\/factory-setup\/([a-z-]+)$/);
    if(url.origin!==origin||url.search||url.hash||!match)return reply(404,{error:'not-found'});
    const action=match[1],write=action!=='context';
-   if(agencyOnly&&!['context','create-site','approve-connection','decline-connection','revoke-connection','assign-internal','revoke-assignment'].includes(action))return reply(404,{error:'not-found'});
+   if(agencyOnly&&!['context','create-site','approve-connection','decline-connection','revoke-connection','assign-internal','revoke-assignment','transfer-internal','rename-site'].includes(action))return reply(404,{error:'not-found'});
    if(request.method!==(write?'POST':'GET'))return reply(405,{error:'not-allowed'});
    const from=request.headers.get('origin'),site=request.headers.get('sec-fetch-site');
    if((write?from!==origin:from!==null&&from!==origin)||(site!==null&&site!=='same-origin')||[...request.headers.keys()].some(k=>/^(authorization|forwarded|x-forwarded-.*|x-role|x-subject|x-issuer|x-tenant.*|x-timeax-.*)$/.test(k)))return reply(403,{error:'not-permitted'});
@@ -44,7 +45,7 @@ export function createFactorySetupHandler({origin,resolveSession,store=null,agen
     const reader=request.body?.getReader();if(!reader)return reply(400,{error:'invalid-request'});
     let size=0,parts=[],timer;const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('timeout')),2500)});
     try{for(;;){const r=await Promise.race([reader.read(),timeout]);if(r.done)break;size+=r.value.length;if(size>2048)return reply(400,{error:'invalid-request'});parts.push(r.value)}input=JSON.parse(new TextDecoder('utf8',{fatal:true}).decode(Buffer.concat(parts)))}finally{clearTimeout(timer);void reader.cancel().catch(()=>{})}
-    if(!valid(action,input))return reply(400,{error:'invalid-request'});
+    if(!valid(action,input)||!agencyOnly&&['transfer-internal','rename-site'].includes(action))return reply(400,{error:'invalid-request'});
    }
    const actor={issuer:s.issuer,subject:s.subject};
    let value;
@@ -60,7 +61,13 @@ export function createFactorySetupHandler({origin,resolveSession,store=null,agen
     if(action==='context')value={memberships,connections,worksites,workers,invitations:[],assignments};
     else{
      const site=owned.find(w=>w.id===input.worksiteId);
-     const allowed=action==='create-site'?scopes.has(input.organizationId):action==='assign-internal'?!!site&&workers.some(w=>w.id===input.membershipId&&w.organizationId===site.organizationId):action==='revoke-assignment'?!!site&&assignments.some(a=>a.membershipId===input.membershipId&&a.worksiteId===site.id):connections.some(v=>v.id===input.id);
+     const sameWorker=site&&workers.some(w=>w.id===input.membershipId&&w.organizationId===site.organizationId);
+     const allowed=action==='create-site'?scopes.has(input.organizationId)
+      :action==='rename-site'?!!site
+      :action==='assign-internal'?!!sameWorker
+      :action==='transfer-internal'?!!sameWorker&&owned.some(w=>w.id===input.fromWorksiteId&&w.organizationId===site.organizationId)
+      :action==='revoke-assignment'?!!site&&assignments.some(a=>a.membershipId===input.membershipId&&a.worksiteId===site.id)
+      :connections.some(v=>v.id===input.id);
      if(!allowed||!await active())return reply(403,{error:'not-permitted'});
      value=await store.invoke(actor,action,input);
     }

@@ -22,7 +22,7 @@ const specs={
  names:{handler:createMemberNamesHandler,match:orgRoute('member-names','context|set')},
  account:{handler:createAccountHandler,match:/^\/api\/personal-account\/(?:agency-context|end-membership)$/},
  registration:{handler:createFactoryRegistrationHandler,match:/^\/api\/factory-registration\/(?:context|invite-factory|revoke-agency-invitation)$/,agencyOnly:true},
- team:{handler:createTeamHandler,match:orgRoute('team','context|read|message|schedule|update-plan|cancel|invite-accountant|revoke-accountant')}
+ team:{handler:createTeamHandler,match:orgRoute('team','context|read|message|invite-accountant|revoke-accountant')}
 };
 const lanes=[...INTEGRATED_LANES.filter(l=>l.id!=='factory'),
  {id:'profile',role:'timeax_agency_profile_login',functions:[{signature:AGENCY_PROFILE_SIGNATURE,owner:'postgres'}],statements:[AGENCY_PROFILE_SQL],create:createAgencyProfileStore},
@@ -30,7 +30,14 @@ const lanes=[...INTEGRATED_LANES.filter(l=>l.id!=='factory'),
 const key=v=>typeof v==='string'&&/^[-_A-Za-z0-9]{43,128}$/.test(v);
 const sha=v=>typeof v==='string'&&/^[0-9a-f]{64}$/.test(v);
 export function managedAgencyOperations(env){
- try{const v=JSON.parse(env.TIMEAX_AGENCY_OPERATIONS??'null');return v&&!Array.isArray(v)&&typeof v==='object'?v:null}catch{return null}
+ try{
+  const v=JSON.parse(env.TIMEAX_AGENCY_OPERATIONS??'null');
+  if(!v||Array.isArray(v)||typeof v!=='object')return null;
+  const teamFingerprint=env.TIMEAX_AGENCY_TEAM_RPC_SHA256;
+  if(sha(teamFingerprint)&&v.team&&typeof v.team==='object'&&!Array.isArray(v.team))
+   v.team={...v.team,hashes:{...v.team.hashes,[TEAM_FUNCTION.signature]:teamFingerprint}};
+  return v;
+ }catch{return null}
 }
 export async function assembleAgencyOperations(config,lane,{now=Date.now}={}){
  if(!config.agencyOperations||!config.selfService)return null;
@@ -56,7 +63,8 @@ export async function assembleAgencyOperations(config,lane,{now=Date.now}={}){
      const session=await resolveSession(request);
      if(session.state!=='verified')return session;
      const organization=spec.match.exec(new URL(request.url).pathname)?.[1];
-     if(!organization)return session; // the factory invite RPC verifies the source agency itself
+     // These routes already lock and verify the exact agency administrator in their RPC.
+     if(!organization||name==='worker')return session;
      const scope=await access.get(session,organization);
      return scope?.organization.kind==='agency'&&scope.membership.role==='agency_admin'&&await session.isActive()?session:{state:'anonymous'};
     }})];
