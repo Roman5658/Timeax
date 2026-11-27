@@ -4,7 +4,7 @@
 .worker-hosted-calendar .worker-hosted-calendar__mark--shift{background:#0b8b62}
 .worker-hosted-calendar .worker-hosted-calendar__mark--absence{background:#a75209}
 .worker-hosted-calendar__day{flex-direction:column;align-items:center;justify-content:space-between;gap:.25rem;min-height:44px}
-.worker-hosted-calendar__detail{margin-block:.75rem;border-top:1px solid var(--line)}
+.worker-hosted-calendar__detail{margin:0 0 .75rem;padding:0;border:0}
 .worker-hosted-calendar__detail h3,.worker-hosted-calendar__detail p{margin-block:.65rem}
 
 .worker-hosted-calendar__mark--planned{border:1.5px solid currentColor;background:transparent}
