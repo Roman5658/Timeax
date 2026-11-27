@@ -12,6 +12,7 @@ import {createPayslipsHandler} from './payslips.server.mjs';
 import {createMemberNamesHandler} from './member-names.server.mjs';
 import {createAccountHandler} from './worker-account.server.mjs';
 import {createFactoryRegistrationHandler} from './factory-registration.server.mjs';
+import {createPayNoticeHandler,createPayNoticeStore,payNoticeRoute,PAY_NOTICE_SIGNATURE,PAY_NOTICE_ROLE,PAY_NOTICE_SQL} from './pay-notices.server.mjs';
 import {createPayEstimateHandler,createPayEstimateStore,payEstimateRoute,PAY_ESTIMATE_SIGNATURE,PAY_ESTIMATE_ROLE,PAY_ESTIMATE_SQL} from './pay-estimates.server.mjs';
 import {createInboxHandler,createInboxStore,inboxRoute,INBOX_SIGNATURE,INBOX_ROLE,INBOX_SQL} from './inbox.server.mjs';
 import {createTeamHandler,createTeamStore,TEAM_SQL,TEAM_FUNCTION} from './team-workflow.server.mjs';
@@ -19,6 +20,7 @@ import {createTeamHandler,createTeamStore,TEAM_SQL,TEAM_FUNCTION} from './team-w
 const id='[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}';
 const orgRoute=(prefix,actions)=>new RegExp('^/api/'+prefix+'/('+id+')/(?:'+actions+')$');
 const specs={
+ payNotices:{handler:createPayNoticeHandler,match:payNoticeRoute},
  estimates:{handler:createPayEstimateHandler,match:payEstimateRoute},
  inbox:{handler:createInboxHandler,match:inboxRoute},
  profile:{handler:createAgencyProfileHandler,match:new RegExp('^/api/agency-profile/('+id+')(?:/worksite/'+id+')?/(?:context|settings)$')},
@@ -46,7 +48,8 @@ function workerWorkspaceAction(name,pathname,method){
   ||['factoryTimecards','names'].includes(name)&&pathname.endsWith('/context')
   ||name==='payroll'&&new RegExp('/(?:context|read/'+id+')$').test(pathname);
 }
-const lanes=[{id:'estimates',role:PAY_ESTIMATE_ROLE,functions:[{signature:PAY_ESTIMATE_SIGNATURE,owner:'postgres'}],statements:[PAY_ESTIMATE_SQL],create:createPayEstimateStore},
+const lanes=[{id:'payNotices',role:PAY_NOTICE_ROLE,functions:[{signature:PAY_NOTICE_SIGNATURE,owner:'postgres'}],statements:[PAY_NOTICE_SQL],create:createPayNoticeStore},
+ {id:'estimates',role:PAY_ESTIMATE_ROLE,functions:[{signature:PAY_ESTIMATE_SIGNATURE,owner:'postgres'}],statements:[PAY_ESTIMATE_SQL],create:createPayEstimateStore},
  {id:'inbox',role:INBOX_ROLE,functions:[{signature:INBOX_SIGNATURE,owner:'postgres'}],statements:[INBOX_SQL],create:createInboxStore},...INTEGRATED_LANES.filter(l=>l.id!=='factory'),
  {id:'profile',role:'timeax_agency_profile_login',functions:[{signature:AGENCY_PROFILE_SIGNATURE,owner:'postgres'}],statements:[AGENCY_PROFILE_SQL],create:createAgencyProfileStore},
  {id:'team',role:'timeax_team_login',functions:[TEAM_FUNCTION],statements:[TEAM_SQL],create:createTeamStore}];
@@ -74,6 +77,7 @@ export function managedAgencyOperations(env){
    v.team={...v.team,hashes:{...v.team.hashes,[TEAM_FUNCTION.signature]:teamFingerprint}};
   if(key(env.TIMEAX_INBOX_DB)&&sha(env.TIMEAX_INBOX_RPC_SHA256))v.inbox={password:env.TIMEAX_INBOX_DB,hashes:{[INBOX_SIGNATURE]:env.TIMEAX_INBOX_RPC_SHA256}};
   if(key(env.TIMEAX_PAY_ESTIMATE_DB)&&sha(env.TIMEAX_PAY_ESTIMATE_RPC_SHA256))v.estimates={password:env.TIMEAX_PAY_ESTIMATE_DB,hashes:{[PAY_ESTIMATE_SIGNATURE]:env.TIMEAX_PAY_ESTIMATE_RPC_SHA256}};
+  if(key(env.TIMEAX_PAY_NOTICE_DB)&&sha(env.TIMEAX_PAY_NOTICE_RPC_SHA256))v.payNotices={password:env.TIMEAX_PAY_NOTICE_DB,hashes:{[PAY_NOTICE_SIGNATURE]:env.TIMEAX_PAY_NOTICE_RPC_SHA256}};
   return v;
  }catch{return null}
 }
@@ -136,6 +140,8 @@ export async function assembleAgencyOperations(config,lane,{now=Date.now,sharedW
      if(!organization||name==='worker')return session;
      const scope=await access.get(session,organization);
      const action=pathname.slice(pathname.lastIndexOf('/')+1);
+     if(name==='payNotices')return scope?.organization.kind==='agency'&&scope.membership.role==='worker'&&await workerTerms?.accepted(session)===true&&await session.isActive()?
+      {...session,workspaceRole:'worker',workspaceMembershipId:scope.membership.id}:{state:'anonymous'};
      if(name==='estimates')return scope?.organization.kind==='agency'&&scope.membership.role==='agency_admin'&&await session.isActive()?session:{state:'anonymous'};
      if(name==='inbox'){
       const role=scope?.membership.role;

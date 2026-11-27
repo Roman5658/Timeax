@@ -34,7 +34,7 @@ export function useInbox(org:string,membershipId:string,enabled:boolean){
   const c=new AbortController(),version=updated.current;
   void request(org,undefined,c.signal).then((v:InboxData)=>{
    if(v?.membershipId!==membershipId||!v.states||Array.isArray(v.states)||typeof v.states!=='object'||
-    Object.entries(v.states).some(([k,s])=>!bellTarget('#'+k)||k.startsWith('earlier-shift-')||s!=='archived'&&s!=='deleted')||
+    Object.entries(v.states).some(([k,s])=>!bellTarget('#'+k)||(k.startsWith('earlier-shift-')||k.startsWith('payslip-'))||s!=='archived'&&s!=='deleted')||
     !Array.isArray(v.joins)||!v.joins.every(e=>uuid(e?.id)&&date(e.joinedAt)&&nullable(e.name)&&nullable(e.reference)&&typeof e.read==='boolean')||
     !Array.isArray(v.requests)||!v.requests.every(e=>uuid(e?.id)&&uuid(e.workerId)&&day(e.day)&&date(e.submittedAt)&&typeof e.site==='string'&&['pending','approved','rejected'].includes(e.state)&&/^\d{2}:\d{2}$/.test(e.startTime)&&/^\d{2}:\d{2}$/.test(e.endTime))||
     !Array.isArray(v.backdated)||!v.backdated.every(e=>uuid(e?.id)&&uuid(e.workerId)&&['internal','factory'].includes(e.source)&&day(e.day)&&date(e.submittedAt)&&typeof e.read==='boolean'))throw Error();
@@ -50,7 +50,7 @@ export function useInbox(org:string,membershipId:string,enabled:boolean){
  },[enabled,refresh]);
  const current=enabled&&data?.membershipId===membershipId?data:undefined;
  async function set(anchor:string,state:Disposition){
-  if(!current||pending.current||!bellTarget('#'+anchor)||anchor.startsWith('earlier-shift-'))return;
+  if(!current||pending.current||!bellTarget('#'+anchor)||(anchor.startsWith('earlier-shift-')||anchor.startsWith('payslip-')))return;
   pending.current=true;setBusy(true);setFailure(false);updated.current++;
   try{
    const r=await request(org,{kind:anchor.slice(0,-37),id:anchor.slice(-36),state});

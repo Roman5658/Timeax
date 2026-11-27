@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {agencyPayEstimates,estimatesForRows,payEstimateScopeIsFullMonth} from '../src/hosted/agency-pay-estimate.ts';
+import {agencyPayEstimates,applyPayEstimateOverrides,payRateOverrideKey,estimatesForRows,payEstimateScopeIsFullMonth} from '../src/hosted/agency-pay-estimate.ts';
 import {buildAgencyTimecardWorkbook} from '../src/hosted/timecard-xlsx.ts';
 import {payEstimateCopy} from '../src/hosted/pay-estimate-copy.ts';
 
@@ -85,4 +85,28 @@ test('common summary and individual sheets visibly show numeric rates/basis and 
  const only=buildAgencyTimecardWorkbook(records,copy,a,estimates);
  assert.equal(only.getWorksheet(b),undefined);assert.equal(salaryRows(only.worksheets[0]).length,2);
  assert.equal(buildAgencyTimecardWorkbook(records,copy).worksheets[0].getRows(1,8).some(r=>r.getCell(1).value?.text==='Preliminary wages'),false);
+});
+test('timecard-only rate overrides recalculate exact worker/month and keep original settings unchanged',()=>{
+ const records=report([row(a,'2026-10-08',60),row(a,'2026-11-02',60),row(a,'2026-11-03',60),row(b,'2026-11-03',60)]);
+ const settings=[rate(a,'2026-10','net',1800),rate(a,'2026-11','gross',3000,[deduction('Insurance',500)]),rate(b,'2026-11','net',2500)];
+ const original=agencyPayEstimates(records,settings,'2026-11'),key=payRateOverrideKey(a,'2026-11');
+ const edited=applyPayEstimateOverrides(original,new Map([[key,{rateCents:4000,basis:'gross'}]]));
+ const november=edited.get(a).months[1];
+ assert.equal(november.override,true);
+ assert.equal(november.hourlyBaseCents,8000);assert.equal(november.netCents,7500);
+ assert.deepEqual(november.deductions,[deduction('Insurance',500)]);
+ assert.equal(edited.get(a).netCents,9300);
+ assert.equal(edited.get(b).netCents,2500);
+ assert.equal(original.get(a).months[1].netCents,5500);assert.equal(settings[1].rateCents,3000);
+ const book=buildAgencyTimecardWorkbook(records,copy,a,edited).getWorksheet(a);
+ const editedRow=book.getRows(1,book.rowCount).find(r=>r.getCell(2).value==='2026-11');
+ assert.equal(editedRow.getCell(4).value,40);assert.equal(editedRow.getCell(8).value,75);
+ assert.match(editedRow.getCell(9).value,/Rate changed for this timecard only/);
+ const net=applyPayEstimateOverrides(original,new Map([[key,{rateCents:7000,basis:'net'}]])).get(a).months[1];
+ assert.equal(net.netCents,14000);assert.deepEqual(net.deductions,[]);
+ const partial=agencyPayEstimates(records,settings);
+ const filtered=applyPayEstimateOverrides(partial,new Map([[key,{rateCents:4000,basis:'gross'}]])).get(a).months[1];
+ assert.equal(filtered.netCents,undefined);assert.equal(filtered.status,'partial-scope');assert.deepEqual(filtered.deductions,[]);
+ const invalid=applyPayEstimateOverrides(original,new Map([[key,{rateCents:-1,basis:'net'}]])).get(a).months[1];
+ assert.equal(invalid.rateCents,3000);
 });

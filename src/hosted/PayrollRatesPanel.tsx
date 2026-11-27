@@ -19,7 +19,7 @@ async function roster(c:PayContext,signal?:AbortSignal){
  }
  return {sites:payrollRateRoster(c.organizationId,c.membershipId,c.workers,setup,connected),connectedUnavailable};
 }
-export function PayrollRatesPanel({context:c,busy,label}:{context:PayContext;busy:boolean;label:(id:string)=>string}){
+export function PayrollRatesPanel({context:c,busy,label,onRatesChanged}:{context:PayContext;busy:boolean;label:(id:string)=>string;onRatesChanged?:(context:PayContext)=>void}){
  const {t}=useTranslation(),tx=(s:string,args?:Record<string,unknown>)=>t('canonicalPayslips.'+s,args??{});
  const [audience,Audience]=useState<'selected'|'production'>('selected'),[site,Site]=useState(''),[selected,Selected]=useState<string[]>([]);
  const [rate,Rate]=useState(''),[date,DateInput]=useState(()=>localDay().slice(0,7)+'-01'),[search,Search]=useState('');
@@ -60,7 +60,7 @@ export function PayrollRatesPanel({context:c,busy,label}:{context:PayContext;bus
    // Refresh the list without clearing outcomes. If it fails, the per-person responses above still stand.
    try{
     const updated=parsePayslips(await payslipsCall(org,'context'),org);
-    if(updated.role==='agency_admin'&&updated.membershipId===c.membershipId)ViewRates(updated.rates);
+    if(updated.role==='agency_admin'&&updated.membershipId===c.membershipId){ViewRates(updated.rates);onRatesChanged?.(updated)}
    }catch{}
   }catch(e){ErrorKey(e instanceof Error&&e.message==='changed'?'rosterChanged':'rateNotVerified')}
   finally{running.current=false;Pending(false)}

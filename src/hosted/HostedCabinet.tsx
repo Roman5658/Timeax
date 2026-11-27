@@ -3,6 +3,7 @@ import {WorkerPasswordPanel} from './WorkerPasswordPanel';
 import {AgencyProfile} from './AgencyProfile';
 import {AgencyNipVisibility} from './AgencyWorkerCards';
 import {PhonePushSettings} from './PhonePushSettings';
+import {payNoticeCopy,usePayNotices} from './pay-notices';
 import {useInbox} from './inbox';
 import {useBackdatedCards} from './BackdatedNoticeCard';
 import {AgencyBackdatedShifts,agencyShiftPreviews,useBackdatedShifts} from './AgencyBackdatedShifts';
@@ -112,7 +113,20 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
  const heading=menu.find(entry=>entry.section===section)?.label??(section==='templates'?'team.templates':section==='absence'?'team.absence':menu[0].label);
  const org=access.organization.id;
  const {i18n}=useTranslation();
- const inbox=useInbox(org,access.membership.id,agencyProfile?.ops.includes('inbox')===true);
+ const teamInbox=useInbox(org,access.membership.id,agencyProfile?.ops.includes('inbox')===true);
+ const payEnabled=agencyWorker&&agencyProfile?.ops.includes('payNotices')===true;
+ const pay=usePayNotices(org,access.membership.id,payEnabled);
+ const [openedPay,setOpenedPay]=useState<{org:string;membershipId:string;id:string}>();
+ const {markRead:markPayslipRead}=pay;
+ useEffect(()=>{
+  if(payEnabled&&openedPay?.org===org&&openedPay.membershipId===access.membership.id)void markPayslipRead(openedPay.id);
+ },[openedPay,payEnabled,org,access.membership.id,markPayslipRead]);
+ const pc=payNoticeCopy(i18n.resolvedLanguage);
+ const payBell=pay.rows.map(n=>({anchor:'payslip-'+n.id,title:pc.title,summary:pc.summary,at:n.at,unread:!n.read}));
+ const inbox={...teamInbox,busy:teamInbox.busy||pay.busy,failure:teamInbox.failure||pay.error,
+  refresh:()=>{teamInbox.refresh();pay.refresh()},
+  set:(anchor:string,state:Parameters<typeof teamInbox.set>[1])=>anchor.startsWith('payslip-')?pay.setState(anchor.slice(8),state):teamInbox.set(anchor,state),
+  state:(anchor:string)=>anchor.startsWith('payslip-')?pay.rows.find(n=>'payslip-'+n.id===anchor)?.state??'active':teamInbox.state(anchor)};
  const joins=useAgencyJoinNotifications(publicAgency&&uses('workerProvisioning')?org:undefined,!inbox.data);
  const backdated=useBackdatedShifts(publicAgency&&uses('timecards')&&uses('team')?org:undefined,!inbox.data);
  const joinEntries=inbox.data?.joins??joins.value?.entries??[];
@@ -123,9 +137,11 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
  const needsReview=inbox.data?requests.filter(e=>e.state==='pending').length:backdated.feed?.pending??0;
  const shiftFeed={notices:shiftEntries,requests,pending:needsReview,unread:backdated.feed?.unread??0};
  const bellEntries=[...agencyJoinPreviews({entries:joinEntries,unread:0},i18n.resolvedLanguage),...agencyShiftPreviews(shiftFeed,i18n.resolvedLanguage)];
- const extraUnread=needsReview+(inbox.data?bellEntries.filter(p=>!p.anchor.startsWith('earlier-shift-')&&p.unread&&inbox.state(p.anchor)==='active').length:(joins.value?.unread??0)+(backdated.feed?.unread??0));
+ const extraUnread=pay.rows.filter(n=>!n.read&&n.state==='active').length+needsReview+(inbox.data?bellEntries.filter(p=>!p.anchor.startsWith('earlier-shift-')&&p.unread&&inbox.state(p.anchor)==='active').length:(joins.value?.unread??0)+(backdated.feed?.unread??0));
  const externalNotices=section==='messages'?[...joinEntries.map(e=>({anchor:'agency-join-'+e.id,at:e.joinedAt,card:()=>joinCards.card(e)})),
-  ...shiftEntries.map(e=>({anchor:'backdated-'+e.source+'-'+e.id,at:e.submittedAt,card:()=>shiftCards.card(e)}))]:[];
+  ...shiftEntries.map(e=>({anchor:'backdated-'+e.source+'-'+e.id,at:e.submittedAt,card:()=>shiftCards.card(e)})),
+  ...pay.rows.map(n=>({anchor:'payslip-'+n.id,at:n.at,card:()=> <><h3>{pc.title}</h3><p>{pc.summary}</p>
+    <Link to={route('payslips')+'#payslip-'+n.id}>{pc.open}</Link></>}))]:[];
  const [agencySearch]=useSearchParams();
  const unifiedHours=publicAgency&&(section==='timecards'||section==='factory-timecards');
  const directory=publicAgency&&section==='workers';
@@ -160,7 +176,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
      <button className="portal-mobile-menu" type="button" aria-controls="hosted-cabinet-menu" aria-label={t('common.openMenu')} aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}><Menu size={19}/></button>
      <div className="portal-breadcrumb"><span className="breadcrumb-dot"/>{agencyName||home}</div>
     </div>
-    <div className="portal-top-actions">{uses('team')&&<TeamBell organizationId={org} inboxState={inbox} additionalUnread={extraUnread} additional={bellEntries}/>}
+    <div className="portal-top-actions">{uses('team')&&<TeamBell organizationId={org} inboxState={inbox} additionalUnread={extraUnread} additional={[...payBell,...bellEntries]}/>}
     <LanguageSwitcher compact/><ThemeToggle/></div>
    </header>
    <main className="portal-content">
@@ -190,7 +206,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
     {agencyWorker&&section==='timecards'&&<WorkerShiftHistory key={org+access.membership.id} organizationId={org} membershipId={access.membership.id}/>}
     {!worker&&!unifiedHours&&uses('timecards')&&section==='timecards'&&<TimecardsPanel organizationId={org} includeFactoryArchive={uses('factoryTimecards')}/>}
     {!production&&!unifiedHours&&uses('factoryTimecards')&&section==='factory-timecards'&&<FactoryTimecardsPanel organizationId={org} readOnlyWorker={worker}/>}
-    {uses('payroll')&&section==='payslips'&&<PayslipsPanel organizationId={org} showTitle={false}/>}
+    {uses('payroll')&&section==='payslips'&&<PayslipsPanel organizationId={org} showTitle={false} onPublicationOpened={agencyWorker?id=>setOpenedPay({org,membershipId:access.membership.id,id}):undefined}/>}
    </main>
   </div>
 

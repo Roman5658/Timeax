@@ -65,7 +65,7 @@ function writeWageRows(sheet:ExcelJS.Worksheet,items:readonly PayEstimate[],name
   for(const m of item.months){
    const entry=sheet.addRow([name,m.month,duration(m.paidMinutes),amount(m.rateCents),
     m.basis==='gross'?amount(m.hourlyBaseCents):'—',m.basis==='net'?amount(m.hourlyBaseCents):'—',
-    m.deductions.map(d=>d.name+': '+formatMoney.format(d.cents/100)).join('; ')||'—',amount(m.netCents),labels[m.status]]);
+    m.deductions.map(d=>d.name+': '+formatMoney.format(d.cents/100)).join('; ')||'—',amount(m.netCents),m.override?labels.override+' · '+labels[m.status]:labels[m.status]]);
    fill(entry,xp.shift,9);formatted(entry,[3],'[h]:mm');formatted(entry,[5,6,8],currency);
    if(m.rateCents!==undefined)entry.getCell(4).numFmt='#,##0.00 "PLN/h '+(m.basis==='gross'?'brutto':'netto')+'"';
   }

@@ -1,10 +1,11 @@
 import {useTranslation} from 'react-i18next';
 import {minutesLabel} from './timecards';
-import {estimatesForRows,type PayEstimates} from './agency-pay-estimate';
+import {estimatesForRows,type PayEstimates,type TimecardRateOverride} from './agency-pay-estimate';
 import {timecardWorkerGroups,type LiveTimekeepingReport} from './timecard-document';
 import {payEstimateCopy} from './pay-estimate-copy';
+import {TimecardRateEditor} from './TimecardRateEditor';
 
-export function TimecardPayEstimates({report,estimates,membershipId}:{report:LiveTimekeepingReport;estimates:PayEstimates;membershipId?:string}){
+export function TimecardPayEstimates({report,estimates,membershipId,onRateChange,actionBusy=false}:{report:LiveTimekeepingReport;estimates:PayEstimates;membershipId?:string;onRateChange?:(workerId:string,month:string,rate:TimecardRateOverride|undefined)=>void;actionBusy?:boolean}){
  const {t,i18n}=useTranslation(),locale=i18n.resolvedLanguage||'pl',c=payEstimateCopy(locale);
  const money=new Intl.NumberFormat(locale,{style:'currency',currency:'PLN'});
  const amount=(cents:number|undefined)=>cents===undefined?'—':money.format(cents/100);
@@ -27,6 +28,7 @@ export function TimecardPayEstimates({report,estimates,membershipId}:{report:Liv
     </dl>
     {!!m.deductions.length&&<p>{c.deductions}: {m.deductions.map(d=>d.name+': '+amount(d.cents)).join('; ')}</p>}
     <p>{c[m.status]}</p>
+    {onRateChange&&<TimecardRateEditor workerId={person.workerId} value={m} disabled={actionBusy} onChange={rate=>onRateChange(person.workerId,m.month,rate)}/>}
    </div>)}
   </details>)}
  </section>;

@@ -3,9 +3,12 @@ import type {ReportRow} from './timecard-document.ts';
 
 export type EstimateStatus='direct-net'|'gross-with-deductions'|'partial-scope'|'missing-deductions'|'missing-rate'|'deductions-exceed-gross';
 export type PayEstimateMonth={month:string;paidMinutes:number;basis?:'gross'|'net';rateCents?:number;hourlyBaseCents?:number;netCents?:number;
- deductions:PayEstimateSetting['deductions'];status:EstimateStatus};
+ deductions:PayEstimateSetting['deductions'];status:EstimateStatus;deductionsEligible:boolean;override?:true};
 export type PayEstimate={workerId:string;months:PayEstimateMonth[];netCents?:number};
 export type PayEstimates=ReadonlyMap<string,PayEstimate>;
+export type TimecardRateOverride={basis:PayEstimateSetting['basis'];rateCents:number};
+export type TimecardRateOverrides=ReadonlyMap<string,TimecardRateOverride>;
+export const payRateOverrideKey=(workerId:string,month:string)=>workerId+'|'+month;
 const monthPattern=/^\d{4}-(0[1-9]|1[0-2])$/;
 
 export function payEstimateScopeIsFullMonth({kind,month,site,days,search}:{
@@ -17,6 +20,37 @@ function hourlyCents(paidMinutes:number,rateCents:number):number|undefined{
  if(!Number.isSafeInteger(paidMinutes)||paidMinutes<0||!Number.isSafeInteger(rateCents)||rateCents<0)return;
  const cents=Number((BigInt(paidMinutes)*BigInt(rateCents)+30n)/60n);
  return Number.isSafeInteger(cents)?cents:undefined;
+}
+function estimateMonth(month:string,paidMinutes:number,deductionsEligible:boolean,rate?:TimecardRateOverride,deductions:PayEstimateSetting['deductions']=[]):PayEstimateMonth{
+ const base={month,paidMinutes,deductionsEligible,deductions:[]};
+ if(!rate)return {...base,status:'missing-rate'};
+ const hourlyBaseCents=hourlyCents(paidMinutes,rate.rateCents);
+ if(hourlyBaseCents===undefined)return {...base,status:'missing-rate'};
+ const rated={...base,basis:rate.basis,rateCents:rate.rateCents,hourlyBaseCents};
+ if(rate.basis==='net')return {...rated,status:'direct-net',netCents:hourlyBaseCents};
+ if(!deductionsEligible)return {...rated,status:'partial-scope'};
+ if(!deductions.length)return {...rated,status:'missing-deductions'};
+ const deductionTotal=deductions.reduce((sum,d)=>sum+d.cents,0);
+ if(!Number.isSafeInteger(deductionTotal)||deductionTotal<0||deductionTotal>hourlyBaseCents)return {...rated,status:'deductions-exceed-gross',deductions};
+ return {...rated,status:'gross-with-deductions',deductions,netCents:hourlyBaseCents-deductionTotal};
+}
+function combineMonths(workerId:string,months:PayEstimateMonth[]):PayEstimate{
+ const net=months.every(m=>m.netCents!==undefined)?months.reduce((sum,m)=>sum+m.netCents!,0):undefined;
+ return {workerId,months,netCents:net!==undefined&&Number.isSafeInteger(net)?net:undefined};
+}
+export function applyPayEstimateOverrides(estimates:PayEstimates,overrides:TimecardRateOverrides):PayEstimates{
+ if(!overrides.size)return estimates;
+ const result=new Map<string,PayEstimate>();
+ for(const [workerId,estimate] of estimates){
+  const months=estimate.months.map((m):PayEstimateMonth=>{
+   const override=overrides.get(payRateOverrideKey(workerId,m.month));
+   if(!override||!Number.isSafeInteger(override.rateCents)||override.rateCents<1||override.rateCents>1_000_000||
+    override.basis!=='gross'&&override.basis!=='net')return m;
+   return {...estimateMonth(m.month,m.paidMinutes,m.deductionsEligible,override,m.basis==='gross'?m.deductions:[]),override:true};
+  });
+  result.set(workerId,combineMonths(workerId,months));
+ }
+ return result;
 }
 export function agencyPayEstimates(report:{rows:readonly Pick<ReportRow,'membershipId'|'data'>[]},settings:readonly PayEstimateSetting[],fullMonth?:string):PayEstimates{
  const byWorker=new Map<string,PayEstimateSetting[]>(),paid=new Map<string,Map<string,number>>();
@@ -36,20 +70,9 @@ export function agencyPayEstimates(report:{rows:readonly Pick<ReportRow,'members
  for(const [workerId,sums] of paid){
   const months=[...sums].sort((a,b)=>a[0].localeCompare(b[0])).map(([month,paidMinutes]):PayEstimateMonth=>{
    const setting=byWorker.get(workerId)?.find(s=>s.effectiveMonth<=month);
-   const base={month,paidMinutes,deductions:[]};
-   if(!setting)return {...base,status:'missing-rate'};
-   const hourlyBaseCents=hourlyCents(paidMinutes,setting.rateCents);
-   if(hourlyBaseCents===undefined)return {...base,status:'missing-rate'};
-   const rated={...base,basis:setting.basis,rateCents:setting.rateCents,hourlyBaseCents};
-   if(setting.basis==='net')return {...rated,status:'direct-net',netCents:hourlyBaseCents};
-   if(month!==fullMonth)return {...rated,status:'partial-scope'};
-   if(!setting.deductions.length)return {...rated,status:'missing-deductions'};
-   const deductionTotal=setting.deductions.reduce((sum,d)=>sum+d.cents,0),deductions=setting.deductions;
-   if(!Number.isSafeInteger(deductionTotal)||deductionTotal<0||deductionTotal>hourlyBaseCents)return {...rated,status:'deductions-exceed-gross',deductions};
-   return {...rated,status:'gross-with-deductions',deductions,netCents:hourlyBaseCents-deductionTotal};
+   return estimateMonth(month,paidMinutes,month===fullMonth,setting,setting?.deductions);
   });
-  const net=months.every(m=>m.netCents!==undefined)?months.reduce((sum,m)=>sum+m.netCents!,0):undefined;
-  results.set(workerId,{workerId,months,netCents:net!==undefined&&Number.isSafeInteger(net)?net:undefined});
+  results.set(workerId,combineMonths(workerId,months));
  }
  return results;
 }

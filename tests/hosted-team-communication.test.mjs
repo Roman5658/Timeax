@@ -103,3 +103,11 @@ test('shift review groups keep pending, approved and rejected independent and ne
  assert.equal(inboxPage(groups.approved,0).rows[0].id,'21');
  assert.equal(requests[0].id,'0');
 });
+
+test('payslip notice links go to the private payslips page',async()=>{
+ const {bellTarget,noticeDestination}=await import('../src/hosted/notification-navigation.ts');
+ const id='payslip-3a9a1784-5dad-4cf7-a294-c8226cdd5973';
+ assert.equal(bellTarget('#'+id),id);
+ assert.equal(noticeDestination(id),'payslips');
+ assert.equal(bellTarget('#'+id+'/other'),undefined);
+});
