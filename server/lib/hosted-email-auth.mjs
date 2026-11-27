@@ -58,7 +58,7 @@ export async function assembleHostedEmailAuth(config,{fetchImpl=globalThis.fetch
   const lane=scoped({host:config.host,ca:config.ca,role:'timeax_factory_setup_login',password,namespace:'timeax_api',
    functions:[{signature:'timeax_api.factory_setup(text,text,text,jsonb)',owner:'timeax_factory_setup_owner',sha256:functionSha}],statements:[FACTORY_SQL]});
   if(await lane.preflight().then(()=>true,()=>false))agencyProductionsFactory=resolveSession=>createFactorySetupHandler({origin:config.origin,resolveSession,
-    store:createFactorySetupStore(lane),agencyOnly:true,now});
+    store:createFactorySetupStore(lane),productionRoles:true,now});
  }
  if(config.selfService!==undefined){
   const credentials=[config.password,config.agencyOnboardingPassword,config.workspaceReadPassword];

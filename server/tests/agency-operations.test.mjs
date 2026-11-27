@@ -32,7 +32,7 @@ test('only the enabled agency-owned contexts and settings are mounted',async()=>
  const {writes,module}=fixture(),ops=await module;
  assert.deepEqual(new Set(ops.enabled),new Set(['timecards','account','team','profile']));
  const own='/api/agency-profile/'+organization+'/settings',other='/api/agency-profile/'+foreign+'/settings';
- assert.equal(ops.find('/api/timecards/'+organization+'/create'),undefined);
+ assert.equal((await ops.find('/api/timecards/'+organization+'/create')(request('/api/timecards/'+organization+'/create',{},false))).status,401);
  assert.equal(ops.find('/api/team/accept-accountant'),undefined);
  assert.equal(ops.find('/api/personal-account/delete'),undefined);
  assert.equal((await ops.find(own)(request(own,{name:'Renamed Agency'},false))).status,401);
@@ -55,7 +55,7 @@ test('unknown role and runtime lane failure cannot enable a section',async()=>{
 test('agency schedule is read-only and other team actions stay enabled',async()=>{
  const {writes,module}=fixture(),ops=await module;
  const root='/api/team/'+organization+'/';
- assert.equal(ops.find(root+'schedule'),undefined);
+ assert.equal((await ops.find(root+'schedule')(request(root+'schedule',{}))).status,401);
  for(const action of ['update-plan','cancel','absence','save-template','delete-template'])
   assert.equal((await ops.find(root+action)(request(root+action,{}))).status,401);
  assert.equal((await ops.find(root+'context')(request(root+'context'))).status,200);

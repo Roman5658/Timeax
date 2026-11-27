@@ -1,14 +1,14 @@
 import type {WorkerLabel} from './member-label';
 import {workerLabelText} from './member-label';
 import {isWorkerLocal} from './worker-enrollment';
-export type ShiftData={localDate:string;startTime:string;endTime:string;startAt:string;endAt:string;grossMinutes:number;paidMinutes:number;breakMinutes:number;breakStatus:'taken'|'not-taken';breakTreatment:'paid'|'unpaid';comment:string;timeZone:'Europe/Warsaw'};
+export type ShiftData={localDate:string;startTime:string;endTime:string;startAt:string;endAt:string;grossMinutes:number;paidMinutes:number;breakMinutes:number;breakStatus:'taken'|'not-taken'|'not-reported';breakTreatment:'paid'|'unpaid';comment:string;timeZone:'Europe/Warsaw'};
 export type TimecardShift={id:string;worksiteId:string;worksiteName:string;membershipId:string;revision:number;state:'recorded'|'archived';data:ShiftData};
-export type TimecardContext={organizationId:string;role:'worker'|'agency_admin';membershipId:string;timeZone:'Europe/Warsaw';worksites:{id:string;name:string}[];shifts:TimecardShift[];archive:{id:string;worksiteId:string;worksiteName:string;dateFrom:string;dateTo:string;paidMinutes:number;createdAt:string}[]};
+export type TimecardContext={organizationId:string;role:'worker'|'agency_admin';membershipId:string;timeZone:'Europe/Warsaw';worksites:{id:string;name:string;manualEntry?:boolean}[];shifts:TimecardShift[];archive:{id:string;worksiteId:string;worksiteName:string;dateFrom:string;dateTo:string;paidMinutes:number;createdAt:string}[]};
 export type Snapshot={version:1;source:'internal-agency';status:'archived';organizationId:string;worksiteId:string;worksiteName:string;dateFrom:string;dateTo:string;timeZone:'Europe/Warsaw';paidMinutes:number;grossMinutes:number;rows:{id:string;membershipId:string;revision:number;data:ShiftData;workerLabel?:WorkerLabel}[]};
 export async function timecardCall(org:string,action:string,body?:unknown,signal?:AbortSignal):Promise<unknown>{
  if(location.protocol!=='https:'&&!isWorkerLocal())throw Error('unavailable');
  const r=await fetch('/api/timecards/'+org+'/'+action,{method:body===undefined?'GET':'POST',credentials:'same-origin',cache:'no-store',redirect:'error',signal,headers:body===undefined?{Accept:'application/json'}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
- if(!r.ok){const v=await r.json().catch(()=>({}));throw Error(r.status===401?'login':r.status===403?'denied':['invalid','conflict','period-closed'].includes(v.error)?v.error:'uncertain')}
+ if(!r.ok){const v=await r.json().catch(()=>({}));throw Error(r.status===401?'login':r.status===403?'denied':['invalid','conflict','period-closed','assignment-required'].includes(v.error)?v.error:'uncertain')}
  if(r.headers.get('content-type')?.split(';')[0]!=='application/json')throw Error('unavailable');return r.json();
 }
 const id=(x:unknown)=>typeof x==='string'&&/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(x);
@@ -16,7 +16,7 @@ const dataValid=(d:ShiftData)=>d&&d.timeZone==='Europe/Warsaw'&&typeof d.localDa
 export function parseTimecards(v:unknown,org:string):TimecardContext{
  const c=v as TimecardContext;
  if(!c||c.organizationId!==org||!id(c.membershipId)||!['worker','agency_admin'].includes(c.role)||c.timeZone!=='Europe/Warsaw'||!Array.isArray(c.worksites)||!Array.isArray(c.shifts)||!Array.isArray(c.archive))throw Error('unavailable');
- for(const w of c.worksites)if(!id(w.id)||typeof w.name!=='string')throw Error('unavailable');
+ for(const w of c.worksites)if(!id(w.id)||typeof w.name!=='string'||w.manualEntry!==undefined&&typeof w.manualEntry!=='boolean')throw Error('unavailable');
  for(const s of c.shifts)if(!id(s.id)||!id(s.membershipId)||!id(s.worksiteId)||!Number.isInteger(s.revision)||!['recorded','archived'].includes(s.state)||!dataValid(s.data))throw Error('unavailable');
  for(const a of c.archive)if(!id(a.id)||typeof a.dateFrom!=='string'||typeof a.dateTo!=='string')throw Error('unavailable');
  if(c.role==='worker'&&(c.archive.length||c.shifts.some(s=>s.membershipId!==c.membershipId)))throw Error('unavailable');

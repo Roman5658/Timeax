@@ -9,6 +9,7 @@ export function RightDrawer({
   titleId,
   onClose,
   hasUnsavedChanges = false,
+  busy = false,
   children,
 }: {
   eyebrow?: ReactNode;
@@ -16,7 +17,8 @@ export function RightDrawer({
   titleId: string;
   onClose: () => void;
   hasUnsavedChanges?: boolean;
-  children: ReactNode;
+  busy?: boolean;
+  children: ReactNode | ((requestClose: () => void) => ReactNode);
 }) {
   const { t } = useTranslation();
   const dialogRef = useRef<HTMLElement>(null);
@@ -39,6 +41,7 @@ export function RightDrawer({
   }, [confirmClose]);
   const closeRef = useRef<() => void>(() => undefined);
   function close() {
+    if (busy) return;
     if (confirmClose) { setConfirmClose(false); return; }
     if (hasUnsavedChanges) { resumeFocusRef.current = document.activeElement as HTMLElement | null; setConfirmClose(true); return; }
     finishClose();
@@ -77,7 +80,7 @@ export function RightDrawer({
 
   return createPortal(<div className={`modal-backdrop right-drawer-backdrop${closing ? " is-closing" : ""}`} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
     <aside ref={dialogRef} tabIndex={-1} className="dashboard-panel right-drawer" role="dialog" aria-modal="true" aria-labelledby={titleId}>
-      <header className="panel-heading right-drawer-heading"><div>{eyebrow && <span className="eyebrow">{eyebrow}</span>}<h2 id={titleId}>{title}</h2></div><button className="icon-button" type="button" aria-label={t("common.close")} onClick={close}><X size={16} /></button></header>
+      <header className="panel-heading right-drawer-heading"><div>{eyebrow && <span className="eyebrow">{eyebrow}</span>}<h2 id={titleId}>{title}</h2></div><button className="icon-button" type="button" aria-label={t("common.close")} disabled={busy} onClick={close}><X size={16} /></button></header>
       <div className="right-drawer-content">
         {confirmClose && <section className="notice-box" aria-label={t("workflow.drawer.unsavedChanges")}>
           <p>{t("workflow.drawer.unsavedChanges")}</p><div className="form-actions">
@@ -85,7 +88,7 @@ export function RightDrawer({
             <button className="button button--outline" type="button" onClick={finishClose}>{t("workflow.drawer.discardAndClose")}</button>
           </div>
         </section>}
-        <div ref={contentRef} hidden={confirmClose}>{children}</div>
+        <div ref={contentRef} hidden={confirmClose}>{typeof children === "function" ? children(close) : children}</div>
       </div>
     </aside>
   </div>, document.body);

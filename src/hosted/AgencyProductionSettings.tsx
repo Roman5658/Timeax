@@ -4,12 +4,15 @@ import {getProductionCopy,getTimePlanCopy,plannedModes,type PlannedTimeMode} fro
 
 type Fields={name:string;address:string;description:string};
 type SitePreferences=Fields&{organizationId:string;worksiteId:string;connected:boolean;plannedTimeMode:PlannedTimeMode|null};
+const internalEntryCopy={ru:'Ручной режим разрешает назначенным работникам записывать свои смены. Во всех остальных режимах ручной ввод закрыт.',pl:'Tryb ręczny pozwala przypisanym pracownikom zapisywać własne zmiany. W pozostałych trybach nie można wpisywać zmian ręcznie.',uk:'Ручний режим дозволяє призначеним працівникам записувати свої зміни. В інших режимах ручне введення вимкнено.',en:'Manual mode lets assigned workers record their own shifts. Other modes disable manual entry.'};
 export function AgencyProductionSettings({organizationId,worksiteId,connected,form,suspended,onSaved,onBusy}:{
  organizationId:string;worksiteId:string;connected:boolean;form:boolean;suspended?:boolean;
  onSaved:(name:string)=>void;onBusy:(busy:boolean)=>void;
 }){
  const {t,i18n}=useTranslation(),copy=getProductionCopy(i18n.resolvedLanguage);
  const modeCopy=getTimePlanCopy(i18n.resolvedLanguage),modeId=useId();
+ const language=(i18n.resolvedLanguage??'en').split('-')[0] as keyof typeof internalEntryCopy;
+ const modeHint=connected?modeCopy.lead:(internalEntryCopy[language]??internalEntryCopy.en);
  const [mode,setMode]=useState<PlannedTimeMode|null>(null),[modeStatus,setModeStatus]=useState('');
  const [settings,setSettings]=useState<SitePreferences>(),[draft,setDraft]=useState<Fields>({name:'',address:'',description:''});
  const [status,setStatus]=useState(''),[busy,setBusy]=useState(false),[attempt,retry]=useState(0);
@@ -60,7 +63,7 @@ export function AgencyProductionSettings({organizationId,worksiteId,connected,fo
   {settings.name&&connected&&<><dt>{copy.internalAlias}</dt><dd>{settings.name}</dd></>}
   {settings.address&&<><dt>{t('workflow.production.address')}</dt><dd>{settings.address}</dd></>}
   {settings.description&&<><dt>{t('workflow.production.description')}</dt><dd className="agency-site-description">{settings.description}</dd></>}
-  {settings.plannedTimeMode&&<><dt>{modeCopy.title}</dt><dd>{modeCopy[settings.plannedTimeMode]}</dd><dd>{modeCopy.lead}</dd></>}
+  {settings.plannedTimeMode&&<><dt>{modeCopy.title}</dt><dd>{modeCopy[settings.plannedTimeMode]}</dd><dd>{modeHint}</dd></>}
  </dl>:null;
  return <><form className="auth-form notice-box" onSubmit={e=>{e.preventDefault();void save()}} aria-busy={busy}>
   {connected&&<p className="muted-copy">{copy.connectedSettingsHint}</p>}
@@ -73,7 +76,7 @@ export function AgencyProductionSettings({organizationId,worksiteId,connected,fo
  <form className="auth-form notice-box" aria-busy={busy} onSubmit={e=>{e.preventDefault();void savePlan()}}>
   <fieldset disabled={busy||suspended} aria-describedby={modeId+'-hint'}>
    <legend>{modeCopy.title}</legend>
-   <p id={modeId+'-hint'} className="muted-copy">{modeCopy.lead}{connected&&<> {modeCopy.tenant}</>}</p>
+   <p id={modeId+'-hint'} className="muted-copy">{modeHint}{connected&&<> {modeCopy.tenant}</>}</p>
    <div className="permission-checks">
     {plannedModes.map(option=><label className="checkbox-field" key={option}>
      <input type="radio" name={modeId} value={option} checked={option===mode} onChange={()=>{setMode(option);setModeStatus('')}}/>

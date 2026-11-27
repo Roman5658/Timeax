@@ -13,7 +13,7 @@ const root='/api/team/'+org+'/';
 const absence={operationId:op,siteId:site,payload:{dateFrom:'2026-11-27',dateTo:'2026-11-27'}};
 const template={operationId:op,id:null,revision:null,name:'Morning',data:{startTime:'06:00',endTime:'14:00',breakMinutes:15,breakTreatment:'unpaid'}};
 function req(path,body,from=origin){return new Request(origin+path,{method:body?'POST':'GET',headers:{origin:from,cookie:'identity=fixture',...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});}
-async function setup({accepted=true,role='worker',misproject=false}={}){
+async function setup({accepted=true,role='worker',kind='agency',misproject=false,manualEntry=true,worksites=[{id:site,name:'Site'}]}={}){
  const calls=[];
  const configs=Object.fromEntries(INTEGRATED_LANES.filter(l=>['worker','timecards','factoryTimecards','names','payroll'].includes(l.id)).map((v,i)=>[v.id,{
   password:String(i).repeat(43),hashes:Object.fromEntries(v.functions.map(fn=>[fn.signature,'a'.repeat(64)]))
@@ -22,9 +22,12 @@ async function setup({accepted=true,role='worker',misproject=false}={}){
   team:{password:'t'.repeat(43),hashes:{'timeax_api.team_workflow(text,text,text,jsonb,jsonb)':'a'.repeat(64)},inviteKey:'i'.repeat(43)},
   workerTerms:{password:'z'.repeat(43),sha:'a'.repeat(64)}}};
  const bind=await assembleAgencyOperations(config,({role:dbRole})=>({async preflight(){},async query(_sql,args){
-  if(dbRole==='timeax_workspace_read_login')return {rows:args[2]===org?[{membership_id:member,organization_id:org,organization_kind:'agency',role,worksites:[]}]:[]};
+  if(dbRole==='timeax_workspace_read_login')return {rows:args[2]===org?[{membership_id:member,organization_id:org,organization_kind:kind,role,worksites}]:[]};
   if(dbRole===WORKER_TERMS_ROLE)return {rows:[{value:{accepted,version:WORKER_TERMS_VERSION,documentSha256:WORKER_TERMS_SHA256,acceptedAt:accepted?'2026-11-27T12:00:00Z':null}}]};
   const action=args[2],input=JSON.parse(args[3]);calls.push({dbRole,actor:args.slice(0,2),action,input});
+  if(dbRole==='timeax_timecards_login'&&action==='context')return {rows:[{value:{organizationId:org,membershipId:member,role,worksites:[{id:site,manualEntry}]}}]};
+  if(dbRole==='timeax_timecards_login'&&action==='create')return {rows:[{value:{id,revision:1,saved:true}}]};
+  if(dbRole==='timeax_factory_timecards_login'&&action==='create')return {rows:[{value:{id,revision:1,state:'needs-review'}}]};
   if(dbRole==='timeax_member_names_login')return {rows:[{value:{organizationId:org,canEdit:false,workers:[{organizationId:org,membershipId:misproject?foreign:member}]}}]};
   if(dbRole==='timeax_payroll_login'){
    const publication={id,document:{source:{agencyId:org,workerKey:misproject?foreign:member}}};
@@ -89,16 +92,54 @@ test('the approved worker read paths never disclose a misprojected label, paysli
  assert.equal((await good.dispatch('/api/member-names/'+foreign+'/context')).status,401);
  assert.equal((await good.dispatch('/api/payslips/'+foreign+'/read/'+id)).status,401);
 });
-test('worker factory entry only dispatches for the exact membership, no corrections or agency writes',async()=>{
+test('worker entry gets its site and membership from the session scope, not the submitted form',async()=>{
  const worker=await setup(),agency=await setup({role:'agency_admin'});
  const route='/api/factory-timecards/'+org+'/';
- const draft={membershipId:member,worksiteId:site,operationId:op,localDate:'2026-11-27',startTime:'06:00',endTime:'14:00',
+ const draft={operationId:op,localDate:'2026-11-27',startTime:'06:00',endTime:'14:00',
   breakStatus:'not-taken',breakMinutes:0,breakTreatment:'unpaid',comment:''};
- assert.equal((await worker.dispatch(route+'create',draft)).status,200);
+ const r=await worker.dispatch(route+'create',draft);assert.equal(r.status,200);assert.deepEqual(await r.json(),{id,revision:1,saved:true});
  assert.equal((await worker.dispatch(route+'create',{...draft,membershipId:foreign})).status,403);
+ assert.equal((await worker.dispatch(route+'create',{...draft,worksiteId:site})).status,403);
  assert.equal((await worker.dispatch(route+'propose-placement',{})).status,401);
- assert.equal(worker.ops.find(route+'correct'),undefined);
+ assert.equal((await worker.dispatch(route+'correct',draft)).status,401);
  assert.equal((await agency.dispatch(route+'create',draft)).status,401);
- assert.deepEqual(worker.calls.map(x=>[x.action,x.input.membershipId]),[['create',member]]);
+ const internal='/api/timecards/'+org+'/create';
+ assert.equal((await worker.dispatch(internal,draft)).status,200);
+ assert.equal((await worker.dispatch(internal,{...draft,worksiteId:site})).status,400);
+ assert.equal((await worker.dispatch(internal,{...draft,breakStatus:'not-reported',breakMinutes:15})).status,400);
+ for(const worksites of [[],[{id:site,name:'Site'},{id:foreign,name:'Other'}]]){
+  const blocked=await setup({worksites});assert.equal((await blocked.dispatch(route+'create',draft)).status,409);
+  assert.equal((await blocked.dispatch(internal,draft)).status,409);assert.deepEqual(blocked.calls,[]);
+ }
+ assert.deepEqual(worker.calls.map(x=>[x.action,x.input.membershipId,x.input.worksiteId]),[['create',member,site],['context',undefined,undefined],['create',undefined,site]]);
+ const oldDatabase=await setup({manualEntry:false});
+ assert.equal((await oldDatabase.dispatch(internal,draft)).status,403);
+ assert.deepEqual(oldDatabase.calls.map(x=>x.action),['context']);
  assert.deepEqual(agency.calls,[]);
+});
+
+test('the three worker break choices retain their meaning and calculate paid minutes on the server',async()=>{
+ const worker=await setup();const route='/api/timecards/'+org+'/create';
+ const base={operationId:op,localDate:'2026-11-26',startTime:'06:00',endTime:'14:00',comment:''};
+ for(const data of [
+  {breakStatus:'not-reported',breakMinutes:0,breakTreatment:'unpaid'},
+  {breakStatus:'taken',breakMinutes:30,breakTreatment:'unpaid'},
+  {breakStatus:'taken',breakMinutes:0,breakTreatment:'paid'},
+ ])assert.equal((await worker.dispatch(route,{...base,...data})).status,200);
+ assert.deepEqual(worker.calls.filter(x=>x.action==='create').map(({input:{data}})=>[data.breakStatus,data.breakTreatment,data.paidMinutes]),
+  [['not-reported','unpaid',480],['taken','unpaid',450],['taken','paid',480]]);
+});
+
+test('the hosted production workspace only mounts known role-specific operations',async()=>{
+ const manager=await setup({role:'factory_admin',kind:'factory'}),leader=await setup({role:'team_leader',kind:'factory'});
+ const hours='/api/factory-timecards/'+org+'/';
+ assert.equal((await manager.dispatch(hours+'context')).status,200);
+ assert.equal((await manager.dispatch(hours+'approve-placement',{worksiteId:site,id,operationId:op,confirmed:true})).status,200);
+ assert.equal((await manager.dispatch(hours+'send',{})).status,401);
+ assert.equal((await manager.dispatch(root+'context')).status,401);
+ assert.equal((await leader.dispatch(hours+'context')).status,200);
+ assert.equal((await leader.dispatch(hours+'set-mode',{worksiteId:site,operationId:op,revision:0,mode:'attendance'})).status,200);
+ assert.equal((await leader.dispatch(hours+'approve-placement',{})).status,401);
+ assert.equal((await leader.dispatch(root+'context')).status,200);
+ assert.equal((await leader.dispatch('/api/payslips/'+org+'/context')).status,401);
 });

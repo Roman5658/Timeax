@@ -1,8 +1,11 @@
 import {useMemberNames,MemberNamesPanel} from './MemberNames';
 import {FactoryIndependencePanel} from './FactoryIndependencePanel';
-import {useCallback,useEffect,useRef,useState} from 'react';import {Link,useLocation} from 'react-router-dom';import {useTranslation} from 'react-i18next';
-import {RegistrationFrame} from '../components/PublicExperience';import {StagingSessionPanel} from '../modules/auth/pages/StagingSessionPanel';import {PrivateAccess} from './PrivateAccess';
+import {useCallback,useEffect,useMemo,useRef,useState} from 'react';import {Link,useLocation,useNavigate} from 'react-router-dom';import {useTranslation} from 'react-i18next';
+import {LegalLink,RegistrationFrame} from '../components/PublicExperience';import {StagingSessionPanel} from '../modules/auth/pages/StagingSessionPanel';import {PrivateAccess} from './PrivateAccess';
+import {createWorkingRegistrationClient,isEmailIdentityOrigin,type AccessContext} from '../modules/auth/registration/contract/registration-client';
+import {workerRegistrationCopy} from './worker-registration-copy';
 import {isWorkerLocal} from './worker-enrollment';import {factoryCall,parseSetupContext,type SetupContext} from './factory-enrollment';
+import {resolveFactoryClaim} from './factory-claim';
 import '../styles/worker-enrollment.css';import '../styles/factory-enrollment.css';
 export function FactorySetupPanel({organizationId,revision=0,leader=false}:{organizationId?:string;revision?:number;leader?:boolean}){
  const {t}=useTranslation(),tx=(k:string)=>t('factoryEnrollment.'+k);
@@ -66,8 +69,51 @@ export function FactorySetupPanel({organizationId,revision=0,leader=false}:{orga
 export function FactoryEnrollmentPage(){
  const {t}=useTranslation(),location=useLocation(),leader=location.pathname==='/leader/access',org=location.pathname.match(/^\/workspace\/([0-9a-f-]+)\/setup$/)?.[1];
  const [revision,setRevision]=useState(0),[access,setAccess]=useState(0);
+ if(!org&&isEmailIdentityOrigin(window.location.origin))return <PublicFactoryEntry key={location.pathname} leader={leader} worker={location.pathname==='/factory/team/join'} review={location.pathname==='/factory/review'}/>;
  return <RegistrationFrame title={t(location.pathname==='/factory/review'?'factoryIndependent.reviewTitle':location.pathname==='/factory/team/join'?'factoryIndependent.ownWorkerTitle':!org&&!leader?'factoryIndependent.registerTitle':'factoryEnrollment.'+(leader?'claimTitle':'title'))} lead={t(location.pathname==='/factory/team/join'?'factoryIndependent.workerCodeHint':location.pathname==='/factory/review'?'factoryIndependent.reviewHint':!org&&!leader?'factoryIndependent.independentHint':'factoryEnrollment.lead')}>
  {!isWorkerLocal()&&<><PrivateAccess onOpened={()=>{setAccess(n=>n+1);setRevision(n=>n+1)}}/><StagingSessionPanel key={access} guided purpose={!org&&!leader&&['/register/factory','/factory/register'].includes(location.pathname)?'enrollment':'existing'} audience="workspace" onChanged={()=>setRevision(n=>n+1)}/></>}
  {!leader&&<FactoryIndependencePanel organizationId={org} revision={revision} review={location.pathname==='/factory/review'} worker={location.pathname==='/factory/team/join'}/>}
  {(org||leader)&&<FactorySetupPanel organizationId={org} revision={revision} leader={leader}/>}</RegistrationFrame>;
+}
+
+function PublicFactoryEntry({leader,worker,review}:{leader:boolean;worker:boolean;review:boolean}){
+ const {t,i18n}=useTranslation(),copy=workerRegistrationCopy(i18n.resolvedLanguage);
+ const [purpose,setPurpose]=useState<'existing'|'enrollment'>(review?'existing':'enrollment'),[scope,setScope]=useState<AccessContext>(),[revision,refresh]=useState(0),[checking,setChecking]=useState(true);
+ const key=leader?'invite':worker?'factoryWorker':'agencyInvite';
+ const [initialInvite]=useState(()=>new URLSearchParams(window.location.hash.slice(1)).get(key)??'');
+ const client=useMemo(()=>createWorkingRegistrationClient(window.location.origin,window.fetch.bind(window),purpose),[purpose]);
+ useEffect(()=>{if(new URLSearchParams(window.location.hash.slice(1)).has(key))history.replaceState(history.state,'',window.location.pathname+window.location.search)},[key]);
+ useEffect(()=>{const c=new AbortController();setChecking(true);void client.context(c.signal).then(v=>{if(!c.signal.aborted)setScope(v)}).finally(()=>{if(!c.signal.aborted)setChecking(false)});return()=>c.abort()},[client,revision]);
+ return <RegistrationFrame title={t(leader?'factoryEnrollment.claimTitle':worker?'factoryIndependent.ownWorkerTitle':review?'factoryIndependent.reviewTitle':'factoryIndependent.registerTitle')} lead={t(leader?'factoryEnrollment.codeHint':worker?'factoryIndependent.workerCodeHint':review?'factoryIndependent.reviewHint':'factoryIndependent.independentHint')}>
+  {checking?<p role="status">{t('closedHosted.checking')}</p>:scope?.state==='verified'?
+   leader?<LeaderInvitationClaim initialInvite={initialInvite}/>:<FactoryIndependencePanel initialInvite={initialInvite} revision={revision} worker={worker} review={review}/>:
+   <>
+    {!review&&<div className="form-actions">
+     <button className={'button '+(purpose==='enrollment'?'button--primary':'button--outline')} type="button" aria-pressed={purpose==='enrollment'} onClick={()=>setPurpose('enrollment')}>{copy.newAccount}</button>
+     <button className={'button '+(purpose==='existing'?'button--primary':'button--outline')} type="button" aria-pressed={purpose==='existing'} onClick={()=>setPurpose('existing')}>{copy.existingAccount}</button>
+    </div>}
+    <p className="muted-copy">{copy.otpLead} <LegalLink kind="terms" to="/terms/2026-11-27"/></p>
+    <StagingSessionPanel key={purpose} purpose={purpose} guided simple signup={purpose==='enrollment'} onChanged={()=>refresh(n=>n+1)}/>
+   </>}
+ </RegistrationFrame>;
+}
+
+function LeaderInvitationClaim({initialInvite}:{initialInvite:string}){
+ const {t}=useTranslation(),navigate=useNavigate(),pending=useRef(false),[code,setCode]=useState(initialInvite),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
+ async function claim(){
+  if(pending.current||!/^[0-9a-f]{64}$/.test(code.trim()))return;
+  pending.current=true;setBusy(true);setNotice('');
+  try{
+   const result=await factoryCall('claim-leader',{code:code.trim()});
+   const destination=resolveFactoryClaim(result,parseSetupContext(await factoryCall('context')),'team_leader');
+   if(!destination)throw Error('unavailable');
+   navigate(destination,{replace:true});
+  }catch(e){setNotice(e instanceof Error&&['login','denied'].includes(e.message)?t('workerEnrollment.'+e.message):t('factoryEnrollment.uncertain'))}
+  finally{pending.current=false;setBusy(false)}
+ }
+ return <form className="auth-form" aria-busy={busy} onSubmit={e=>{e.preventDefault();void claim()}}>
+  <label className="field-label">{t('factoryEnrollment.inviteCode')}<input autoComplete="off" maxLength={64} required value={code} disabled={busy} onChange={e=>{setCode(e.target.value);setNotice('')}}/></label>
+  <button className="button button--primary" disabled={busy||!/^[0-9a-f]{64}$/.test(code.trim())}>{t('factoryEnrollment.claim')}</button>
+  {notice&&<p role="alert">{notice}</p>}
+ </form>;
 }

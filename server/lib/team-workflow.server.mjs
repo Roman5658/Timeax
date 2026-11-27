@@ -12,6 +12,12 @@ const parseDay=v=>{
  const ms=Date.parse(v+'T00:00:00Z');
  return Number.isFinite(ms)&&new Date(ms).toISOString().slice(0,10)===v?ms:NaN;
 };
+export function validTeamMessagePayload(v){
+ if(!v||typeof v!=='object'||Array.isArray(v)||!Object.hasOwn(v,'text')||!text(v.text,2000)
+  ||Object.keys(v).some(k=>!['text','subject','replyTo'].includes(k)))return false;
+ if(Object.hasOwn(v,'subject')&&(!text(v.subject,120)||/[\p{Cc}\p{Cs}]/u.test(v.subject)))return false;
+ return !Object.hasOwn(v,'replyTo')||id(v.replyTo);
+}
 const hash=v=>createHash('sha256').update(v).digest('hex');
 const reply=(status,value)=>Response.json(value,{status,headers:{'Cache-Control':'no-store, private',Vary:'Cookie','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});
 export function createTeamHandler({origin,resolveSession,store=null,inviteKey,now=Date.now}){
@@ -47,7 +53,8 @@ export function createTeamHandler({origin,resolveSession,store=null,inviteKey,no
     ||b.revision!==undefined&&b.revision!==null&&(!Number.isSafeInteger(b.revision)||b.revision<1))return reply(400,{error:'invalid'});
    if(['message','absence','schedule'].includes(action)&&b.siteId!==null&&!id(b.siteId))return reply(400,{error:'invalid'});
    if(b.recipients&&(!Array.isArray(b.recipients)||b.recipients.length<1||b.recipients.length>100||!b.recipients.every(id)))return reply(400,{error:'invalid'});
-   if(action==='message'&&(!exact(b.payload,['text'])||!text(b.payload.text,2000)))return reply(400,{error:'invalid'});
+   if(action==='message'&&(!validTeamMessagePayload(b.payload)
+    ||Object.hasOwn(b.payload,'replyTo')&&b.recipients?.length!==1))return reply(400,{error:'invalid'});
    if(action==='absence'||action==='update-plan'&&Object.hasOwn(b.payload??{},'dateFrom')){
     if(!exact(b.payload,['dateFrom','dateTo'])||action==='absence'&&!id(b.siteId))return reply(400,{error:'invalid'});
     const days=(parseDay(b.payload.dateTo)-parseDay(b.payload.dateFrom))/86_400_000;

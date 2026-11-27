@@ -6,7 +6,7 @@ export type FactoryHoursContext={organizationId:string;membershipId:string;role:
 export async function factoryHoursCall(org:string,action:string,body?:unknown,signal?:AbortSignal):Promise<unknown>{
  if(location.protocol!=='https:'&&!isWorkerLocal())throw Error('unavailable');
  const r=await fetch('/api/factory-timecards/'+org+'/'+action,{method:body===undefined?'GET':'POST',credentials:'same-origin',cache:'no-store',redirect:'error',signal,headers:body===undefined?{Accept:'application/json'}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
- if(!r.ok){const v=await r.json().catch(()=>({}));throw Error(r.status===401?'login':r.status===403?'denied':['invalid','conflict','period-closed','unresolved'].includes(v.error)?v.error:'uncertain')}
+ if(!r.ok){const v=await r.json().catch(()=>({}));throw Error(r.status===401?'login':r.status===403?'denied':['invalid','conflict','period-closed','unresolved','assignment-required'].includes(v.error)?v.error:'uncertain')}
  if(r.headers.get('content-type')?.split(';')[0]!=='application/json')throw Error('unavailable');return r.json();
 }
 const uuid=(x:unknown)=>typeof x==='string'&&/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(x);

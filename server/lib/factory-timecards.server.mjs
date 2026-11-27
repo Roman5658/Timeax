@@ -1,5 +1,5 @@
 import {ISSUER} from './provider-adapters.mjs';
-import {normalizeTimecard} from './timecards.server.mjs';
+import {assignedWorkerDraft,normalizeTimecard} from './timecards.server.mjs';
 export const FACTORY_TIMECARDS_SQL='SELECT timeax_api.factory_timecards($1::text,$2::text,$3::text,$4::jsonb) AS value';
 export function createFactoryTimecardsStore(lane){if(typeof lane?.query!=='function')throw Error('Timecards lane required');return {async invoke(actor,action,input){const r=await lane.query(FACTORY_TIMECARDS_SQL,[actor.issuer,actor.subject,action,JSON.stringify(input)]);if(r.rows?.length!==1||!r.rows[0].value)throw Error('Invalid result');return r.rows[0].value}}}
 const id=x=>typeof x==='string'&&/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(x);
@@ -28,9 +28,14 @@ export function createFactoryTimecardsHandler({origin,resolveSession,store=null,
     for(;;){const r=await Promise.race([reader.read(),timeout]);if(r.done)break;bytes+=r.value.length;if(bytes>8192)return reply(400,{error:'invalid'});chunks.push(r.value)}
     const body=JSON.parse(new TextDecoder('utf8',{fatal:true}).decode(Buffer.concat(chunks)));
     if(['create','correct'].includes(action)){
-     if(!id(body.membershipId))return reply(400,{error:'invalid'});
-     if(s.workspaceRole==='worker'&&(action!=='create'||body.membershipId!==s.workspaceMembershipId))return reply(403,{error:'denied'});
-     const {membershipId,...draft}=body;const normalized=normalizeTimecard(draft,action==='correct');if(!normalized)return reply(400,{error:'invalid'});value={...normalized,membershipId};
+     if(s.workspaceRole==='worker'){
+      if(action!=='create'||!id(s.workspaceMembershipId)||Object.hasOwn(body??{},'worksiteId')||Object.hasOwn(body??{},'membershipId'))return reply(403,{error:'denied'});
+      const draft=assignedWorkerDraft(body,s);if(draft.unassigned)return reply(409,{error:'assignment-required'});
+      if(!draft.value)return reply(400,{error:'invalid'});value={...draft.value,membershipId:s.workspaceMembershipId};
+     }else{
+      if(!id(body.membershipId))return reply(400,{error:'invalid'});
+      const {membershipId,...draft}=body;const normalized=normalizeTimecard(draft,action==='correct');if(!normalized)return reply(400,{error:'invalid'});value={...normalized,membershipId};
+     }
     }else{
      const fields={
       'set-mode':['worksiteId','operationId','revision','mode'],
@@ -53,6 +58,10 @@ export function createFactoryTimecardsHandler({origin,resolveSession,store=null,
   }
   const result=await store.invoke({issuer:s.issuer,subject:s.subject},action,{...value,organizationId,...(recordId?{id:recordId}:{})});
   if(!await active())return reply(401,{error:'login'});
+  if(s.workspaceRole==='worker'&&action==='create'){
+   if(!id(result?.id)||!Number.isSafeInteger(result?.revision)||result.revision<1||result?.state!=='needs-review')return reply(503,{error:'unavailable'});
+   return reply(200,{id:result.id,revision:result.revision,saved:true});
+  }
   return reply(200,result);
  }catch(e){const code=e?.code;return reply(code==='42501'?403:code==='23505'||code==='P0001'||code==='P0002'?409:['22023','22007','22008','23514'].includes(code)?400:503,{error:code==='P0002'?'unresolved':code==='P0001'?'period-closed':code==='23505'?'conflict':code==='42501'?'denied':['22023','22007','22008','23514'].includes(code)?'invalid':'unavailable'})}};
 }

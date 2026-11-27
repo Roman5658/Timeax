@@ -7,3 +7,4 @@
 .worker-hosted-calendar__detail{margin-block:.75rem;border-top:1px solid var(--line)}
 .worker-hosted-calendar__detail h3,.worker-hosted-calendar__detail p{margin-block:.65rem}
 
+.worker-hosted-calendar__mark--planned{border:1.5px solid currentColor;background:transparent}

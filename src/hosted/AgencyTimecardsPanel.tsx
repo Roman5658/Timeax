@@ -1,10 +1,12 @@
-import {useEffect,useState,useRef,useId} from 'react';
+import {useEffect,useState,useRef} from 'react';
 import {Link} from 'react-router-dom';
 import {useTranslation} from 'react-i18next';
 import {useMemberNames} from './MemberNames';
+import {AgencyBookDrawer} from './AgencyBookDrawer';
+import {agencyPeriodToday,agencyPeriodBounds,agencyPeriodOverlaps,agencyShiftGroups,weekdays,type AgencyPeriodKind} from './agency-hours-scope';
 import {workerLabelText} from './member-label';
 import {agencyTimecardsCopy} from './agency-timecards-copy';
-import {timecardCall,parseTimecards,parseSnapshot,minutesLabel,type TimecardContext,type ShiftData} from './timecards';
+import {timecardCall,parseTimecards,parseSnapshot,minutesLabel,type TimecardContext,type ShiftData,type TimecardShift} from './timecards';
 import {factoryHoursCall,parseFactoryHours,parseFactorySnapshot,type FactoryHoursContext} from './factory-timecards';
 import type {AgencyTimecardSnapshot} from './timecard-xlsx';
 import '../styles/timecards.css';
@@ -14,10 +16,6 @@ type Source='internal'|'factory';
 type Copy=ReturnType<typeof agencyTimecardsCopy>;
 type DocumentRow={id:string;name:string;worksiteId:string;dateFrom:string;dateTo:string;paidMinutes:number;factoryName?:string};
 const uuid=(v:unknown):v is string=>typeof v==='string'&&/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(v);
-function currentMonth(){
-  const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-  return {from:today.slice(0,8)+'01',to:today};
-}
 export function AgencyTimecardsPanel({organizationId,internalEnabled,factoryEnabled,initialSource='internal'}:{
   organizationId:string; internalEnabled:boolean; factoryEnabled:boolean; initialSource?:Source;
 }){
@@ -38,12 +36,13 @@ export function AgencyTimecardsPanel({organizationId,internalEnabled,factoryEnab
 
 function AgencySource({organizationId,source,c}:{organizationId:string;source:Source;c:Copy}){
   const {t,i18n}=useTranslation(),tt=(k:string)=>t('timecards.'+k);
-  const dialogId=useId();
   const [data,setData]=useState<TimecardContext|FactoryHoursContext>(),[status,setStatus]=useState('checking'),[revision,setRevision]=useState(0);
-  const [site,setSite]=useState(''),[worker,setWorker]=useState(''),[{from,to},setPeriod]=useState(currentMonth);
+  const [site,setSite]=useState(''),[worker,setWorker]=useState(''),[period,setPeriod]=useState(()=>agencyPeriodToday());
+  const [search,setSearch]=useState(''),[days,setDays]=useState<readonly number[]>(weekdays),[detail,setDetail]=useState<string>();
+  const dayName=new Intl.DateTimeFormat(i18n.language,{weekday:'long',timeZone:'UTC'});
   const [confirmed,setConfirmed]=useState(false),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[snapshot,setSnapshot]=useState<AgencyTimecardSnapshot>();
   const pending=useRef<AbortController|null>(null);
-  const [history,setHistory]=useState<{revision:number;data:ShiftData;reason:string}[]>();
+  const [history,setHistory]=useState<{id:string;revisions:{revision:number;data:ShiftData;reason:string}[]}>();
   const {label}=useMemberNames(source==='internal'?organizationId:undefined,revision);
   useEffect(()=>{
     const controller=new AbortController();
@@ -61,17 +60,24 @@ function AgencySource({organizationId,source,c}:{organizationId:string;source:So
   },[organizationId,source,revision]);
   useEffect(()=>()=>pending.current?.abort(),[]);
 
-  const periodValid=!!from&&!!to&&from<=to;
+  const bounds=agencyPeriodBounds(period);
+  const periodValid=bounds!==undefined;
   const internal=data&&'worksites' in data?data:undefined;
   const factory=data&&'sites' in data?data:undefined;
-  const periodShifts=(internal?.shifts??[]).filter(row=>(!site||site===row.worksiteId)&&periodValid&&row.data.localDate>=from&&row.data.localDate<=to);
-  const workers=[...new Set(periodShifts.map(row=>row.membershipId))].sort((a,b)=>label(a).localeCompare(label(b),i18n.language));
-  const filteredShifts=periodShifts.filter(row=>!worker||row.membershipId===worker).sort((a,b)=>b.data.localDate.localeCompare(a.data.localDate)||a.data.startTime.localeCompare(b.data.startTime));
+  const baseScope={site,bounds,days,search,label,locale:i18n.language};
+  const workers=agencyShiftGroups(internal?.shifts??[],{...baseScope,worker:''});
+  const matchingWorkers=worker?workers.filter(group=>group.id===worker):workers;
+  const detailGroup=matchingWorkers.find(group=>group.id===detail);
   const documents:DocumentRow[]=internal?internal.archive.map(row=>({...row,name:row.worksiteName})):
     (factory?.archive??[]).map(row=>({id:row.id,name:row.snapshot.worksiteName,worksiteId:row.worksiteId,dateFrom:row.dateFrom,dateTo:row.dateTo,paidMinutes:row.snapshot.paidMinutes,factoryName:row.snapshot.factoryName}));
-  const sites=source==='internal'?new Map((internal?.worksites??[]).map(s=>[s.id,s.name])):new Map([...(factory?.sites??[]).map(s=>[s.id,s.name] as const),...documents.map(d=>[d.worksiteId,d.name] as const)]);
-  const filteredDocuments=documents.filter(row=>(!site||row.worksiteId===site)&&(source==='internal'||(periodValid&&row.dateFrom<=to&&row.dateTo>=from))).sort((a,b)=>b.dateTo.localeCompare(a.dateTo)||a.name.localeCompare(b.name,i18n.language));
-  const canArchive=source==='internal'&&periodValid&&!!site&&!worker&&periodShifts.some(s=>s.state==='recorded');
+  const sites=source==='internal'?new Map([...documents.map(d=>[d.worksiteId,d.name] as const),...(internal?.worksites??[]).map(s=>[s.id,s.name] as const)]):new Map([...(factory?.sites??[]).map(s=>[s.id,s.name] as const),...documents.map(d=>[d.worksiteId,d.name] as const)]);
+  const filteredDocuments=documents.filter(row=>(!site||row.worksiteId===site)&&agencyPeriodOverlaps(row.dateFrom,row.dateTo,bounds))
+    .sort((a,b)=>b.dateTo.localeCompare(a.dateTo)||a.name.localeCompare(b.name,i18n.language));
+  // Don't silently apply screen-only employee/search/weekday filters to the whole site archive.
+  const archiveBounds=bounds&&period.kind!=='year'?{from:bounds.from,to:[bounds.to,agencyPeriodToday().date].sort()[0]}:null;
+  const archiveScope=!!archiveBounds&&archiveBounds.from<=archiveBounds.to&&days.length===weekdays.length&&!search.trim()&&!worker;
+  const canArchive=source==='internal'&&archiveScope&&!!site&&internal?.worksites.some(w=>w.id===site)===true&&
+   workers.some(g=>g.rows.some(row=>row.state==='recorded'&&row.data.localDate<=archiveBounds!.to));
 
   async function act(id:string|null){
     if(pending.current)return;
@@ -81,8 +87,8 @@ function AgencySource({organizationId,source,c}:{organizationId:string;source:So
     try{
       let documentId=id;
       if(!documentId){
-        if(!confirmed||!canArchive)return;
-        const result=await timecardCall(organizationId,'archive',{worksiteId:site,dateFrom:from,dateTo:to,confirmed:true},controller.signal) as {id?:unknown};
+        if(!confirmed||!canArchive||!archiveBounds)return;
+        const result=await timecardCall(organizationId,'archive',{worksiteId:site,dateFrom:archiveBounds.from,dateTo:archiveBounds.to,confirmed:true},controller.signal) as {id?:unknown};
         if(!uuid(result.id))throw Error('uncertain');
         documentId=result.id;
         if(!controller.signal.aborted){setConfirmed(false);setNotice('archivedNotice');setRevision(n=>n+1)}
@@ -107,8 +113,10 @@ function AgencySource({organizationId,source,c}:{organizationId:string;source:So
     const controller=new AbortController();pending.current=controller;setBusy(true);setNotice('');setHistory(undefined);
     try{
       const result=await timecardCall(organizationId,'history/'+id,undefined,controller.signal) as {revisions?:unknown};
-      if(!Array.isArray(result.revisions))throw Error('unavailable');
-      if(!controller.signal.aborted)setHistory(result.revisions);
+      if(!Array.isArray(result.revisions)||result.revisions.some(entry=>!entry||!Number.isInteger(entry.revision)||
+        typeof entry.reason!=='string'||typeof entry.data?.localDate!=='string'||typeof entry.data.startTime!=='string'||
+        typeof entry.data.endTime!=='string'))throw Error('unavailable');
+      if(!controller.signal.aborted)setHistory({id,revisions:result.revisions});
     }catch(error){
       if(!controller.signal.aborted)setNotice(['login','denied'].includes((error as Error).message)?(error as Error).message:'unavailable');
     }finally{
@@ -116,32 +124,64 @@ function AgencySource({organizationId,source,c}:{organizationId:string;source:So
       if(!controller.signal.aborted)setBusy(false);
     }
   }
-  const updateFilters=()=>{setConfirmed(false);setWorker('');setHistory(undefined)};
-
+  const updateFilters=()=>{setConfirmed(false);setWorker('');setHistory(undefined);setDetail(undefined);setNotice('')};
+  function shiftRow(row:TimecardShift){return <article className="notice-box timecards-row" key={row.id}>
+    <strong>{row.worksiteName}</strong>
+    <p>{row.data.localDate} &middot; {row.data.startTime}-{row.data.endTime} &middot; {tt('counted')}: <strong>{minutesLabel(row.data.paidMinutes)}</strong> &middot; {tt(row.state)}</p>
+    <p>{tt('break')}: {row.data.breakMinutes} &middot; {tt(row.data.breakTreatment)}</p>{row.data.comment&&<p>{row.data.comment}</p>}
+    <button type="button" className="button button--outline" disabled={busy} onClick={()=>void readHistory(row.id)}>{tt('history')}</button>
+    {history?.id===row.id&&<section className="notice-box"><h3>{tt('history')}</h3>{history.revisions.map(h=><p key={h.revision}>{tt('version')} {h.revision}: {h.data.localDate} {h.data.startTime}-{h.data.endTime} &middot; {h.reason==='created'?tt('created'):h.reason}</p>)}<button type="button" className="button button--outline" onClick={()=>setHistory(undefined)}>{tt('close')}</button></section>}
+  </article>}
   return <section className="agency-hours__source worker-enrollment timecards" aria-busy={busy||status==='checking'}>
     <p className="notice-box">{source==='internal'?c.internalHint:c.factoryHint}</p>
     {!data?<><p role="status">{tt(status)}</p>{status==='login'&&<Link to="/login">{t('common.login')}</Link>}</>:<>
       <div className="agency-hours__filters">
         <label className="field-label">{c.site}<select value={site} disabled={busy} onChange={e=>{setSite(e.target.value);updateFilters()}}><option value="">{c.selectSite}</option>{[...sites].sort((a,b)=>a[1].localeCompare(b[1],i18n.language)).map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label>
-        <label className="field-label">{tt('from')}<input type="date" value={from} disabled={busy} onChange={e=>{setPeriod({from:e.target.value,to});updateFilters()}}/></label>
-        <label className="field-label">{tt('to')}<input type="date" value={to} disabled={busy} onChange={e=>{setPeriod({from,to:e.target.value});updateFilters()}}/></label>
-        {source==='internal'&&<label className="field-label">{tt('workerRef')}<select value={worker} disabled={busy||!workers.length} onChange={e=>{setWorker(e.target.value);setConfirmed(false)}}><option value="">{c.selectWorker}</option>{workers.map(id=><option value={id} key={id}>{label(id)}</option>)}</select></label>}
+        <label className="field-label">{t('workflow.timekeeping.period')}<select value={period.kind} disabled={busy} onChange={e=>{setPeriod({...period,kind:e.target.value as AgencyPeriodKind});updateFilters()}}>
+         <option value="month">{t('exports.periodMonth')}</option><option value="year">{t('workflow.timekeeping.year')}</option><option value="date">{t('exports.periodDate')}</option><option value="date-range">{t('exports.periodRange')}</option><option value="all">{t('workflow.timekeeping.allPeriods')}</option>
+        </select></label>
+        {period.kind==='month'&&<label className="field-label">{t('exports.periodMonth')}<input type="month" value={period.month} disabled={busy} onChange={e=>{setPeriod({...period,month:e.target.value});updateFilters()}}/></label>}
+        {period.kind==='year'&&<label className="field-label">{t('workflow.timekeeping.year')}<input type="number" min="2000" max="2100" value={period.year} disabled={busy} onChange={e=>{setPeriod({...period,year:e.target.value});updateFilters()}}/></label>}
+        {period.kind==='date'&&<label className="field-label">{t('exports.periodDate')}<input type="date" value={period.date} disabled={busy} onChange={e=>{setPeriod({...period,date:e.target.value});updateFilters()}}/></label>}
+        {period.kind==='date-range'&&<>
+         <label className="field-label">{tt('from')}<input type="date" value={period.from} disabled={busy} onChange={e=>{setPeriod({...period,from:e.target.value});updateFilters()}}/></label>
+         <label className="field-label">{tt('to')}<input type="date" value={period.to} disabled={busy} onChange={e=>{setPeriod({...period,to:e.target.value});updateFilters()}}/></label>
+        </>}
+        {source==='internal'&&<>
+         <label className="field-label">{t('workflow.timekeeping.search')}<input type="search" value={search} disabled={busy} onChange={e=>{setSearch(e.target.value);updateFilters()}}/></label>
+         <label className="field-label">{tt('workerRef')}<select value={worker} disabled={busy||!workers.length} onChange={e=>{updateFilters();setWorker(e.target.value)}}><option value="">{c.selectWorker}</option>{workers.map(group=><option value={group.id} key={group.id}>{group.name}</option>)}</select></label>
+        </>}
       </div>
+      {source==='internal'&&<fieldset className="agency-hours__weekday" disabled={busy}>
+       <legend>{c.weekdays}</legend>
+       <div className="form-actions">
+        <button className="button button--outline" type="button" disabled={days.length===weekdays.length} onClick={()=>{setDays(weekdays);updateFilters()}}>{c.allDays}</button>
+        <button className="button button--outline" type="button" disabled={!days.length} onClick={()=>{setDays([]);updateFilters()}}>{c.noDays}</button>
+       </div>
+       <div className="agency-hours__days">
+        {weekdays.map(day=><label key={day}><input type="checkbox" checked={days.includes(day)} onChange={()=>{setDays(old=>old.includes(day)?old.filter(d=>d!==day):[...old,day]);updateFilters()}}/>{dayName.format(new Date(Date.UTC(2024,0,7+day,12)))}</label>)}
+       </div>
+      </fieldset>}
+      <button type="button" className="button button--outline" disabled={busy} onClick={()=>{setSite('');setPeriod(agencyPeriodToday());setSearch('');setDays(weekdays);updateFilters()}}>{t('workflow.timekeeping.reset')}</button>
       {!periodValid&&<p role="alert">{c.invalidRange}</p>}
       {source==='internal'&&<>
-        <div className="agency-hours__heading"><h2>{c.matches}</h2><strong>{tt('counted')}: {minutesLabel(filteredShifts.reduce((sum,row)=>sum+row.data.paidMinutes,0))}</strong></div>
-        {!filteredShifts.length&&<p>{c.emptyMatch}</p>}
-        <div className="agency-hours__rows">
-          {filteredShifts.map(row=><article className="notice-box timecards-row" key={row.id}>
-            <strong>{label(row.membershipId)} · {row.worksiteName}</strong>
-            <p>{row.data.localDate} · {row.data.startTime}–{row.data.endTime} · {tt('counted')}: <strong>{minutesLabel(row.data.paidMinutes)}</strong> · {tt(row.state)}</p>
-            <p>{tt('break')}: {row.data.breakMinutes} · {tt(row.data.breakTreatment)}</p>{row.data.comment&&<p>{row.data.comment}</p>}<button type="button" className="button button--outline" disabled={busy} onClick={()=>void readHistory(row.id)}>{tt('history')}</button>
-          </article>)}
-        </div>
-        {history&&<section className="notice-box"><h3>{tt('history')}</h3>{history.map(h=><p key={h.revision}>{tt('version')} {h.revision}: {h.data.localDate} {h.data.startTime}–{h.data.endTime} · {h.reason==='created'?tt('created'):h.reason}</p>)}<button type="button" className="button button--outline" onClick={()=>setHistory(undefined)}>{tt('close')}</button></section>}
-        {!site&&periodShifts.length>0&&<p>{c.siteRequired}</p>}
-        {canArchive&&<form className="notice-box auth-form" onSubmit={e=>{e.preventDefault();void act(null)}}>
-          <h3>{tt('archiveTitle')}</h3><p>{tt('sealHint')}</p>
+        <div className="agency-hours__heading"><h2>{t('workflow.timekeeping.workers')}</h2><strong>{tt('counted')}: {minutesLabel(matchingWorkers.reduce((sum,row)=>sum+row.paidMinutes,0))}</strong></div>
+        {!matchingWorkers.length&&<p>{c.emptyMatch}</p>}
+        <ul className="agency-hours__workers">
+          {matchingWorkers.map(group=><li key={group.id} className="notice-box"><strong>{group.name}</strong>
+           <span>{c.shiftCount}: {group.rows.length}</span><span>{tt('counted')}: <strong>{minutesLabel(group.paidMinutes)}</strong></span>
+           <button type="button" className="button button--outline" disabled={busy} onClick={()=>{setDetail(group.id);setHistory(undefined)}}>{tt('open')}</button>
+          </li>)}
+        </ul>
+        {detailGroup&&<AgencyBookDrawer title={detailGroup.name} closeLabel={tt('close')} busy={busy} onClose={()=>{setDetail(undefined);setHistory(undefined)}}>
+          <p>{tt('counted')}: <strong>{minutesLabel(detailGroup.paidMinutes)}</strong></p>
+          <div className="agency-hours__rows">{detailGroup.rows.map(shiftRow)}</div>
+          {notice&&<p role="alert">{tt(notice)}</p>}
+        </AgencyBookDrawer>}
+        {!site&&workers.length>0&&<p>{c.siteRequired}</p>}
+        {site&&!archiveScope&&internal?.shifts.some(s=>s.worksiteId===site&&s.state==='recorded')&&<p>{c.archiveFilters}</p>}
+        {canArchive&&archiveBounds&&<form className="notice-box auth-form" onSubmit={e=>{e.preventDefault();void act(null)}}>
+          <h3>{tt('archiveTitle')}</h3><p>{tt('sealHint')}</p><p>{archiveBounds.from} - {archiveBounds.to}</p>
           <label className="timecards-check"><input type="checkbox" checked={confirmed} disabled={busy} onChange={e=>setConfirmed(e.target.checked)}/>{tt('sealConfirm')}</label>
           <button className="button button--primary" disabled={busy||!confirmed}>{tt('archiveAction')}</button>
         </form>}
@@ -153,18 +193,17 @@ function AgencySource({organizationId,source,c}:{organizationId:string;source:So
         <p>{record.dateFrom} – {record.dateTo} · {tt('counted')}: <strong>{minutesLabel(record.paidMinutes)}</strong></p>
         <button type="button" className="button button--outline" disabled={busy} onClick={()=>void act(record.id)}>{tt('open')}</button>
       </article>)}</div>
-      {snapshot&&<SnapshotDialog key={snapshot.source+snapshot.worksiteId+snapshot.dateFrom+snapshot.dateTo} titleId={dialogId} snapshot={snapshot} c={c} onClose={()=>setSnapshot(undefined)}/>}
+      {snapshot&&<SnapshotDialog key={snapshot.source+snapshot.worksiteId+snapshot.dateFrom+snapshot.dateTo} snapshot={snapshot} c={c} onClose={()=>setSnapshot(undefined)}/>}
     </>}
     {notice&&<p role={notice==='archivedNotice'?'status':'alert'}>{tt(notice)}</p>}
     <button type="button" className="button button--outline" disabled={busy||status==='checking'} onClick={()=>{setNotice('');setSnapshot(undefined);setHistory(undefined);setRevision(n=>n+1)}}>{tt('refresh')}</button>
   </section>;
 }
 
-function SnapshotDialog({snapshot,c,titleId,onClose}:{snapshot:AgencyTimecardSnapshot;c:Copy;titleId:string;onClose:()=>void}){
+function SnapshotDialog({snapshot,c,onClose}:{snapshot:AgencyTimecardSnapshot;c:Copy;onClose:()=>void}){
   const {t}=useTranslation(),tt=(k:string)=>t('timecards.'+k);
-  const dialog=useRef<HTMLDialogElement>(null),saving=useRef(false);
+  const saving=useRef(false);
   const [busy,setBusy]=useState(false),[failed,setFailed]=useState(false);
-  useEffect(()=>{const el=dialog.current;const current=document.activeElement;el?.showModal();return()=>{el?.close();if(current instanceof HTMLElement)current.focus()}},[]);
   const workerText=(r:AgencyTimecardSnapshot['rows'][number])=>workerLabelText(r.workerLabel,t('memberNames.historicalMissing'),t('memberNames.reference'));
   async function download(){
     if(saving.current)return;saving.current=true;setBusy(true);setFailed(false);
@@ -172,8 +211,8 @@ function SnapshotDialog({snapshot,c,titleId,onClose}:{snapshot:AgencyTimecardSna
       await downloadAgencyTimecardWorkbook(snapshot,{source:c.source,site:c.site,factory:c.factoryLabel,worker:tt('workerRef'),date:tt('date'),start:tt('start'),end:tt('end'),gross:c.gross,break:c.break,paid:c.paid,comment:tt('comment'),total:c.total,worksheet:c.workbook,missingName:t('memberNames.historicalMissing'),reference:t('memberNames.reference'),internal:c.internal,factorySource:c.factory,timeZone:c.timeZone});
     }catch{setFailed(true)}finally{saving.current=false;setBusy(false)}
   }
-  return <dialog ref={dialog} className="compact-modal agency-hours__document" aria-labelledby={titleId} onCancel={e=>{e.preventDefault();if(!busy)onClose()}}>
-    <h2 id={titleId}>{snapshot.source==='connected-factory'?snapshot.factoryName+' · ':''}{snapshot.worksiteName}</h2>
+  const title=snapshot.source==='connected-factory'?snapshot.factoryName+' / '+snapshot.worksiteName:snapshot.worksiteName;
+  return <AgencyBookDrawer title={title} closeLabel={tt('close')} busy={busy} onClose={onClose}>
     <p>{snapshot.dateFrom} – {snapshot.dateTo} · {snapshot.timeZone}</p>
     <p>{tt('counted')}: <strong>{minutesLabel(snapshot.paidMinutes)}</strong></p>
     <div className="agency-hours__rows">
@@ -181,9 +220,8 @@ function SnapshotDialog({snapshot,c,titleId,onClose}:{snapshot:AgencyTimecardSna
     </div>
     <div className="timecards-actions">
       <button type="button" className="button button--primary" disabled={busy} onClick={()=>void download()}>{busy?c.exporting:c.download}</button>
-      <button type="button" className="button button--outline" disabled={busy} onClick={onClose}>{tt('close')}</button>
     </div>
     {failed&&<p role="alert">{c.exportError}</p>}
-  </dialog>;
+  </AgencyBookDrawer>;
 }
 

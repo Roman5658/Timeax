@@ -19,20 +19,23 @@ const orgRoute=(prefix,actions)=>new RegExp('^/api/'+prefix+'/('+id+')/(?:'+acti
 const specs={
  profile:{handler:createAgencyProfileHandler,match:new RegExp('^/api/agency-profile/('+id+')(?:/worksite/'+id+')?/(?:context|settings)$')},
  worker:{handler:createWorkerEnrollmentHandler,match:new RegExp('^/api/worker-enrollment/(?:agency/('+id+')(?:/(?:invite|approve|provision|directory|cards|send-invitation|joins))?|context|lookup|request|claim|email-invitations|accept-email-invitation|terms)$')},
- timecards:{handler:createTimecardsHandler,match:orgRoute('timecards','context|archive|(?:read|history)/'+id)},
- factoryTimecards:{handler:createFactoryTimecardsHandler,match:orgRoute('factory-timecards','context|create|propose-placement|revoke-placement|read/'+id)},
+ timecards:{handler:createTimecardsHandler,match:orgRoute('timecards','context|create|archive|(?:read|history)/'+id)},
+ factoryTimecards:{handler:createFactoryTimecardsHandler,match:orgRoute('factory-timecards','context|create|correct|set-mode|propose-placement|approve-placement|revoke-placement|review|confirm|dispute|send|history|read/'+id)},
  payroll:{handler:createPayslipsHandler,match:orgRoute('payslips','context|settings|group|group-member|rate|create|assign|save|issue|read/'+id)},
  names:{handler:createMemberNamesHandler,match:orgRoute('member-names','context|set')},
  account:{handler:createAccountHandler,match:/^\/api\/personal-account\/(?:agency-context|end-membership)$/},
- registration:{handler:createFactoryRegistrationHandler,match:/^\/api\/factory-registration\/(?:context|invite-factory|revoke-agency-invitation)$/,agencyOnly:true},
- team:{handler:createTeamHandler,match:orgRoute('team','context|read|message|absence|update-plan|cancel|save-template|delete-template|invite-accountant|revoke-accountant')}
+ registration:{handler:createFactoryRegistrationHandler,match:/^\/api\/factory-registration\/(?:context|submit|review|invite-worker|claim-worker|revoke-worker|invite-factory|claim-agency-invitation|revoke-agency-invitation)$/},
+ team:{handler:createTeamHandler,match:orgRoute('team','context|read|message|absence|schedule|update-plan|cancel|save-template|delete-template|invite-accountant|revoke-accountant')}
 };
 const agencyTeamActions=new Set(['context','read','message','invite-accountant','revoke-accountant']);
 const workerTeamActions=new Set(['context','read','message','absence','update-plan','cancel','save-template','delete-template']);
+const agencyFactoryActions=new Set(['context','propose-placement','revoke-placement']);
+const leaderFactoryWrites=new Set(['create','correct','set-mode','review','send','history']);
+const leaderTeamActions=new Set(['context','read','message','schedule','update-plan','cancel']);
 function workerWorkspaceAction(name,pathname,method){
  // Factory create is separately checked in its RPC against the worker's own
  // active placement, connection and exact existing factory self-entry policy.
- if(method==='POST')return name==='factoryTimecards'&&pathname.endsWith('/create');
+ if(method==='POST')return name==='timecards'&&pathname.endsWith('/create')||name==='factoryTimecards'&&/\/(create|confirm|dispute|history)$/.test(pathname);
  if(method!=='GET')return false;
  return name==='timecards'&&new RegExp('/(?:context|history/'+id+')$').test(pathname)
   ||['factoryTimecards','names'].includes(name)&&pathname.endsWith('/context')
@@ -54,6 +57,9 @@ export function managedAgencyOperations(env){
   const profileFingerprint=env.TIMEAX_AGENCY_PROFILE_RPC_SHA256;
   if(sha(profileFingerprint)&&v.profile&&typeof v.profile==='object'&&!Array.isArray(v.profile))
    v.profile={...v.profile,hashes:{...v.profile.hashes,[AGENCY_PROFILE_SIGNATURE]:profileFingerprint}};
+  const timecardsFingerprint=env.TIMEAX_AGENCY_TIMECARDS_RPC_SHA256;
+  if(sha(timecardsFingerprint)&&v.timecards&&typeof v.timecards==='object'&&!Array.isArray(v.timecards))
+   v.timecards={...v.timecards,hashes:{...v.timecards.hashes,['timeax_api.timecards(text,text,text,jsonb)']:timecardsFingerprint}};
   const teamFingerprint=env.TIMEAX_AGENCY_TEAM_RPC_SHA256;
   if(sha(teamFingerprint)&&v.team&&typeof v.team==='object'&&!Array.isArray(v.team))
    v.team={...v.team,hashes:{...v.team.hashes,[TEAM_FUNCTION.signature]:teamFingerprint}};
@@ -118,13 +124,23 @@ export async function assembleAgencyOperations(config,lane,{now=Date.now}={}){
      // These routes already lock and verify the exact agency administrator in their RPC.
      if(!organization||name==='worker')return session;
      const scope=await access.get(session,organization);
-     if(scope?.organization.kind!=='agency')return {state:'anonymous'};
      const action=pathname.slice(pathname.lastIndexOf('/')+1);
+     if(scope?.organization.kind==='factory'){
+      const role=scope.membership.role,method=request.method;
+      const context=method==='GET'&&action==='context';
+      const allowed=role==='factory_admin'&&(name==='factoryTimecards'&&(context||method==='POST'&&['approve-placement','revoke-placement'].includes(action))
+       ||name==='names'&&(context||method==='POST'&&action==='set'))
+       ||role==='team_leader'&&(name==='team'&&leaderTeamActions.has(action)||name==='names'&&context
+        ||name==='factoryTimecards'&&(context||method==='GET'&&new RegExp('/read/'+id+'$').test(pathname)||method==='POST'&&leaderFactoryWrites.has(action)));
+      return allowed&&await session.isActive()?{...session,workspaceRole:role,workspaceMembershipId:scope.membership.id}:{state:'anonymous'};
+     }
+     if(scope?.organization.kind!=='agency')return {state:'anonymous'};
      if(scope.membership.role==='agency_admin')return (name!=='team'||agencyTeamActions.has(action))
-      &&!(name==='factoryTimecards'&&action==='create')&&await session.isActive()?session:{state:'anonymous'};
+      &&!(name==='timecards'&&action==='create')&&(name!=='factoryTimecards'||agencyFactoryActions.has(action)||request.method==='GET'&&new RegExp('/read/'+id+'$').test(pathname))
+      &&await session.isActive()?session:{state:'anonymous'};
      if(scope.membership.role==='worker'&&(name==='team'?workerTeamActions.has(action):workerWorkspaceAction(name,pathname,request.method))
       &&await workerTerms?.accepted(session)===true&&await session.isActive())
-       return {...session,workspaceRole:'worker',workspaceMembershipId:scope.membership.id};
+       return {...session,workspaceRole:'worker',workspaceMembershipId:scope.membership.id,workspaceWorksites:scope.worksites.map(w=>w.id)};
      return {state:'anonymous'};
     }})];
   });

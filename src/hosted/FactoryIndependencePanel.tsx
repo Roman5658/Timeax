@@ -1,11 +1,12 @@
-import {useEffect,useRef,useState} from 'react';import {Link} from 'react-router-dom';import {useTranslation} from 'react-i18next';
+import {useEffect,useRef,useState} from 'react';import {Link,useNavigate} from 'react-router-dom';import {useTranslation} from 'react-i18next';
 import {factoryCall,parseSetupContext,type SetupContext} from './factory-enrollment';
+import {resolveFactoryClaim} from './factory-claim';
 import {independenceCall,parseIndependence,type FactoryIndependenceContext} from './factory-independence';
-export function FactoryIndependencePanel({organizationId,revision=0,review=false,worker=false,agencyOnly=false}:{organizationId?:string;revision?:number;review?:boolean;worker?:boolean;agencyOnly?:boolean}){
- const {t}=useTranslation(),tx=(k:string)=>t('factoryIndependent.'+k);
+export function FactoryIndependencePanel({organizationId,revision=0,review=false,worker=false,agencyOnly=false,initialInvite}:{organizationId?:string;revision?:number;review?:boolean;worker?:boolean;agencyOnly?:boolean;initialInvite?:string}){
+ const {t}=useTranslation(),tx=(k:string)=>t('factoryIndependent.'+k),navigate=useNavigate();
  const [context,setContext]=useState<FactoryIndependenceContext>(),[setup,setSetup]=useState<SetupContext>(),[refresh,setRefresh]=useState(0),[status,setStatus]=useState('checking'),[busy,setBusy]=useState(false),[notice,setNotice]=useState('');
  const [name,setName]=useState(''),[nip,setNip]=useState(''),[siteName,setSiteName]=useState(''),[confirmed,setConfirmed]=useState(false),[reference,setReference]=useState(''),[reviewed,setReviewed]=useState(false);
- const [site,setSite]=useState(''),[start,setStart]=useState(new Date().toISOString().slice(0,10)),[code,setCode]=useState(()=>new URLSearchParams(location.hash.slice(1)).get(worker?'factoryWorker':'agencyInvite')??''),[factoryNip,setFactoryNip]=useState(''),[invite,setInvite]=useState<{code:string;expiresAt:string;worker:boolean}>();
+ const [site,setSite]=useState(''),[start,setStart]=useState(new Date().toISOString().slice(0,10)),[code,setCode]=useState(()=>initialInvite??new URLSearchParams(location.hash.slice(1)).get(worker?'factoryWorker':'agencyInvite')??''),[factoryNip,setFactoryNip]=useState(''),[invite,setInvite]=useState<{code:string;expiresAt:string;worker:boolean}>();
  const pending=useRef(false);
  useEffect(()=>{if(/^#(?:factoryWorker|agencyInvite)=/.test(location.hash))history.replaceState(history.state,'',location.pathname)},[]);
  useEffect(()=>{const c=new AbortController();setContext(undefined);setSetup(undefined);setStatus('checking');
@@ -14,6 +15,10 @@ export function FactoryIndependencePanel({organizationId,revision=0,review=false
  const admin=setup?.memberships.find(m=>m.organizationId===organizationId&&['agency_admin','factory_admin'].includes(m.role)),sites=setup?.worksites.filter(w=>w.ownerId===organizationId&&w.organizationId===organizationId)??[];
  async function act(action:string,input:unknown){if(pending.current)return;pending.current=true;setBusy(true);setNotice('');try{
  const result=await independenceCall(action,input) as {code?:string;expiresAt?:string};
+ if(action==='claim-worker'){
+  const destination=resolveFactoryClaim(result,parseSetupContext(await factoryCall('context')),'worker');
+  if(destination){navigate(destination,{replace:true});return}
+ }
  if(action==='invite-worker'||action==='invite-factory'){if(!/^[0-9a-f]{64}$/.test(result.code??'')||!Number.isFinite(Date.parse(result.expiresAt??'')))throw Error();setInvite({code:result.code!,expiresAt:result.expiresAt!,worker:action==='invite-worker'})}
  if(action.startsWith('claim-'))setCode('');
  setNotice('saved');

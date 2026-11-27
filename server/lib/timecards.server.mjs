@@ -5,6 +5,14 @@ export function createTimecardsStore(lane){if(typeof lane?.query!=='function')th
 const id=x=>typeof x==='string'&&/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(x);
 const exact=(v,keys)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length===keys.length&&keys.every(k=>Object.hasOwn(v,k));
 const clean=x=>typeof x==='string'&&x.length>=2&&x.length<=500&&!/[\p{Cc}\p{Cs}\u202a-\u202e\u2066-\u2069]/u.test(x);
+const ownFields=['operationId','localDate','startTime','endTime','breakStatus','breakMinutes','breakTreatment','comment'];
+export function assignedWorkerDraft(body,session){
+ if(!exact(body,ownFields))return {};
+ const sites=session.workspaceWorksites;
+ if(!Array.isArray(sites)||sites.length!==1||!id(sites[0]))return {unassigned:true};
+ const value=normalizeTimecard({...body,worksiteId:sites[0]});
+ return {value};
+}
 export function normalizeTimecard(input,correction=false){
  const keys=['worksiteId','operationId','localDate','startTime','endTime','breakStatus','breakMinutes','breakTreatment','comment',...(correction?['id','revision','reason']:[])];
  if(!exact(input,keys)||!id(input.worksiteId)||!id(input.operationId)||correction&&(!id(input.id)||!Number.isInteger(input.revision)||input.revision<1||!clean(input.reason)))return;
@@ -37,11 +45,25 @@ export function createTimecardsHandler({origin,resolveSession,store=null,now=Dat
     if(action==='archive'){
      if(!exact(body,['worksiteId','dateFrom','dateTo','confirmed'])||!id(body.worksiteId)||body.confirmed!==true||![body.dateFrom,body.dateTo].every(d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)))return reply(400,{error:'invalid'});
      value=body;
+    }else if(s.workspaceRole==='worker'){
+     if(action!=='create')return reply(403,{error:'denied'});
+     const draft=assignedWorkerDraft(body,s);if(draft.unassigned)return reply(409,{error:'assignment-required'});
+     if(!draft.value)return reply(400,{error:'invalid'});value=draft.value;
     }else{value=normalizeTimecard(body,action==='correct');if(!value)return reply(400,{error:'invalid'});}
    }finally{clearTimeout(timer);void reader.cancel().catch(()=>{})}
   }
-  const result=await store.invoke({issuer:s.issuer,subject:s.subject},action,{...value,organizationId,...(recordId?{id:recordId}:{})});
+  const actor={issuer:s.issuer,subject:s.subject};
+  if(s.workspaceRole==='worker'&&action==='create'){
+   // Fail closed if a previous DB version is still serving this route. The
+   // new RPC checks the same mode again under lock when saving.
+   const context=await store.invoke(actor,'context',{organizationId});
+   if(context?.organizationId!==organizationId||context?.membershipId!==s.workspaceMembershipId||context.role!=='worker'
+    ||!Array.isArray(context.worksites)||!context.worksites.some(w=>w?.id===value.worksiteId&&w?.manualEntry===true)||!await active())
+     return reply(403,{error:'denied'});
+  }
+  const result=await store.invoke(actor,action,{...value,organizationId,...(recordId?{id:recordId}:{})});
   if(!await active())return reply(401,{error:'login'});
+  if(s.workspaceRole==='worker'&&action==='create'&&(!id(result?.id)||!Number.isSafeInteger(result?.revision)||result.revision<1||result?.saved!==true))return reply(503,{error:'unavailable'});
   return reply(200,result);
  }catch(e){const code=e?.code;return reply(code==='42501'?403:code==='23505'||code==='P0001'?409:['22023','22007','22008','23514'].includes(code)?400:503,{error:code==='P0001'?'period-closed':code==='23505'?'conflict':code==='42501'?'denied':['22023','22007','22008','23514'].includes(code)?'invalid':'unavailable'})}};
 }

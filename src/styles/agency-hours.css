@@ -8,9 +8,14 @@
 .agency-hours__rows{display:grid;gap:8px;max-block-size:36rem;overflow:auto;margin-block:4px}
 .agency-hours__rows .notice-box{margin:0}
 .agency-hours__rows .timecards-row .button{justify-self:start}
-.agency-hours__document{margin:auto;box-sizing:border-box;width:min(43rem,calc(100% - 24px));max-height:calc(100dvh - 24px);overflow:auto}
-.agency-hours__document:not([open]){display:none}
-.agency-hours__document .agency-hours__rows{max-block-size:45vh}
-.agency-hours__document .timecards-actions{margin-top:12px}
 @media(max-width:560px){.agency-hours__sources .button{flex:1 1 140px}}
 
+
+.agency-hours__weekday{border:1px solid var(--line);border-radius:14px;padding:10px 14px;min-inline-size:0}
+.agency-hours__weekday legend{font-weight:700}
+.agency-hours__days{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:10px}
+.agency-hours__days label{display:flex;gap:6px;align-items:center}
+.agency-hours__workers{list-style:none;padding:0;margin:0;display:grid;gap:8px;min-width:0}
+.agency-hours__workers li{display:grid;grid-template-columns:minmax(8rem,1fr) repeat(3,max-content);gap:8px 12px;align-items:center;margin:0;min-width:0}
+.agency-hours__workers li > strong{overflow-wrap:anywhere}
+@media(max-width:620px){.agency-hours__workers li{grid-template-columns:repeat(2,minmax(0,1fr))}.agency-hours__workers li > strong{grid-column:1/-1}}

@@ -1,7 +1,7 @@
 import {Eye,EyeOff} from 'lucide-react';
 import {useCallback,useEffect,useMemo,useRef,useState,type FormEvent} from 'react';
 import {Link,useLocation,useNavigate} from 'react-router-dom';
-import {emailInvitations,enrollmentContext,workerCall} from './worker-enrollment';
+import {emailInvitations,enrollmentContext,workerCall,type Membership} from './worker-enrollment';
 import {workerRegistrationCopy} from './worker-registration-copy';
 import {useTranslation} from 'react-i18next';
 import {LegalLink,RegistrationProgress} from '../components/PublicExperience';
@@ -30,6 +30,7 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
  const client=useMemo(()=>createWorkingRegistrationClient(location.origin,fetch.bind(window),existing?'existing':'enrollment'),[existing]);
  const [stage,setStage]=useState<Stage>('check'),[needsPassword,setNeedsPassword]=useState(true),[email,setEmail]=useState(''),[name,setName]=useState(''),[nip,setNip]=useState(''),[password,setPassword]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [workerReady,setWorkerReady]=useState(false);
+ const [productionDestinations,setProductionDestinations]=useState<Membership[]>([]);
  const [termsAccepted,setTermsAccepted]=useState(false),[showPassword,setShowPassword]=useState(false);
  const controller=useRef<AbortController|null>(null);
  const accept=useCallback((v:{state?:unknown;organizationId?:unknown;passwordRequired?:unknown},reopening=false)=>{
@@ -42,12 +43,14 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
   }
   throw Error('service-unavailable');
  },[navigate,returnTo]);
- const destinations=useCallback(async(signal:AbortSignal)=>{
+ const destinations=useCallback(async(signal:AbortSignal,onlyKnown=false)=>{
   const scope=await client.context(signal);
   if(signal.aborted)return;
   if(scope?.workerSelfService){
    setWorkerReady(true);
-   try{const member=enrollmentContext(await workerCall('context',undefined,signal)).memberships.find(m=>m.role==='worker');
+   try{const memberships=enrollmentContext(await workerCall('context',undefined,signal)).memberships;
+    const member=memberships.find(m=>m.role==='worker'&&m.kind==='agency');
+    const productions=memberships.filter(m=>m.kind==='factory'&&['factory_admin','team_leader'].includes(m.role));
     if(signal.aborted)return;
     if(member&&workerPasswordReauth){navigate('/account/settings',{replace:true});return;}
     if(member&&scope.workerProvisioning){
@@ -57,7 +60,11 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
       }
      }catch{}
     }
-    if(!signal.aborted)navigate(member?'/workspace/'+member.organizationId:'/register/worker',{replace:true,...(!member?{state:{fromWorkerLogin:true}}:{})});
+    if(signal.aborted)return;
+    if(!member&&productions.length===1){navigate('/workspace/'+productions[0].organizationId,{replace:true});return;}
+    if(productions.length>0){setProductionDestinations(memberships.filter(m=>m===member||productions.includes(m)));setStage('destinations');return;}
+    if(onlyKnown&&!member){setStage('password');return;}
+    navigate(member?'/workspace/'+member.organizationId:'/register/worker',{replace:true,...(!member?{state:{fromWorkerLogin:true}}:{})});
     return;
    }catch{if(signal.aborted)return}
   }
@@ -77,8 +84,7 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
      if(state?.state==='ready'){accept(state);return;}
     }catch(e){if(c.signal.aborted)return;if(!(e instanceof Error&&e.message==='registration-required'))throw e;}
     // A verified email or an agency draft is not a request to resume registration.
-    if(reopening){setStage('password');return;}
-    await destinations(c.signal);return;
+    await destinations(c.signal,reopening);return;
    }
    const state=await call(setup,c.signal);
    if(!c.signal.aborted)accept(state,reopening);
@@ -146,10 +152,10 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
    <button type="button" className="button button--outline button--full" disabled={busy} onClick={()=>void restartRegistration()}>{t('publicSignup.restartAgency')}</button>
   </div>}
   {stage==='code'&&<StagingSessionPanel guided simple signup={!existing} termsHref={existing?undefined:termsHref} purpose={existing?'existing':'enrollment'} onChanged={()=>void refresh()}/>}
-  {existing&&stage==='destinations'&&<div className="auth-form"><p role="status">{copy.noWorkspace}</p>
+   {existing&&stage==='destinations'&&<div className="auth-form">{productionDestinations.length>0?productionDestinations.map(m=><Link key={m.membershipId} to={'/workspace/'+m.organizationId}>{m.name} · {t('workspaceRead.'+m.role)}</Link>):<><p role="status">{copy.noWorkspace}</p>
     {workerReady&&<Link to="/register/worker">{copy.workerRoute}</Link>}
     <Link to="/register/agency">{copy.agencyRoute}</Link>
-  </div>}
+    </>}</div>}
   {stage==='unavailable'&&(error==='registration-required'?
    <button type="button" className="button button--primary" disabled={busy} onClick={()=>void restartRegistration()}>{t('publicExperience.create')}</button>:
    <button type="button" className="button button--outline" onClick={()=>void refresh(true)}>{t('publicSignup.retry')}</button>)}

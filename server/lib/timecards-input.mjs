@@ -42,10 +42,11 @@ export function shiftInput(input){
  if(!input||Object.keys(input).length!==keys.length||keys.some(k=>!Object.hasOwn(input,k))
  ||!id.test(input.employmentId??'')||!id.test(input.submissionId??'')||typeof input.localDate!=='string'
  ||typeof input.startTime!=='string'||typeof input.endTime!=='string'||input.startTime===input.endTime
- ||!['taken','not-taken'].includes(input.breakStatus)||!['paid','unpaid'].includes(input.breakTreatment)
+ ||!['taken','not-taken','not-reported'].includes(input.breakStatus)||!['paid','unpaid'].includes(input.breakTreatment)
  ||!Number.isInteger(input.breakMinutes)||input.breakMinutes<0
  ||typeof input.comment!=='string'||input.comment.length>500||control.test(input.comment)
- ||input.breakStatus==='not-taken'&&input.breakMinutes!==0||input.breakStatus==='taken'&&input.breakMinutes===0)return;
+ ||input.breakStatus!=='taken'&&input.breakMinutes!==0||input.breakStatus==='not-reported'&&input.breakTreatment!=='unpaid'
+ ||input.breakStatus==='taken'&&input.breakTreatment==='unpaid'&&input.breakMinutes===0)return;
  const start=zonedDateTime(input.localDate,input.startTime,'Europe/Warsaw'),end=zonedDateTime(input.endTime<=input.startTime?nextLocalDate(input.localDate):input.localDate,input.endTime,'Europe/Warsaw');
  const grossMinutes=(end.getTime()-start.getTime())/60000;
  if(!Number.isInteger(grossMinutes)||grossMinutes<=0||grossMinutes>1440||input.breakMinutes>=grossMinutes)return;

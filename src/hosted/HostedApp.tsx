@@ -158,6 +158,9 @@ export function HostedApp(){
  if(teamRoute)return <HostedCabinetRoute organizationId={teamRoute[1]} section={teamRoute[2] as TeamSection} fallback={<TeamStandalone organizationId={teamRoute[1]} section={teamRoute[2] as TeamSection}/>}/>;
  if(loc.pathname==='/accountant/invitation')return <AccountantInvitePage/>;
  const workspace=loc.pathname.match(/^\/workspace\/([0-9a-f-]+)$/);
+ const productionRoute=loc.pathname.match(/^\/workspace\/([0-9a-f-]+)\/(teams|timesheets)$/);
+ if(productionRoute)return <HostedCabinetRoute key={productionRoute[1]} organizationId={productionRoute[1]} section={productionRoute[2]==='teams'?'teams':'timesheets'}
+  fallback={<RegistrationFrame title={t('workspaceRead.title')} lead={t('workspaceRead.unavailable')}><Link to="/login">{t('common.login')}</Link></RegistrationFrame>}/>;
  const existing=loc.pathname==="/login",register=loc.pathname==="/register/agency";
  const PayslipsPageRoute=loc.pathname.match(/^\/workspace\/([0-9a-f-]+)\/payslips$/);
  if(PayslipsPageRoute)return <HostedCabinetRoute key={PayslipsPageRoute[1]} organizationId={PayslipsPageRoute[1]} section="payslips" fallback={<PayslipsPage/>}/>;
@@ -180,7 +183,9 @@ export function HostedApp(){
  const settings=loc.pathname.match(/^\/workspace\/([0-9a-f-]+)\/settings$/);
  if(settings)return <HostedCabinetRoute key={settings[1]} organizationId={settings[1]} section="settings" fallback={<RegistrationFrame title={t('agencySettings.title')} lead={t('workspaceRead.unavailable')}>{null}</RegistrationFrame>}/>;
  const setup=loc.pathname.match(/^\/workspace\/([0-9a-f-]+)\/setup$/);
- if(setup)return <HostedCabinetRoute key={setup[1]} organizationId={setup[1]} section="setup" fallback={<FactoryEnrollmentPage/>}/>;
+ if(setup)return <HostedCabinetRoute key={setup[1]} organizationId={setup[1]} section="setup" fallback={canonical
+  ?<RegistrationFrame title={t('workspaceRead.title')} lead={t('workspaceRead.unavailable')}><Link to="/login">{t('common.login')}</Link></RegistrationFrame>
+  :<FactoryEnrollmentPage/>}/>;
  if(role==='factory'||['/factory/review','/factory/team/join'].includes(loc.pathname)||loc.pathname==='/leader/access')return <FactoryEnrollmentPage/>;
  if(role==='worker')return <WorkerEnrollmentEntry/>;
  if(role)return <RegistrationFrame title={t("roleEntry."+role+"Title")} lead={t("publicExperience."+role+"Path")}>
