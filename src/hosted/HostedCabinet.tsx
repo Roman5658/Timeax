@@ -13,7 +13,7 @@ import {TeamBell,TeamPanel,type TeamSection} from './TeamWorkflow';
 
 import { Building2, CalendarDays, ClipboardList, LayoutDashboard, Menu, MessageCircle, Settings2, UsersRound, X } from 'lucide-react';
 import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { BrandMark } from '../components/BrandMark';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
@@ -55,12 +55,11 @@ const agencyMenu = [
 const workerMenu = [
  item('home','nav.workerHome','workspace',LayoutDashboard),
  item('timecards','nav.shifts','operations',CalendarDays),
- item('factory-timecards','factoryHours.title','operations',Building2),
  item('schedule','team.schedule','operations',CalendarDays),
  item('messages','team.messages','operations',MessageCircle),
  item('payslips','canonicalPayslips.title','reports',ClipboardList),
 ];
-const factoryWorkerMenu=[workerMenu[0],item('messages','team.messages','operations',MessageCircle)];
+const factoryWorkerMenu=[workerMenu[0],item('schedule','team.schedule','operations',CalendarDays),item('messages','team.messages','operations',MessageCircle)];
 const factoryMenu=[item('home','nav.factoryHome','workspace',LayoutDashboard),item('setup','workflow.factory.sections.agencies','people',Building2),
  item('workers','nav.workers','people',UsersRound),item('teams','workflow.factory.sections.teams','people',UsersRound),item('factory-timecards','nav.timekeeping','operations',ClipboardList),item('schedule','team.schedule','operations',CalendarDays),item('messages','team.messages','operations',MessageCircle),item('timesheets','nav.monthlyTimesheets','reports',ClipboardList),item('settings','workflow.factory.sections.settings','account',Settings2)];
 const leaderMenu=[item('home','nav.leaderHome','workspace',LayoutDashboard),item('workers','nav.teams','people',UsersRound),
@@ -81,6 +80,8 @@ export function HostedCabinetRoute({organizationId, section, fallback}:{organiza
  if(status.state!=='ready')return fallback;
  const value=status.value,role=value.membership.role;
  if(!hasProductionRole(value)&&role!=='worker'&&!(value.organization.kind==='agency'&&role==='agency_admin'))return fallback;
+ // Keep old worker bookmarks useful without exposing agency reports as worker navigation.
+ if(role==='worker'&&value.organization.kind==='agency'&&section==='factory-timecards')return <Navigate replace to={'/workspace/'+organizationId+'/timecards'}/>;
  const menu=role==='agency_admin'?agencyMenu:role==='factory_admin'?factoryMenu:role==='team_leader'?leaderMenu:value.organization.kind==='factory'?factoryWorkerMenu:workerMenu;
  if(!menu.some(entry=>entry.section===section)&&!(role==='worker'&&value.organization.kind==='agency'&&['templates','absence'].includes(section)))return fallback;
  const cabinet=<HostedCabinet access={status.value} section={section} menu={menu}/>;
@@ -208,7 +209,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
      reviewPanel={<AgencyBackdatedShifts key={org} organizationId={org} feed={shiftFeed} refresh={()=>{backdated.refresh();inbox.refresh()}}/>}/>}
     {agencyWorker&&section==='timecards'&&<WorkerShiftHistory key={org+access.membership.id} organizationId={org} membershipId={access.membership.id}/>}
     {!worker&&!unifiedHours&&uses('timecards')&&section==='timecards'&&<TimecardsPanel organizationId={org} includeFactoryArchive={uses('factoryTimecards')}/>}
-    {!production&&!unifiedHours&&uses('factoryTimecards')&&section==='factory-timecards'&&<FactoryTimecardsPanel organizationId={org} readOnlyWorker={worker}/>}
+    {!worker&&!production&&!unifiedHours&&uses('factoryTimecards')&&section==='factory-timecards'&&<FactoryTimecardsPanel organizationId={org} readOnlyWorker={worker}/>}
     {uses('payroll')&&section==='payslips'&&<PayslipsPanel organizationId={org} showTitle={false} onPublicationOpened={agencyWorker?id=>setOpenedPay({org,membershipId:access.membership.id,id}):undefined}/>}
     </Suspense>
    </main>

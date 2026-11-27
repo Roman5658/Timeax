@@ -11,6 +11,7 @@ import "../styles/theme-aurora.css";
 import "../styles/agency-registration.css";
 import {ThemeProvider} from "../app/ThemeContext";
 import {HostedApp} from "./HostedApp";
+import {InstalledAppResume} from "./InstalledAppResume";
 import {RoutePageTurn} from "../app/RoutePageTurn";
 import "../styles/page-turn.css";
-createRoot(document.getElementById("root")!).render(<StrictMode><ThemeProvider><BrowserRouter><HostedApp/><RoutePageTurn hostedAuthPanels/></BrowserRouter></ThemeProvider></StrictMode>);
+createRoot(document.getElementById("root")!).render(<StrictMode><ThemeProvider><BrowserRouter><InstalledAppResume><HostedApp/></InstalledAppResume><RoutePageTurn hostedAuthPanels/></BrowserRouter></ThemeProvider></StrictMode>);

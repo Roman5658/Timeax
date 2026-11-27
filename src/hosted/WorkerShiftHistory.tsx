@@ -9,6 +9,7 @@ import {workerCalendarCopy} from './worker-calendar-copy';
 import {workerShiftCopy} from './worker-shift-copy';
 import {calendarDate,workerCalendarRecords} from './worker-calendar-data';
 import {workerHistoryDays,workerHistoryMonth} from './worker-shift-history';
+import {WorkerShiftRows} from './WorkerShiftRows';
 import '../styles/worker-history-hosted.css';
 
 type Revision={revision:number;reason:string;data:{localDate:string;startTime:string;endTime:string}};
@@ -61,7 +62,6 @@ export function WorkerShiftHistory({organizationId,membershipId,enableInternal=t
  },[focusDay,loading]);
  const records=useMemo(()=>workerCalendarRecords({organizationId,membershipId,internal,factory,team}),[organizationId,membershipId,internal,factory,team]);
  const days=workerHistoryDays(month,records);
- const dateFormatter=new Intl.DateTimeFormat(i18n.resolvedLanguage||'pl',{dateStyle:'full',timeZone:'UTC'});
  function selectMonth(next:string){
   if(!workerHistoryMonth(next))return;
   historyController.current?.abort();H(undefined);
@@ -86,7 +86,6 @@ export function WorkerShiftHistory({organizationId,membershipId,enableInternal=t
   <div className="panel-heading"><h2 id={anchor}>{t('workflow.history.open')}</h2>
    <div className="form-actions">
     <Link className="button button--outline button--small" to={root}>{shift.back}</Link>
-    {enableFactory&&<Link className="button button--outline button--small" to={root+'/factory-timecards'}>{t('factoryHours.title')}</Link>}
    </div>
   </div>
   <div className="worker-history-hosted__controls">
@@ -98,22 +97,14 @@ export function WorkerShiftHistory({organizationId,membershipId,enableInternal=t
   {partial&&<p role="status">{calendar.partial}</p>}
   {!loading&&!partial&&!days.length&&<p>{shift.monthEmpty}</p>}
   {!!days.length&&<p className="muted-copy">{t('workflow.calendar.periodHours',{hours:minutesLabel(paid)})}</p>}
-  {days.map(d=><article key={d.day} ref={d.day===focusDay?focus:undefined} tabIndex={d.day===focusDay?-1:undefined} className="worker-history-hosted__day">
-   <h3>{dateFormatter.format(new Date(d.day+'T12:00:00Z'))}</h3>
-   {d.shifts.map(row=><section className="notice-box" key={row.source+row.id}>
-    <strong>{row.data.startTime} – {row.data.endTime}</strong>
-    <p>{row.site&&row.site+' · '}{t((row.source==='internal'?'timecards.':'factoryHours.')+row.status)} · {t('timecards.counted')}: {minutesLabel(row.data.paidMinutes)}</p>
-    <p>{t('timecards.break')}: {row.data.breakStatus==='not-reported'?t('workflow.breakReport.notReported'):row.data.breakStatus==='not-taken'?t('breaks.notTaken'):row.data.breakTreatment==='paid'?t('workflow.breakReport.paidChoice'):t('workflow.breakReport.unpaidChoice')+' · '+minutesLabel(row.data.breakMinutes)}</p>
-    {row.data.comment&&<p>{row.data.comment}</p>}
-    {row.source==='internal'&&<><button className="button button--outline button--small" type="button" aria-expanded={history?.shiftId===row.id} onClick={()=>void showHistory(row.id)}>{t('timecards.history')}</button>
-     {history?.shiftId===row.id&&<div className="worker-history-hosted__revisions" aria-live="polite">
-      {history.state!=='ready'?<p>{t('timecards.'+(history.state==='loading'?'checking':'unavailable'))}</p>:history.rows?.map(v=><p key={v.revision}>{t('timecards.version')} {v.revision}: {v.data.localDate} · {v.data.startTime} – {v.data.endTime} · {v.reason==='created'?t('timecards.created'):v.reason}</p>)}
-     </div>}
-    </>}
-   </section>)}
+  {days.length>0&&<WorkerShiftRows focusDay={focusDay} focusRef={element=>{focus.current=element}} groups={days.map(d=>({...d,notes:d.absences.length||d.plans.length?<>
    {d.absences.map(absence=><p className="inline-notice" key={absence.id}>{calendar.absence}{absence.site?' · '+absence.site:''}</p>)}
    {d.plans.map(plan=><p className="inline-notice" key={plan.id}>{t('team.planned')}:  {plan.start} – {plan.end}{plan.site?' · '+plan.site:''}</p>)}
-  </article>)}
+  </>:undefined}))} revisionDetails={row=>row.source==='internal'&&<><button className="button button--outline button--small" type="button" aria-expanded={history?.shiftId===row.id} onClick={()=>void showHistory(row.id)}>{t('timecards.history')}</button>
+    {history?.shiftId===row.id&&<div className="worker-history-hosted__revisions" aria-live="polite">
+     {history.state!=='ready'?<p>{t('timecards.'+(history.state==='loading'?'checking':'unavailable'))}</p>:history.rows?.map(v=><p key={v.revision}>{t('timecards.version')} {v.revision}: {v.data.localDate} · {v.data.startTime}–{v.data.endTime} · {v.reason==='created'?t('timecards.created'):v.reason}</p>)}
+    </div>}
+   </>}/>}
   <button className="button button--outline" type="button" disabled={loading} onClick={()=>refresh(n=>n+1)}>{t('timecards.refresh')}</button>
  </section>;
 }

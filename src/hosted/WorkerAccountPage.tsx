@@ -7,13 +7,21 @@ import {RegistrationFrame} from '../components/PublicExperience';import {Private
 import {WorkerPasswordPanel} from './WorkerPasswordPanel';
 import {StagingSessionPanel} from '../modules/auth/pages/StagingSessionPanel';
 import {accountCall,parsePersonal,savePersonalExport,type PersonalAccount} from './worker-account';
-import {isWorkerLocal} from './worker-enrollment';import '../styles/worker-account.css';
+import {isWorkerLocal} from './worker-enrollment';import {isCanonicalEmailOrigin} from '../modules/auth/registration/contract/registration-client';import '../styles/worker-account.css';
+const profileCopy={
+ en:{archive:'Personal archive',archiveHint:'Your archived timecards and issued payslips, including from previous workplaces. Find current shifts in your workspace.',archiveUnavailable:'Your profile and personal archive could not be loaded. Password settings are separate.',recovery:'If you can still access your email, use a sign-in code. Timeax cannot automatically restore access to an account if you no longer control its email.',loginEmail:'Sign-in email'},
+ pl:{archive:'Archiwum osobiste',archiveHint:'Twoje zarchiwizowane ewidencje i wystawione rozliczenia, także z wcześniejszych miejsc pracy. Bieżące zmiany znajdziesz w panelu pracy.',archiveUnavailable:'Nie udało się wczytać profilu i archiwum osobistego. Ustawienia hasła działają niezależnie.',recovery:'Jeżeli nadal masz dostęp do poczty, użyj kodu logowania. Timeax nie może automatycznie przywrócić dostępu do konta bez dostępu do jego adresu e-mail.',loginEmail:'E-mail do logowania'},
+ ru:{archive:'Личный архив',archiveHint:'Ваши сохранённые табели и выданные расчётные листки, в том числе с прежних мест работы. Текущие смены смотрите в рабочем кабинете.',archiveUnavailable:'Не удалось загрузить профиль и личный архив. Настройки пароля работают отдельно.',recovery:'Если у вас ещё есть доступ к почте, войдите по коду из письма. Без доступа к этой почте Timeax не может автоматически восстановить аккаунт.',loginEmail:'Почта для входа'},
+ uk:{archive:'Особистий архів',archiveHint:'Ваші збережені табелі й видані розрахункові листки, зокрема з попередніх місць роботи. Поточні зміни переглядайте в робочому кабінеті.',archiveUnavailable:'Не вдалося завантажити профіль і особистий архів. Налаштування пароля працюють окремо.',recovery:'Якщо у вас іще є доступ до пошти, увійдіть за кодом із листа. Без доступу до цієї пошти Timeax не може автоматично відновити обліковий запис.',loginEmail:'Пошта для входу'},
+};
 const errorKey=(e:unknown)=>e instanceof Error&&['login','denied','conflict','invalid','tryLater'].includes(e.message)?e.message:'unavailable';
 export function WorkerAccountPage(){
- const {t}=useTranslation(),tx=(k:string)=>t('workerAccount.'+k),loc=useLocation();
+ const {t,i18n}=useTranslation(),tx=(k:string)=>t('workerAccount.'+k),loc=useLocation();
+ const copy=profileCopy[(i18n.resolvedLanguage??'en').split('-')[0] as keyof typeof profileCopy]??profileCopy.en;
  const [value,setValue]=useState<PersonalAccount>(),[status,setStatus]=useState('checking'),[revision,setRevision]=useState(0),[busy,setBusy]=useState(false),[confirmed,setConfirmed]=useState(false),[closed,setClosed]=useState(false);
  const [email,setEmail]=useState(''),[reference,setReference]=useState(''),[requestId,setRequestId]=useState('');
- const recovery=loc.pathname==='/account/recovery',reauth=loc.pathname==='/account/reauth';
+ const recovery=loc.pathname==='/account/recovery',reauth=loc.pathname==='/account/reauth',settings=loc.pathname==='/account/settings';
+ const publicRecovery=recovery&&isCanonicalEmailOrigin(location.origin);
  const reload=useCallback(()=>{setValue(undefined);setConfirmed(false);setRevision(n=>n+1)},[]);
  useEffect(()=>{if(recovery||reauth)return;const c=new AbortController();setValue(undefined);setStatus('checking');
  void accountCall('context',undefined,c.signal).then(parsePersonal).then(v=>{if(!c.signal.aborted){setValue(v);setStatus('')}}).catch(async e=>{if(c.signal.aborted)return;if(errorKey(e)==='login'){try{const receipt=await accountCall('deletion-status',undefined,c.signal) as {state:string};if(!c.signal.aborted&&receipt.state==='closed-provider-cleanup-pending'){setClosed(true);setStatus('');return}}catch{}}if(!c.signal.aborted)setStatus(errorKey(e))});return()=>c.abort()
@@ -22,29 +30,31 @@ export function WorkerAccountPage(){
  async function prepare(){await accountCall('begin-delete',{});reload()}
  return <RegistrationFrame title={tx(recovery?'recoveryTitle':reauth?'reauthTitle':'title')} lead={tx(recovery?'recoveryLead':'lead')}>
  <div className="personal-account" aria-busy={busy}>
- {loc.pathname==='/account/settings'&&!closed&&<WorkerPasswordPanel/>}
- {recovery?<><p className="notice-box">{tx('proofBoundary')}</p>{requestId?<div role="status"><h2>{tx('requestSaved')}</h2><p>{tx('requestPending')}</p><code>{requestId}</code></div>:<form className="auth-form" onSubmit={e=>{e.preventDefault();void run(async()=>{const r=await accountCall('recovery-request',{contactEmail:email,reference}) as {status:string;requestId:string;accessChanged:boolean;mailSent:boolean};if(r.status!=='received-awaiting-independent-proof'||r.accessChanged||r.mailSent)throw Error();setRequestId(r.requestId);setEmail('');setReference('')})}}>
+ {!recovery&&!reauth&&!closed&&status!=='login'&&<WorkerPasswordPanel/>}
+ {publicRecovery?<><p>{copy.recovery}</p><Link className="button button--outline" to="/login?method=code">{tx('loginAction')}</Link></>:
+ recovery?<><p className="notice-box">{tx('proofBoundary')}</p>{requestId?<div role="status"><h2>{tx('requestSaved')}</h2><p>{tx('requestPending')}</p><code>{requestId}</code></div>:<form className="auth-form" onSubmit={e=>{e.preventDefault();void run(async()=>{const r=await accountCall('recovery-request',{contactEmail:email,reference}) as {status:string;requestId:string;accessChanged:boolean;mailSent:boolean};if(r.status!=='received-awaiting-independent-proof'||r.accessChanged||r.mailSent)throw Error();setRequestId(r.requestId);setEmail('');setReference('')})}}>
  <label className="field-label" htmlFor="recovery-email">{tx('contactEmail')}<input id="recovery-email" type="email" required maxLength={254} value={email} onChange={e=>setEmail(e.target.value)}/></label>
  <label className="field-label" htmlFor="recovery-reference">{tx('reference')}<textarea id="recovery-reference" required minLength={2} maxLength={200} rows={3} value={reference} onChange={e=>setReference(e.target.value)}/></label>
  <p>{tx('noDocuments')}</p><button className="button button--primary button--full" disabled={busy}>{tx('request')}</button></form>}<p>{tx('hiringIndependent')}</p><Link to="/register/worker">{tx('join')}</Link></>:
  reauth?<><p>{tx('reauthLead')}</p>{isWorkerLocal()?<Link className="button button--primary button--full" to="/login">{tx('loginAction')}</Link>:<><PrivateAccess onOpened={reload}/><StagingSessionPanel purpose="existing" audience="workspace" guided onChanged={reload}/></>}
  <Link className="button button--outline button--full" to="/account/settings">{tx('returnSettings')}</Link></>:
  closed?<div className="notice-box" role="status"><h2>{tx('closedTitle')}</h2><p>{tx('closedBody')}</p></div>:
- value?<><nav aria-label={tx('navigation')}><Link to="/account">{tx('history')}</Link> · <Link to="/account/settings">{tx('settings')}</Link> · <Link to="/register/worker">{tx('join')}</Link></nav>
+ value?<><nav aria-label={tx('navigation')}><Link to="/account" aria-current={!settings?'page':undefined}>{copy.archive}</Link> · <Link to="/account/settings" aria-current={settings?'page':undefined}>{tx('settings')}</Link> · <Link to="/register/worker">{tx('join')}</Link></nav>
+ {value.email&&<p className="notice-box personal-sign-in-email"><strong>{copy.loginEmail}:</strong> {value.email}</p>}
  <h2>{tx('organizations')}</h2>{!value.memberships.length&&<p>{tx('emptyOrganizations')}</p>}
  {value.memberships.map(m=><article className="notice-box" key={m.membershipId}><h3>{m.name}</h3><p>{tx(m.state)}{m.endedAt?' · '+new Date(m.endedAt).toLocaleDateString():''}</p>{m.state==='active'&&<Link to={'/workspace/'+m.organizationId}>{tx('workspace')}</Link>}</article>)}
- <h2>{tx('history')}</h2><p>{tx('historyLead')}</p>{!value.timecards.length&&!value.payslips.length&&<p>{tx('emptyHistory')}</p>}
+ {!settings&&<><h2>{copy.archive}</h2><p>{copy.archiveHint}</p>{!value.timecards.length&&!value.payslips.length&&<p>{tx('emptyHistory')}</p>}
  {value.timecards.map(s=><details className="notice-box" key={s.kind+s.sourceId+s.workerKey}><summary>{tx('timecard')} · {s.agencyName} · {s.siteName} · {s.dateFrom} — {s.dateTo}</summary><p>{tx(s.kind)} · {s.paidMinutes} {tx('minutes')}</p><ul>{s.rows.map(r=><li key={r.id}>{r.data.localDate}: {r.data.paidMinutes} {tx('minutes')}</li>)}</ul></details>)}
  {value.payslips.map(p=><details className="notice-box" key={p.id}><summary>{tx('payslip')} · {p.document.source.agencyName} · {p.document.source.dateFrom} — {p.document.source.dateTo}</summary><p>{p.document.source.siteName}</p><PayslipAmounts value={p.document.calculation}/><p>{tx('issued')}: {new Date(p.issued_at).toLocaleString()}</p><PayslipPdfButton publication={p} disabled={busy}/></details>)}
- <button className="button button--outline button--full" disabled={busy} onClick={()=>void run(async()=>{const r=await accountCall('export');parsePersonal({...r as object,deletionState:'none'});savePersonalExport(r)})}>{tx('export')}</button>
- {loc.pathname==='/account/settings'&&<section className="personal-deletion"><h2>{tx('deleteTitle')}</h2><p>{tx('deleteLead')}</p><p>{tx('retention')}</p>
+ <button className="button button--outline button--full" disabled={busy} onClick={()=>void run(async()=>{const r=await accountCall('export');parsePersonal({...r as object,deletionState:'none'});savePersonalExport(r)})}>{tx('export')}</button></>}
+ {settings&&value.deletionAvailable!==false&&<section className="personal-deletion"><h2>{tx('deleteTitle')}</h2><p>{tx('deleteLead')}</p><p>{tx('retention')}</p>
  {value.deletionState==='none'?<button className="button button--outline button--full" disabled={busy} onClick={()=>void run(prepare)}>{tx('prepareDelete')}</button>:
  value.deletionState==='reauthentication-required'?<><p>{tx('reauthLead')}</p><Link className="button button--primary button--full" to="/account/reauth">{tx('reauthTitle')}</Link></>:
  <><label className="personal-confirm"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/><span>{tx('confirmDelete')}</span></label><button className="button button--primary button--full" disabled={busy||!confirmed} onClick={()=>void run(async()=>{const r=await accountCall('delete',{operationId:crypto.randomUUID(),confirmed:true}) as {state:string};if(r.state!=='closed-provider-cleanup-pending')throw Error();setClosed(true);setValue(undefined);setConfirmed(false)})}>{tx('deleteAction')}</button></>}</section>}
  <button className="button button--outline button--full" disabled={busy} onClick={reload}>{tx('refresh')}</button></>:null}
- {status&&<p className="notice-box" role="status">{tx(status)}</p>}
+ {status&&<p className="notice-box" role="status">{!recovery&&!reauth&&status==='unavailable'?copy.archiveUnavailable:tx(status)}</p>}
  {!recovery&&!reauth&&!value&&!closed&&<button className="button button--outline button--full" disabled={busy} onClick={reload}>{tx('refresh')}</button>}
- <p><Link to="/login">{tx('loginAction')}</Link> · <Link to="/account/recovery">{tx('recoveryTitle')}</Link></p>
+ <p>{!value&&!publicRecovery&&<><Link to="/login">{tx('loginAction')}</Link>{!recovery&&' · '}</>}{!recovery&&<Link to="/account/recovery">{tx('recoveryTitle')}</Link>}</p>
  </div></RegistrationFrame>
 }
 export function AgencyLifecyclePanel({organizationId,refreshKey=0}:{organizationId:string;refreshKey?:number}){

@@ -12,6 +12,7 @@ import {WorkerQuickShift,type WorkerShiftSource,type QuickTemplate} from './Work
 import {workerShiftCopy} from './worker-shift-copy';
 import {TeamPanel} from './TeamWorkflow';
 import {WorkerTemplateDrawer} from './WorkerTemplateDrawer';
+import {WorkerShiftRows} from './WorkerShiftRows';
 import {RightDrawer} from '../modules/workflows/components/RightDrawer';
 import '../styles/worker-hosted-calendar.css';
 
@@ -124,7 +125,7 @@ export function WorkerCalendar({organizationId,membershipId,enableInternal=true,
    {saved&&<p role="status">{t('timecards.saved')}</p>}
    {reviewPending===selected&&<p role="status">{shiftCopy.requestSent}</p>}
    {!loading&&!detailRecords.shifts.length&&!detailRecords.absences.length&&!detailRecords.plans.length&&(!partial||internal||factory||team)&&<p>{c.empty}</p>}
-   {detailRecords.shifts.map(s=><p key={s.source+s.id}><strong>{s.data.startTime} – {s.data.endTime}</strong>{s.site?' · '+s.site:''} · {t((s.source==='internal'?'timecards.':'factoryHours.')+s.status)}</p>)}
+   <WorkerShiftRows groups={detailRecords.shifts.length?[{day:selected,shifts:detailRecords.shifts}]:[]}/>
    {detailRecords.absences.map(a=><p key={a.id}>{c.absence}{a.site?' · '+a.site:''}{a.to!==a.from?' · '+a.from+' – '+a.to:''}</p>)}
    {detailRecords.plans.map(p=><p key={p.id}>{planLabel} · {p.start} - {p.end}{p.site?' · '+p.site:''}</p>)}
   </div>

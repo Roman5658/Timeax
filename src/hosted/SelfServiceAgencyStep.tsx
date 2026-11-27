@@ -52,7 +52,7 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
     const member=memberships.find(m=>m.role==='worker'&&m.kind==='agency');
     const productions=memberships.filter(m=>m.kind==='factory'&&['factory_admin','team_leader','worker'].includes(m.role));
     if(signal.aborted)return;
-    if(member&&workerPasswordReauth){navigate('/account/settings',{replace:true});return;}
+    if(workerPasswordReauth&&memberships.length&&memberships.every(m=>m.role==='worker')){navigate('/account/settings',{replace:true});return;}
     if(member&&scope.workerProvisioning){
      try{
       if(emailInvitations(await workerCall('email-invitations',undefined,signal)).length){

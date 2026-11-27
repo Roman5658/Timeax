@@ -29,7 +29,7 @@ const specs={
  factoryTimecards:{handler:createFactoryTimecardsHandler,match:orgRoute('factory-timecards','context|create|correct|set-mode|propose-placement|approve-placement|revoke-placement|review|confirm|dispute|send|history|read/'+id)},
  payroll:{handler:createPayslipsHandler,match:orgRoute('payslips','context|settings|group|group-member|rate|create|assign|save|issue|read/'+id)},
  names:{handler:createMemberNamesHandler,match:orgRoute('member-names','context|set')},
- account:{handler:createAccountHandler,match:/^\/api\/personal-account\/(?:agency-context|end-membership)$/},
+ account:{handler:createAccountHandler,match:/^\/api\/personal-account\/(?:context|export|agency-context|end-membership)$/},
  registration:{handler:createFactoryRegistrationHandler,match:/^\/api\/factory-registration\/(?:context|submit|review|invite-worker|claim-worker|revoke-worker|invite-factory|claim-agency-invitation|revoke-agency-invitation)$/},
  team:{handler:createTeamHandler,match:orgRoute('team','context|read|message|absence|schedule|update-plan|cancel|save-template|delete-template|invite-accountant|revoke-accountant')}
 };
@@ -130,7 +130,7 @@ export async function assembleAgencyOperations(config,lane,{now=Date.now,sharedW
  return resolveSession=>{
   const handlers=ready.map(([name,store,inviteKey])=>{
    const spec=specs[name];
-   return [spec.match,spec.handler({origin:config.origin,now,store,inviteKey,provisioning:name==='worker'?provisioning:undefined,invitationMailer:name==='worker'?invitationMailer:undefined,workerTerms:name==='worker'?workerTerms:undefined,requireWorkerTerms:name==='worker',agencyOnly:spec.agencyOnly,revokeSessions:async()=>{},
+   return [spec.match,spec.handler({origin:config.origin,now,store,inviteKey,provisioning:name==='worker'?provisioning:undefined,invitationMailer:name==='worker'?invitationMailer:undefined,workerTerms:name==='worker'?workerTerms:undefined,requireWorkerTerms:name==='worker',agencyOnly:spec.agencyOnly,personalReadOnly:name==='account',revokeSessions:async()=>{},
     resolveSession:async request=>{
      const session=await resolveSession(request);
      if(session.state!=='verified')return session;

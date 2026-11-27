@@ -8,12 +8,13 @@ const cookie=(name,value='',seconds=0)=>name+'='+value+'; Max-Age='+seconds+'; P
 const readIntent=r=>{const a=(r.headers.get('cookie')??'').split(';').map(s=>s.trim()).filter(s=>s.startsWith(INTENT+'='));const v=a.length===1?a[0].slice(INTENT.length+1):'';return /^[A-Za-z0-9_-]{43}$/.test(v)?v:null};
 const reply=(status,body,cookies=[])=>{const headers=new Headers({'Content-Type':'application/json','Cache-Control':'no-store, private',Vary:'Cookie','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'});for(const c of cookies)headers.append('set-cookie',c);return new Response(JSON.stringify(body),{status,headers})};
 async function body(r){if(!/^application\/json(?:;\s*charset=utf-8)?$/i.test(r.headers.get('content-type')??'')||r.headers.has('content-encoding')||!r.body)throw Error();const reader=r.body.getReader();let timer,size=0,parts=[];try{const limit=new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error()),2500)});for(;;){const v=await Promise.race([reader.read(),limit]);if(v.done)break;size+=v.value.length;if(size>2048)throw Error();parts.push(v.value)}return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(parts)))}finally{clearTimeout(timer);void reader.cancel().catch(()=>{})}}
-export function createAccountHandler({origin,store=null,resolveSession,revokeSessions,now=Date.now}){
+export function createAccountHandler({origin,store=null,resolveSession,revokeSessions,personalReadOnly=false,now=Date.now}){
  if(new URL(origin).origin!==origin||!origin.startsWith('https:'))throw Error('HTTPS required');
  let recoveryWindow=0,recoveryCount=0;
  return async r=>{try{
  const u=new URL(r.url),m=u.pathname.match(/^\/api\/personal-account\/(context|export|begin-delete|delete|deletion-status|recovery-request|agency-context|end-membership)$/);
  if(u.origin!==origin||u.search||u.hash||!m)return reply(404,{error:'unavailable'});const action=m[1],write=!['context','export','deletion-status'].includes(action);
+ if(personalReadOnly&&!['context','export','agency-context','end-membership'].includes(action))return reply(404,{error:'unavailable'});
  if(r.method!==(write?'POST':'GET'))return reply(405,{error:'unavailable'});
  const mutation=r.method==='POST',from=r.headers.get('origin'),site=r.headers.get('sec-fetch-site');
  if((mutation?from!==origin:from!==null&&from!==origin)||(site!==null&&site!=='same-origin')||[...r.headers.keys()].some(k=>/^(authorization|forwarded|x-forwarded-.*|x-role|x-subject|x-issuer|x-tenant.*|x-timeax-.*)$/.test(k)))return reply(403,{error:'denied'});
@@ -34,7 +35,8 @@ export function createAccountHandler({origin,store=null,resolveSession,revokeSes
  const actor={issuer:s.issuer,subject:s.subject};let result,cookies=[];
  if(action==='context'||action==='export'){
   result=await store.invoke(actor,action);
-  if(action==='context')result.deletionState=tokenHash?(await store.invoke(actor,'deletion-readiness',{tokenHash,sessionHash:s.sessionKey,authenticatedAt:new Date(Number.isSafeInteger(s.authenticatedAt)&&s.authenticatedAt<=now()&&now()-s.authenticatedAt<=300000?s.authenticatedAt:0).toISOString()})).state:'none';
+  if(action==='context'&&personalReadOnly)result={...result,email:s.email,deletionAvailable:false,deletionState:'none'};
+  else if(action==='context')result.deletionState=tokenHash?(await store.invoke(actor,'deletion-readiness',{tokenHash,sessionHash:s.sessionKey,authenticatedAt:new Date(Number.isSafeInteger(s.authenticatedAt)&&s.authenticatedAt<=now()&&now()-s.authenticatedAt<=300000?s.authenticatedAt:0).toISOString()})).state:'none';
  }
  else if(action==='agency-context'){
   if(!exact(input,['organizationId'])||!id(input.organizationId))return reply(400,{error:'invalid'});result=await store.invoke(actor,action,input);

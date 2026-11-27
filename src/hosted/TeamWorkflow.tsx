@@ -9,6 +9,7 @@ import {AgencyBookDrawer} from './AgencyBookDrawer';
 import {cleanTeamDay,eligibleTeamRecipients,warsawTeamDay,type TeamAudience} from './team-communication';
 import {groupInboxConversations,indexMessageThreads,unreadInboxMessageIds} from './team-message-threads';
 import {teamCommunicationCopy} from './team-communication-copy';
+import {workerScheduleRows} from './worker-schedule.ts';
 import {AgencySchedule} from './AgencySchedule';
 import {WorkerTemplateDrawer} from './WorkerTemplateDrawer';
 import {inboxPage,inboxPageSize,type Inbox} from './inbox';
@@ -180,6 +181,7 @@ export function TeamPanel({organizationId,section,initialDay,compact=false,notif
  const visibleEntries=value?.entries.filter(v=>section==='messages'
   ?v.kind!=='message'
   :v.kind===(section==='schedule'?'schedule':'absence'))??[];
+ const workerSchedule=section==='schedule'&&value?.role==='worker';
  const allNotices:ExternalNotice[]=section==='messages'&&!inboxLoading?[...visibleEntries.map(e=>({anchor:'team-notice-'+e.id,at:e.createdAt,card:()=>noticeCard(e,true)})),...externalNotices]
   .sort((a,b)=>Date.parse(b.at)-Date.parse(a.at)||a.anchor.localeCompare(b.anchor)):[];
  const listedNotices=allNotices.filter(p=>(inboxState?.state(p.anchor)??'active')===noticeFolder);
@@ -278,8 +280,9 @@ export function TeamPanel({organizationId,section,initialDay,compact=false,notif
  {section==='absence'&&value.role==='worker'&&!!value.sites.length&&<form className="auth-form dashboard-panel" onSubmit={e=>{e.preventDefault();void run(edit?'update-plan':'absence',{...(edit?{id:edit.id,revision:edit.revision}:{siteId:site}),payload:{dateFrom:date,dateTo:until}})}}>
  {!compact&&<h2>{tx('absence')}</h2>}<p>{tx('absenceHint')}</p>{siteInput(true)}{dates}<button className="button button--primary" disabled={busy||!site}>{tx(edit?'save':'send')}</button></form>}
  {section==='schedule'&&value.role==='agency_admin'&&<AgencySchedule key={organizationId} context={value} workerLabel={label}/>}
- {section==='schedule'&&value.role!=='agency_admin'&&<><p className="notice-box">{tx('plannedOnly')}</p>{value.role==='team_leader'&&<form className="auth-form dashboard-panel" onSubmit={e=>{e.preventDefault();void run(edit?'update-plan':'schedule',{...(edit?{id:edit.id,revision:edit.revision}:{siteId:site,recipients:selected}),payload:{localDate:date,startTime:start,endTime:end}})}}>
- {siteInput(true)}{choices(true)}<label className="field-label">{t('timecards.date')}<input type="date" required value={date} onChange={e=>{D(e.target.value);dirty()}}/></label>{times}<p>{t('timecards.overnight')} · Europe/Warsaw</p><button className="button button--primary" disabled={busy||!site||!selected.length}>{tx(edit?'save':'plan')}</button></form>}</>}
+ {workerSchedule&&<WorkerSchedule entries={visibleEntries}/>}
+ {section==='schedule'&&value.role==='team_leader'&&<><p className="notice-box">{tx('plannedOnly')}</p><form className="auth-form dashboard-panel" onSubmit={e=>{e.preventDefault();void run(edit?'update-plan':'schedule',{...(edit?{id:edit.id,revision:edit.revision}:{siteId:site,recipients:selected}),payload:{localDate:date,startTime:start,endTime:end}})}}>
+ {siteInput(true)}{choices(true)}<label className="field-label">{t('timecards.date')}<input type="date" required value={date} onChange={e=>{D(e.target.value);dirty()}}/></label>{times}<p>{t('timecards.overnight')} · Europe/Warsaw</p><button className="button button--primary" disabled={busy||!site||!selected.length}>{tx(edit?'save':'plan')}</button></form></>}
  {section==='templates'&&value.role==='worker'&&<>
   <div className="form-actions team-template-tools">
    <button className="button button--primary" type="button" disabled={busy} onClick={()=>{ET(undefined);setTemplateOpen(true)}}><Plus size={16} aria-hidden="true"/>{t('workflow.templates.add')}</button>
@@ -293,7 +296,7 @@ export function TeamPanel({organizationId,section,initialDay,compact=false,notif
  {invite&&<div className="notice-box"><label className="field-label">{tx('inviteLink')}<input readOnly value={invite} onFocus={e=>e.target.select()}/></label><p>{tx('noMail')}</p><button className="button button--outline" onClick={()=>{void navigator.clipboard.writeText(invite).then(()=>N('copied')).catch(()=>N('copyManually'))}}>{tx('copy')}</button></div>}
  {value.invitations.map(v=><article className="notice-box" key={v.id}><strong>{v.email}</strong><p>{tx(v.state)} · {new Date(v.expiresAt).toLocaleString()}</p>{!['revoked','expired'].includes(v.state)&&<button className="button button--outline" disabled={busy} onClick={()=>{if(window.confirm(tx('revokeConfirm'))){dirty();void run('revoke-accountant',{id:v.id})}}}>{tx('revoke')}</button>}</article>)}</>}
  {edit&&<button className="button button--outline" onClick={()=>{E(undefined);dirty()}}>{tx('stopEditing')}</button>}
- {['messages','schedule','absence'].includes(section)&&!(section==='schedule'&&value.role==='agency_admin')&&<>{section!=='messages'&&!compact&&<h2>{tx('history')}</h2>}
+ {['messages','schedule','absence'].includes(section)&&!(section==='schedule'&&(value.role==='agency_admin'||workerSchedule))&&<>{section!=='messages'&&!compact&&<h2>{tx('history')}</h2>}
 
  {section==='messages'?<section className="dashboard-panel team-work-notices" aria-label={tx('workNotifications')}>
  <h2>{tx('workNotifications')}</h2>{notificationExtras}
@@ -322,6 +325,18 @@ export function TeamPanel({organizationId,section,initialDay,compact=false,notif
  {value?.role!=='agency_admin'&&v.outgoing&&v.state==='active'&&<div className="form-actions"><Link to={'/workspace/'+organizationId+'/'+(v.kind==='absence'?'absence':'schedule')}>{tx('section')}</Link>{section!=='messages'&&<button className="button button--outline" disabled={busy} onClick={()=>editPlan(v)}>{tx('edit')}</button>}<button className="button button--outline" disabled={busy} onClick={()=>{dirty();void run('cancel',{id:v.id,revision:v.revision})}}>{tx('cancelPlan')}</button></div>}
  </>;
  return embedded?contents:<article className="notice-box" key={v.id} id={'team-notice-'+v.id} tabIndex={-1}>{contents}</article>}
+}
+function WorkerSchedule({entries}:{entries:TeamEntry[]}){
+ const {t,i18n}=useTranslation();
+ const rows=workerScheduleRows(entries);
+ const date=new Intl.DateTimeFormat(i18n.resolvedLanguage,{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'});
+ return <section className="dashboard-panel" aria-label={t('workflow.schedule.mySchedule')}>
+  <p className="muted-copy">{t('workflow.schedule.plannedDisclaimer')}</p>
+  {!rows.length?<p>{t('workflow.schedule.empty')}</p>:<ul className="factory-summary-list">{rows.map(row=><li className="factory-summary-row" key={row.id}>
+   <time dateTime={row.day}>{date.format(new Date(row.day+'T12:00:00Z'))}</time><strong>{row.start}–{row.end}</strong>
+   {row.cancelled&&<span className="status-pill">{t('workflow.schedule.state.cancelled')}</span>}
+  </li>)}</ul>}
+ </section>;
 }
 export function AccountantInvitePage(){
  const {t}=useTranslation(),tx=(k:string)=>t('team.'+k),location=useLocation();

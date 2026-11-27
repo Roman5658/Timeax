@@ -1,7 +1,7 @@
 import {isWorkerLocal} from './worker-enrollment';
 import {parsePublication,type PayPublication,type PaySource} from './payslips';
 export type PersonalMembership={membershipId:string;organizationId:string;name:string;role:'worker';state:'active'|'revoked'|'ended';endedAt:string|null};
-export type PersonalAccount={state:'active';identityId:string;memberships:PersonalMembership[];timecards:PaySource[];payslips:PayPublication[];exportVersion:1;deletionState:'none'|'reauthentication-required'|'ready-to-confirm'};
+export type PersonalAccount={state:'active';identityId:string;memberships:PersonalMembership[];timecards:PaySource[];payslips:PayPublication[];exportVersion:1;email?:string;deletionAvailable?:boolean;deletionState:'none'|'reauthentication-required'|'ready-to-confirm'};
 export async function accountCall(action:string,body?:unknown,signal?:AbortSignal):Promise<unknown>{
  if(location.protocol!=='https:'&&!isWorkerLocal())throw Error('unavailable');
  const r=await fetch('/api/personal-account/'+action,{method:body===undefined?'GET':'POST',credentials:'same-origin',redirect:'error',cache:'no-store',signal,headers:body===undefined?{Accept:'application/json'}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
@@ -11,6 +11,8 @@ export async function accountCall(action:string,body?:unknown,signal?:AbortSigna
 const uuid=(v:unknown)=>typeof v==='string'&&/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(v);
 export function parsePersonal(v:unknown):PersonalAccount{
  const c=v as PersonalAccount;if(c?.state!=='active'||!uuid(c.identityId)||c.exportVersion!==1||!Array.isArray(c.memberships)||!Array.isArray(c.timecards)||!Array.isArray(c.payslips)||!['none','reauthentication-required','ready-to-confirm'].includes(c.deletionState))throw Error('unavailable');
+ if(c.email!==undefined&&(typeof c.email!=='string'||c.email.length>254||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c.email))||
+  c.deletionAvailable!==undefined&&typeof c.deletionAvailable!=='boolean')throw Error('unavailable');
  for(const m of c.memberships)if(!uuid(m.membershipId)||!uuid(m.organizationId)||m.role!=='worker'||typeof m.name!=='string'||!['active','revoked','ended'].includes(m.state))throw Error('unavailable');
  const own=(s:PaySource)=>c.memberships.some(m=>m.membershipId===s.workerKey&&m.organizationId===s.agencyId);
  for(const s of c.timecards)if(!own(s)||!['internal','factory'].includes(s.kind)||!Array.isArray(s.rows)||!s.rows.length||s.rows.some(r=>r.membershipId!==s.workerKey)||s.rows.reduce((n,r)=>n+r.data.paidMinutes,0)!==s.paidMinutes)throw Error('unavailable');

@@ -17,7 +17,7 @@ test("page-turn follows real pathname changes, not same-page updates or the host
 
 test("route decoration is independent from rendered content and windows open without taking over existing close behavior", () => {
   const read = name => readFileSync(new URL("../src/" + name, import.meta.url), "utf8");
-  assert.match(read("hosted/main.tsx"), /<HostedApp\/><RoutePageTurn hostedAuthPanels\/>/);
+  assert.match(read("hosted/main.tsx"), /<InstalledAppResume>\s*<HostedApp\/>\s*<\/InstalledAppResume>\s*<RoutePageTurn hostedAuthPanels\/>/);
   assert.match(read("app/App.tsx"), /<RoutePageTurn \/>\s*<Suspense/);
   assert.match(read("app/RoutePageTurn.tsx"), /const \{ pathname \} = useLocation\(\)/);
   assert.match(read("app/RoutePageTurn.tsx"), /aria-hidden="true"/);
