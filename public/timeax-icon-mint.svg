@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="back" x2="1" y2="1" gradientUnits="objectBoundingBox" x1="0" y1="0">
+      <stop stop-color="#144448"/><stop offset=".56" stop-color="#0a2836"/><stop offset="1" stop-color="#081827"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".28" cy=".14" r=".76">
+      <stop stop-color="#3b9c83" stop-opacity=".34"/><stop offset="1" stop-color="#3b9c83" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="mint" x1="132" y1="166" x2="350" y2="340" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#e1ffda"/><stop offset=".50" stop-color="#a8ffc5"/><stop offset="1" stop-color="#4de0b1"/>
+    </linearGradient>
+  </defs>
+  <path d="M0 0h512v512H0z" fill="url(#back)"/>
+  <path d="M0 0h512v512H0z" fill="url(#glow)"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="256" cy="256" r="111" stroke="#3d7e7b" stroke-width="19" opacity=".6"/>
+    <path d="M350 196a111 111 0 1 0 11 92" stroke="url(#mint)" stroke-width="19"/>
+    <path d="M256 172v14M172 256h14M256 326v14" stroke="#e2fff1" stroke-opacity=".75" stroke-width="9"/>
+    <path d="m204 253 35 36 71-76" stroke="url(#mint)" stroke-width="23"/>
+  </g>
+</svg>

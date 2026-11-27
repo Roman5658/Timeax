@@ -6,7 +6,7 @@ self.addEventListener('push',event=>{
  const path=href(payload?.path);
  const body=typeof payload?.body==='string'&&payload.body.length<=90?payload.body:'New notification in Timeax';
  event.waitUntil(self.registration.showNotification('Timeax',{
-  body,icon:'/timeax-app-192.png',tag:'timeax-notification'+path,data:{path},
+  body,icon:'/timeax-icon-mint-192.png',tag:'timeax-notification'+path,data:{path},
  }));
 });
 self.addEventListener('notificationclick',event=>{
