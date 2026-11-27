@@ -46,3 +46,25 @@
   top:max(17px,env(safe-area-inset-top,0px));
  }
 }
+/* Keep cabinet controls on one line on phones without moving the desktop header. */
+@media (max-width: 650px) {
+ .hosted-cabinet .portal-topline {
+  grid-template-columns: 44px minmax(0, 1fr);
+  column-gap: 8px;
+ }
+ .hosted-cabinet .portal-topline-left { display: contents; }
+ .hosted-cabinet .portal-breadcrumb { grid-area: 1 / 1 / 2 / -1; }
+ .hosted-cabinet .portal-mobile-menu { grid-area: 2 / 1; align-self: center; }
+ .hosted-cabinet .portal-top-actions {
+  grid-area: 2 / 2;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+ }
+ .hosted-cabinet .portal-top-actions .team-bell {
+  min-width: 44px;
+  min-height: 44px;
+  margin-inline-end: auto;
+  flex-shrink: 0;
+ }
+}
