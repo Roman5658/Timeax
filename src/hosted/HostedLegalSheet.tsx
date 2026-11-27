@@ -27,7 +27,7 @@ export function HostedLegalSheet({kind,opener,onClosed,centered=false}:{kind:Leg
   const timeout=window.setTimeout(onClosed,460);
   return()=>window.clearTimeout(timeout);
  },[closing,onClosed]);
- return <dialog ref={dialog} className={`auth-book enrollment-card auth-legal-sheet${centered?" auth-legal-sheet--centered":""}${closing?" is-closing":""}`}
+ return <dialog ref={dialog} className={`auth-book enrollment-card auth-legal-sheet${centered?" auth-book--centered auth-legal-sheet--centered":""}${closing?" is-closing":""}`}
   aria-labelledby="legal-sheet-title"
   onKeyDown={event=>{if(event.key==="Escape"){event.preventDefault();event.stopPropagation();close()}}}
   onCancel={event=>{event.preventDefault();event.stopPropagation();close()}}
