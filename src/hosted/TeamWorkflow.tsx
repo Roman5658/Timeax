@@ -253,7 +253,7 @@ export function TeamPanel({organizationId,section,initialDay,compact=false,notif
     const unread=group.messages.filter(v=>!read(v)).length;
     const active=group.id===conversation;
     const responder=group.messages.filter(v=>!v.outgoing&&responseMode(v)).at(-1);
-    return <li key={group.id} className="team-inbox__item">
+    return <li key={group.id} className="team-inbox__item" data-unread={unread>0}>
      <button type="button" className="team-inbox__open" aria-expanded={active} aria-controls={'team-thread-'+group.id} onClick={()=>viewConversation(group)}>
       <strong>{who}</strong><time dateTime={summary.createdAt}>{new Date(summary.createdAt).toLocaleString()}</time>
       {subject&&<span className="team-inbox__subject">{subject}</span>}
@@ -261,7 +261,7 @@ export function TeamPanel({organizationId,section,initialDay,compact=false,notif
       {unread>0&&<span className="team-inbox__unread">{tx('unread')} · {unread}</span>}
      </button>
      <div id={'team-thread-'+group.id} hidden={!active}>{active&&<>
-      <ol className="team-inbox__messages">{group.messages.map(v=><li key={v.id} id={'team-message-'+v.id} tabIndex={-1} className={v.outgoing?'team-inbox__bubble is-outgoing':'team-inbox__bubble'}>
+      <ol className="team-inbox__messages">{group.messages.map(v=><li key={v.id} id={'team-message-'+v.id} tabIndex={-1} data-unread={!read(v)} className={v.outgoing?'team-inbox__bubble is-outgoing':'team-inbox__bubble'}>
        <div><strong>{v.outgoing?tx('you'):person(v.sender)}</strong> <time dateTime={v.createdAt}>{new Date(v.createdAt).toLocaleString()}</time></div>
        <p className="team-body">{String(v.payload.text)}</p>
        <InboxActions inbox={inboxState} anchor={'team-message-'+v.id}/>

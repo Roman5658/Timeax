@@ -38,3 +38,14 @@
 .team-work-notices>article{margin-block:.55rem}
 .hosted-cabinet .portal-nav-link .timeax-review-count{flex:none;margin-inline-start:auto;min-width:1.45rem;padding:.15rem .34rem;text-align:center;border-radius:999px;background:var(--accent,#266b5b);color:var(--on-accent,#fff);font-size:.8rem;font-weight:700}
 .agency-worker-group li[id^="earlier-shift-"]:target{outline:2px solid var(--accent,#2d8068);outline-offset:2px;scroll-margin-top:4rem}
+
+.agency-shift-reviews{display:grid;gap:.8rem;margin-block-end:1rem}
+.agency-shift-review h2 small{color:var(--muted-strong);font-weight:500}
+
+/* Unread is visible through both the accent and the existing text label. */
+.team-inbox__item[data-unread=true],.team-inbox__bubble[data-unread=true],.team-bell-popover a.team-bell-preview[data-unread=true]{
+ border-inline-start:3px solid var(--accent,#38a98a);
+ background:var(--surface-soft,var(--surface));
+ background:color-mix(in srgb,var(--surface) 86%,var(--accent,#38a98a));
+}
+.team-inbox__unread{width:fit-content;border-radius:999px;padding:.12rem .5rem;background:var(--surface);color:var(--ink)}

@@ -24,11 +24,4 @@ export function parsePayslips(v:unknown,org:string):PayContext{const c=v as PayC
  if(c.role!=='agency_admin'&&(c.settings||c.sources.length||c.groups.length||c.rates.length||c.workers.length||c.accountants.length||c.groupAssignments.length))throw Error('unavailable');
  if(c.role==='worker'&&c.drafts.length)throw Error('unavailable');return c;
 }
-export function cents(value:string):number|undefined{const s=value.trim().replace(',','.');if(!/^\d+(?:\.\d{1,2})?$/.test(s))return;const n=Math.round(Number(s)*100);return Number.isSafeInteger(n)&&n<=1000000000?n:undefined}
-export function payPreview(minutes:number,rates:RateLine[],v:PayValues){if(v.deductions.some(d=>!Number.isSafeInteger(d.cents)||d.cents<0))return;const deductions=v.deductions.reduce((n,d)=>n+d.cents,0);let gross:number,net:number;
- if(v.mode==='saved-rates'){if(!rates.length||rates.some(r=>r.cents===null||!r.basis)||new Set(rates.map(r=>r.basis)).size!==1)return;const total=rates.reduce((n,r)=>n+Math.round(r.minutes*r.cents!/60),0);gross=rates[0].basis==='gross'?total:total+deductions;net=gross-deductions}
- else if(v.amountCents===null)return;
- else if(v.mode==='net-total'){net=v.amountCents;gross=net+deductions}
- else{gross=v.mode==='gross-rate'?Math.round(minutes*v.amountCents/60):v.amountCents;net=gross-deductions}
- if(gross<0||gross>1000000000||net<0||v.knownNetCents!==null&&v.knownNetCents!==net)return;return {grossCents:gross,netCents:net,deductionCents:deductions};
-}
+export {payslipCents as cents,calculateDisplayedPay as payPreview} from './payroll-simple';

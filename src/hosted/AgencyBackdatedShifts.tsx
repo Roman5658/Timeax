@@ -1,8 +1,12 @@
-import {useCallback,useEffect,useState} from 'react';
+import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import {useLocation} from 'react-router-dom';
 import {useTranslation} from 'react-i18next';
-import {useBellAnchor,type BellPreview} from './notification-navigation';
+import {bellTarget,useBellAnchor,type BellPreview} from './notification-navigation';
 import {timecardCall} from './timecards';
 import {useMemberNames} from './MemberNames';
+import {InboxPagination} from './InboxControls';
+import {inboxPage,inboxPageSize} from './inbox';
+import {groupShiftReviews,type ShiftReviewState} from './shift-review';
 
 export type Notice={id:string;source:'internal'|'factory';workerId:string;day:string;submittedAt:string;read:boolean};
 export type Request={id:string;workerId:string;day:string;startTime:string;endTime:string;site:string;submittedAt:string;state:'pending'|'approved'|'rejected'};
@@ -47,9 +51,28 @@ export function agencyShiftPreviews(feed:Feed|undefined,language:string|undefine
  return [...feed.requests.filter(e=>e.state==='pending').map(e=>({anchor:'earlier-shift-'+e.id,title:c[2],summary:e.site+' · '+e.day+' · '+e.startTime+'–'+e.endTime,at:e.submittedAt,unread:e.state==='pending'})),
   ...feed.notices.map(e=>({anchor:'backdated-'+e.source+'-'+e.id,title:c[0],summary:c[1]+' · '+e.day,at:e.submittedAt,unread:!e.read}))];
 }
+const sectionCopy={
+ en:{pending:'Shifts awaiting review',approved:'Approved shifts',rejected:'Rejected shifts',empty:'No shifts in this list.',history:'History shows up to 50 of the most recent decisions.'},
+ ru:{pending:'Смены на подтверждение',approved:'Подтверждённые смены',rejected:'Отклонённые смены',empty:'В этом списке пока нет смен.',history:'В истории показываются до 50 последних решений.'},
+ pl:{pending:'Zmiany do zatwierdzenia',approved:'Zatwierdzone zmiany',rejected:'Odrzucone zmiany',empty:'Brak zmian na tej liście.',history:'Historia obejmuje do 50 ostatnich decyzji.'},
+ uk:{pending:'Зміни на підтвердження',approved:'Підтверджені зміни',rejected:'Відхилені зміни',empty:'У цьому списку поки немає змін.',history:'В історії показано до 50 останніх рішень.'},
+};
 export function AgencyBackdatedShifts({organizationId,feed,refresh}:{organizationId:string;feed:Feed;refresh:()=>void}){
  useBellAnchor(true);
- const {i18n}=useTranslation(),c=copy[(i18n.resolvedLanguage??'en').split('-')[0] as keyof typeof copy]??copy.en;
+ const {i18n}=useTranslation(),lang=(i18n.resolvedLanguage??'en').split('-')[0] as keyof typeof copy,c=copy[lang]??copy.en,w=sectionCopy[lang]??sectionCopy.en;
+ const {hash,key}=useLocation(),lastLink=useRef('');
+ const [pages,P]=useState<Record<ShiftReviewState,number>>({pending:0,approved:0,rejected:0});
+ const groups=useMemo(()=>groupShiftReviews(feed.requests),[feed.requests]);
+ useEffect(()=>{
+  if(lastLink.current===key)return;
+  const anchor=bellTarget(hash);
+  if(!anchor?.startsWith('earlier-shift-'))return;
+  for(const state of ['pending','approved','rejected'] as const){
+   const position=groups[state].findIndex(e=>'earlier-shift-'+e.id===anchor);
+   if(position<0)continue;
+   lastLink.current=key;P(previous=>({...previous,[state]:Math.floor(position/inboxPageSize)}));break;
+  }
+ },[groups,hash,key]);
  const {label}=useMemberNames(organizationId),[busy,B]=useState(false),[error,E]=useState(false);
  const when=new Intl.DateTimeFormat(i18n.resolvedLanguage,{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Warsaw'});
  async function action(kind:string,input:{id:string},expected:string){
@@ -61,14 +84,23 @@ export function AgencyBackdatedShifts({organizationId,feed,refresh}:{organizatio
   }catch{E(true)}finally{B(false)}
  }
  if(!feed.requests.length)return null;
- return <section className="dashboard-panel agency-worker-group">
-  {!!feed.requests.length&&<><h2>{c[2]}</h2><ul>{feed.requests.map(e=><li key={e.id} id={'earlier-shift-'+e.id} tabIndex={-1}>
-   <div><strong>{label(e.workerId)}</strong><p>{e.site} · {e.day} · {e.startTime}–{e.endTime}</p><p>{c[8]}: {when.format(new Date(e.submittedAt))}</p></div>
-   {e.state==='pending'?<div className="form-actions team-template-tools">
-    <button type="button" className="button button--primary button--small" disabled={busy} onClick={()=>{if(window.confirm(c[9]))void action('earlier-approve',{id:e.id},'approved')}}>{c[3]}</button>
-    <button type="button" className="button button--outline button--small" disabled={busy} onClick={()=>{if(window.confirm(c[10]))void action('earlier-reject',{id:e.id},'rejected')}}>{c[4]}</button>
-   </div>:<span>{c[e.state==='approved'?5:6]}</span>}
-  </li>)}</ul></>}
-  {error&&<p role="alert">{c[7]}</p>}
- </section>;
+ return <div className="agency-shift-reviews">
+  {(['pending','approved','rejected'] as const).map(state=>{
+   if(state==='rejected'&&!groups.rejected.length)return null;
+   const current=inboxPage(groups[state],pages[state]);
+   return <section key={state} className="dashboard-panel agency-worker-group agency-shift-review" data-review-state={state} aria-label={w[state]}>
+    <h2>{w[state]}{current.rows.length>0&&<small> ({state==='pending'?feed.pending:groups[state].length})</small>}</h2>
+    {current.rows.length>0?<ul>{current.rows.map(e=><li key={e.id} id={'earlier-shift-'+e.id} tabIndex={-1}>
+     <div><strong>{label(e.workerId)}</strong><p>{e.site} · {e.day} · {e.startTime}–{e.endTime}</p><p>{c[8]}: {when.format(new Date(e.submittedAt))}</p></div>
+     {state==='pending'&&<div className="form-actions team-template-tools">
+      <button type="button" className="button button--primary button--small" disabled={busy} onClick={()=>{if(window.confirm(c[9]))void action('earlier-approve',{id:e.id},'approved')}}>{c[3]}</button>
+      <button type="button" className="button button--outline button--small" disabled={busy} onClick={()=>{if(window.confirm(c[10]))void action('earlier-reject',{id:e.id},'rejected')}}>{c[4]}</button>
+     </div>}
+    </li>)}</ul>:<p>{w.empty}</p>}
+    {state==='pending'&&error&&<p role="alert">{c[7]}</p>}
+    <InboxPagination page={current.page} pages={current.pages} onPage={page=>P(previous=>({...previous,[state]:page}))}/>
+   </section>;
+  })}
+  {groups.approved.length+groups.rejected.length>=50&&<p className="muted-copy">{w.history}</p>}
+ </div>;
 }

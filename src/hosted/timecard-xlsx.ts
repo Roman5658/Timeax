@@ -1,15 +1,15 @@
 import ExcelJS from 'exceljs';
-import {snapshotExportRows,timecardBreakLabel,timecardTotals,timecardWorkerGroups,type AgencyTimecardSnapshot} from './timecard-document.ts';
-export {snapshotExportRows,type AgencyTimecardSnapshot} from './timecard-document.ts';
+import {snapshotExportRows,timecardBreakLabel,timecardTotals,timecardWorkerGroups,type TimecardReport} from './timecard-document.ts';
+export {snapshotExportRows,type AgencyTimecardSnapshot,type TimecardReport} from './timecard-document.ts';
 
 export type WorkbookCopy={
  source:string;site:string;factory:string;timeZone:string;worker:string;date:string;start:string;end:string;gross:string;break:string;paid:string;
  comment:string;total:string;worksheet:string;missingName:string;reference:string;internal:string;factorySource:string;locale:string;
  scope:string;workerExtract:string;breakState:string;breakUnreported:string;breakNotTaken:string;breakPaid:string;breakUnpaid:string;
- weekday:string;agency:string;shifts:string;status:string;archived:string;received:string;absences:string;notInSnapshot:string;shiftLabel:string;
+ weekday:string;agency:string;shifts:string;status:string;archived:string;received:string;absences:string;notInSnapshot:string;shiftLabel:string;preview?:{status:string;source:string;notice:string;total:string;recorded:string;absences?:string;absenceNote?:string;absenceUnavailable?:string};
 };
-export const timecardFileName=(s:AgencyTimecardSnapshot,membershipId?:string)=>
- 'Timeax-'+(s.source==='internal-agency'?'agency':'factory')+'-'+s.dateFrom+'-'+s.dateTo+'-'+s.worksiteId.slice(0,8)
+export const timecardFileName=(s:TimecardReport,membershipId?:string)=>
+ 'Timeax-'+(s.source==='internal-live'?'preview':s.source==='internal-agency'?'agency':'factory')+'-'+s.dateFrom+'-'+s.dateTo+'-'+(s.worksiteId.slice(0,8)||'all')
  +(membershipId?'-worker-'+membershipId.replaceAll('-','').slice(0,12):'')+'.xlsx';
 
 const xp={head:'FF385A48',shift:'FFDDF1DF',weekendShift:'FFD5EBE9',total:'FFDCE7F2',confirmed:'FFBDE6C4',border:'FFD5DDD7',primary:'FF263B30'};
@@ -52,30 +52,50 @@ function setup(sheet:ExcelJS.Worksheet,widths:number[]){
  sheet.pageSetup={orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,margins:{left:.25,right:.25,top:.5,bottom:.5,header:.2,footer:.2}};
 }
 
-export function buildAgencyTimecardWorkbook(snapshot:AgencyTimecardSnapshot,c:WorkbookCopy,membershipId?:string){
+export function buildAgencyTimecardWorkbook(snapshot:TimecardReport,c:WorkbookCopy,membershipId?:string){
  const picked=snapshotExportRows(snapshot,membershipId);
  const group=timecardWorkerGroups(picked.rows,c.missingName,c.reference,c.locale),totals=timecardTotals(picked.rows);
  const localeDate=new Intl.DateTimeFormat(c.locale,{weekday:'long',timeZone:'UTC'});
  const received=snapshot.source==='connected-factory';
- const from=received?c.factorySource:c.internal,status=received?c.received:c.archived;
+ const preview=snapshot.source==='internal-live';
+ if(preview&&!c.preview)throw Error('Missing preview labels');
+ const from=preview?c.preview!.source:received?c.factorySource:c.internal,status=preview?c.preview!.status:received?c.received:c.archived;
+ const totalLabel=preview?c.preview!.total:c.total;
+ const absences=preview?snapshot.absences?.filter(a=>!membershipId||a.membershipId===membershipId):undefined;
  const period=[snapshot.worksiteName,snapshot.dateFrom+' – '+snapshot.dateTo,snapshot.timeZone].join(' · ');
  const wb=new ExcelJS.Workbook();wb.creator='Timeax';wb.subject=c.worksheet;wb.title=c.worksheet+' – '+snapshot.worksiteName;
- const used=new Set<string>(),summary=wb.addWorksheet(sheetName(c.total,used));
+ const used=new Set<string>(),summary=wb.addWorksheet(sheetName(totalLabel,used));
  setup(summary,[27,34,12,18,18,18,22]);
  banner(summary,c.worksheet,7,'title');
  banner(summary,period,7,'sub');
  summary.addRow([c.source,from,c.status,status]);
  if(received)summary.addRow([c.factory,snapshot.factoryName,c.agency,snapshot.agencyName]);
  if(membershipId)summary.addRow([c.scope,c.workerExtract,group[0]?.name]);
- banner(summary,c.notInSnapshot,7,'sub');
- const top=headers(summary,[c.site,c.worker,c.shifts,c.gross,c.break,c.paid,c.absences]);
+ banner(summary,preview?c.preview!.notice:c.notInSnapshot,7,'sub');
+ if(preview&&absences===undefined&&c.preview!.absenceUnavailable)banner(summary,c.preview!.absenceUnavailable,7,'sub');
+ const top=headers(summary,[c.site,c.worker,c.shifts,c.gross,c.break,c.paid,preview?c.preview!.absences??c.absences:c.absences]);
+ const remaining=new Map<string,NonNullable<typeof absences>>();
+ for(const row of absences??[]){const key=row.membershipId+'|'+row.worksiteId;if(!remaining.has(key))remaining.set(key,[]);remaining.get(key)!.push(row)}
  for(const person of group){
-  const {shiftCount,grossMinutes,breakMinutes,paidMinutes}=person.totals;
-  const row=summary.addRow([snapshot.worksiteName,person.name,shiftCount,duration(grossMinutes),duration(breakMinutes),duration(paidMinutes),'—']);
-  fill(row,xp.shift,7);formatted(row,[4,5,6],'[h]:mm');
+  const sites=new Map<string,typeof person.rows>();
+  for(const row of person.rows){
+   const key=row.worksiteId??snapshot.worksiteId,prior=sites.get(key);
+   if(prior)prior.push(row);else sites.set(key,[row]);
+  }
+  for(const rows of sites.values()){
+   const {shiftCount,grossMinutes,breakMinutes,paidMinutes}=timecardTotals(rows);
+   const key=person.id+'|'+(rows[0]?.worksiteId??snapshot.worksiteId),absencesAtSite=absences?(remaining.get(key)?.length??0):'—';
+   remaining.delete(key);
+   const row=summary.addRow([rows[0]?.worksiteName??snapshot.worksiteName,person.name,shiftCount,duration(grossMinutes),duration(breakMinutes),duration(paidMinutes),absencesAtSite]);
+   fill(row,xp.shift,7);formatted(row,[4,5,6],'[h]:mm');
+  }
  }
- if(group.length)summary.autoFilter={from:'A'+top,to:'G'+summary.rowCount};
- const sums=summary.addRow([c.total,'',totals.shiftCount,duration(totals.grossMinutes),duration(totals.breakMinutes),duration(picked.paidMinutes),'—']);
+ for(const rows of remaining.values()){
+  const row=summary.addRow([rows[0].worksiteName,rows[0].name,0,0,0,0,rows.length]);
+  fill(row,'FFE8DEFF',7);formatted(row,[4,5,6],'[h]:mm');
+ }
+ if(summary.rowCount>top)summary.autoFilter={from:'A'+top,to:'G'+summary.rowCount};
+ const sums=summary.addRow([totalLabel,'',totals.shiftCount,duration(totals.grossMinutes),duration(totals.breakMinutes),duration(picked.paidMinutes),absences?.length??'—']);
  total(sums,7);formatted(sums,[4,5,6],'[h]:mm');
  for(const person of group){
   const sheet=wb.addWorksheet(sheetName(person.name,used));
@@ -87,23 +107,31 @@ export function buildAgencyTimecardWorkbook(snapshot:AgencyTimecardSnapshot,c:Wo
   for(const row of person.rows){
    const d=row.data,when=dateValue(d.localDate),weekday=when.getUTCDay();
    const breakValue=d.breakStatus==='not-reported'?c.breakUnreported:d.breakStatus==='not-taken'?c.breakNotTaken:duration(d.breakMinutes);
-   const record=sheet.addRow([person.name,received?snapshot.agencyName:'',snapshot.worksiteName,when,localeDate.format(when),
-    excelTime(d.startTime),excelTime(d.endTime),duration(d.grossMinutes),breakValue,duration(d.paidMinutes),timecardBreakLabel(d,c),status,d.comment]);
+   const record=sheet.addRow([person.name,received?snapshot.agencyName:'',row.worksiteName??snapshot.worksiteName,when,localeDate.format(when),
+    excelTime(d.startTime),excelTime(d.endTime),duration(d.grossMinutes),breakValue,duration(d.paidMinutes),timecardBreakLabel(d,c),preview?(row.liveState==='archived'?c.archived:c.preview!.recorded):status,d.comment]);
    fill(record,weekday===0||weekday===6?xp.weekendShift:xp.shift,13);
    record.height=Math.min(95,Math.max(22,Math.ceil(d.comment.length/36)*15+6));
-   record.getCell(12).fill={type:'pattern',pattern:'solid',fgColor:{argb:xp.confirmed}};
+   if(!preview||row.liveState==='archived')record.getCell(12).fill={type:'pattern',pattern:'solid',fgColor:{argb:xp.confirmed}};
    formatted(record,[4],'dd.mm.yyyy');formatted(record,[6,7],'hh:mm');formatted(record,[8,10],'[h]:mm');
    if(typeof breakValue==='number')formatted(record,[9],'[h]:mm');
   }
   if(person.rows.length)sheet.autoFilter={from:'A'+rowHeader,to:'M'+sheet.rowCount};
   const {grossMinutes,breakMinutes,paidMinutes}=person.totals;
-  const sums=sheet.addRow([c.total,null,null,null,null,null,null,duration(grossMinutes),duration(breakMinutes),duration(paidMinutes)]);
+  const sums=sheet.addRow([totalLabel,null,null,null,null,null,null,duration(grossMinutes),duration(breakMinutes),duration(paidMinutes)]);
   total(sums,13);formatted(sums,[8,9,10],'[h]:mm');
+ }
+ if(absences?.length){
+  const label=c.preview!.absences??c.absences,sheet=wb.addWorksheet(sheetName(label,used));setup(sheet,[28,28,17,17]);
+  banner(sheet,label,4,'title');banner(sheet,c.preview!.absenceNote??c.preview!.notice,4,'sub');
+  const head=headers(sheet,[c.worker,c.site,c.date+' ('+c.start+')',c.date+' ('+c.end+')']);
+  for(const a of absences)for(const range of a.ranges){const row=sheet.addRow([a.name,a.worksiteName,dateValue(range.from),dateValue(range.to)]);fill(row,'FFE8DEFF',4);formatted(row,[3,4],'dd.mm.yyyy');}
+  sheet.autoFilter={from:'A'+head,to:'D'+sheet.rowCount};
  }
  return wb;
 }
-export async function downloadAgencyTimecardWorkbook(snapshot:AgencyTimecardSnapshot,copy:WorkbookCopy,membershipId?:string){
+export async function downloadAgencyTimecardWorkbook(snapshot:TimecardReport,copy:WorkbookCopy,membershipId?:string,signal?:AbortSignal){
  const bytes=await buildAgencyTimecardWorkbook(snapshot,copy,membershipId).xlsx.writeBuffer();
+ if(signal?.aborted)return;
  const blob=new Blob([new Uint8Array(bytes)],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),url=URL.createObjectURL(blob);
  const link=document.createElement('a');link.href=url;link.download=timecardFileName(snapshot,membershipId);
  document.body.appendChild(link);link.click();link.remove();window.setTimeout(()=>URL.revokeObjectURL(url),1000);

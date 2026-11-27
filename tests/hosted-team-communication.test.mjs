@@ -90,3 +90,16 @@ test('inbox pages list at most ten and earlier requests go to timekeeping',async
  assert.equal(noticeDestination('earlier-shift-any'),'timecards');
  assert.equal(noticeDestination('backdated-internal-any'),'messages');
 });
+
+test('shift review groups keep pending, approved and rejected independent and newest first',async()=>{
+ const {groupShiftReviews}=await import('../src/hosted/shift-review.ts');
+ const requests=Array.from({length:23},(_,i)=>({id:String(i),state:i===22?'rejected':i%2?'approved':'pending',submittedAt:new Date(Date.UTC(2026,10,i+1)).toISOString()}));
+ const groups=groupShiftReviews(requests);
+ const {inboxPage}=await import('../src/hosted/inbox.ts');
+ assert.equal(groups.pending.length,11);
+ assert.equal(groups.approved.length,11);
+ assert.deepEqual(groups.rejected.map(r=>r.id),['22']);
+ assert.deepEqual(inboxPage(groups.pending,1).rows.map(r=>r.id),['0']);
+ assert.equal(inboxPage(groups.approved,0).rows[0].id,'21');
+ assert.equal(requests[0].id,'0');
+});

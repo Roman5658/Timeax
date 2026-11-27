@@ -185,12 +185,12 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
     {directory&&<AgencyWorkersPanel key={org+(agencySearch.get('site')??'')} organizationId={org} siteId={agencySearch.get('site')??undefined} initialSection={agencySearch.get('tab')==='applications'?'applications':'roster'} enrollmentEnabled={uses('worker')} provisioningEnabled={publicAgency&&uses('workerProvisioning')} productionsEnabled={agencyProfile?.productions===true} factoryHoursEnabled={uses('factoryTimecards')} timecardsEnabled={uses('timecards')} absencesEnabled={uses('team')} namesEnabled={uses('names')} lifecycleEnabled={uses('account')}/>}
     {!production&&!directory&&uses('worker')&&section==='workers'&&<AgencyWorkerPanel organizationId={org} verifiedAgency={publicAgency} namesEnabled={uses('names')} lifecycleEnabled={uses('account')}/> }
     {!production&&section==='setup'&&(publicAgency?<AgencyProductions key={org} organizationId={org} initialSites={access.worksites} enabled={agencyProfile?.productions===true} factoryInvites={uses('registration')} settingsEnabled={uses('profile')} namesEnabled={uses('names')} placementsEnabled={uses('factoryTimecards')}/>:loadModules?<FactorySetupPanel organizationId={org}/>:null)}
-    {unifiedHours&&<AgencyBackdatedShifts key={org} organizationId={org} feed={shiftFeed} refresh={()=>{backdated.refresh();inbox.refresh()}}/>}
-    {unifiedHours&&<AgencyTimecardsPanel key={section} organizationId={org} internalEnabled={uses('timecards')} factoryEnabled={uses('factoryTimecards')} initialSource={section==='factory-timecards'?'factory':'internal'}/>}
+    {unifiedHours&&<AgencyTimecardsPanel key={section} organizationId={org} internalEnabled={uses('timecards')} factoryEnabled={uses('factoryTimecards')} initialSource={section==='factory-timecards'?'factory':'internal'}
+     reviewPanel={<AgencyBackdatedShifts key={org} organizationId={org} feed={shiftFeed} refresh={()=>{backdated.refresh();inbox.refresh()}}/>}/>}
     {agencyWorker&&section==='timecards'&&<WorkerShiftHistory key={org+access.membership.id} organizationId={org} membershipId={access.membership.id}/>}
     {!worker&&!unifiedHours&&uses('timecards')&&section==='timecards'&&<TimecardsPanel organizationId={org} includeFactoryArchive={uses('factoryTimecards')}/>}
     {!production&&!unifiedHours&&uses('factoryTimecards')&&section==='factory-timecards'&&<FactoryTimecardsPanel organizationId={org} readOnlyWorker={worker}/>}
-    {uses('payroll')&&section==='payslips'&&<PayslipsPanel organizationId={org}/>}
+    {uses('payroll')&&section==='payslips'&&<PayslipsPanel organizationId={org} showTitle={false}/>}
    </main>
   </div>
 
