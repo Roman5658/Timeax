@@ -2,7 +2,9 @@ import {createAgencyProfileHandler,createAgencyProfileStore,AGENCY_PROFILE_SIGNA
 import {INTEGRATED_LANES} from './integrated.contract.mjs';
 import {createWorkspaceReadStore,WORKSPACE_SQL} from './workspace-read.server.mjs';
 import {WORKSPACE_ROLE,WORKSPACE_FUNCTIONS} from './workspace-read.contract.mjs';
+import {createWorkerProvisioning,WORKER_PROVISIONING_SIGNATURE,WORKER_PROVISIONING_ROLE,WORKER_PROVISIONING_SQL} from './worker-provisioning.mjs';
 import {createWorkerEnrollmentHandler} from './worker-enrollment.server.mjs';
+import {createWorkerTerms,WORKER_TERMS_ROLE,WORKER_TERMS_SIGNATURE,WORKER_TERMS_SQL} from './worker-terms.mjs';
 import {createTimecardsHandler} from './timecards.server.mjs';
 import {createFactoryTimecardsHandler} from './factory-timecards.server.mjs';
 import {createPayslipsHandler} from './payslips.server.mjs';
@@ -15,7 +17,7 @@ const id='[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}';
 const orgRoute=(prefix,actions)=>new RegExp('^/api/'+prefix+'/('+id+')/(?:'+actions+')$');
 const specs={
  profile:{handler:createAgencyProfileHandler,match:new RegExp('^/api/agency-profile/('+id+')(?:/worksite/'+id+')?/(?:context|settings)$')},
- worker:{handler:createWorkerEnrollmentHandler,match:new RegExp('^/api/worker-enrollment/(?:agency/('+id+')(?:/(?:invite|approve))?|context|lookup|request|claim)$')},
+ worker:{handler:createWorkerEnrollmentHandler,match:new RegExp('^/api/worker-enrollment/(?:agency/('+id+')(?:/(?:invite|approve|provision|directory))?|context|lookup|request|claim|email-invitations|accept-email-invitation|terms)$')},
  timecards:{handler:createTimecardsHandler,match:orgRoute('timecards','context|archive|(?:read|history)/'+id)},
  factoryTimecards:{handler:createFactoryTimecardsHandler,match:orgRoute('factory-timecards','context|propose-placement|revoke-placement|read/'+id)},
  payroll:{handler:createPayslipsHandler,match:orgRoute('payslips','context|settings|group|group-member|rate|create|assign|save|issue|read/'+id)},
@@ -33,6 +35,10 @@ export function managedAgencyOperations(env){
  try{
   const v=JSON.parse(env.TIMEAX_AGENCY_OPERATIONS??'null');
   if(!v||Array.isArray(v)||typeof v!=='object')return null;
+  const workerPassword=env.TIMEAX_WORKER_CONNECTION_DB,workerSha=env.TIMEAX_WORKER_CONNECTION_RPC_SHA256;
+  if(key(workerPassword)&&sha(workerSha))v.workerProvisioning={password:workerPassword,sha:workerSha};
+  const termsPassword=env.TIMEAX_WORKER_TERMS_DB,termsSha=env.TIMEAX_WORKER_TERMS_RPC_SHA256;
+  if(key(termsPassword)&&sha(termsSha))v.workerTerms={password:termsPassword,sha:termsSha};
   const profileFingerprint=env.TIMEAX_AGENCY_PROFILE_RPC_SHA256;
   if(sha(profileFingerprint)&&v.profile&&typeof v.profile==='object'&&!Array.isArray(v.profile))
    v.profile={...v.profile,hashes:{...v.profile.hashes,[AGENCY_PROFILE_SIGNATURE]:profileFingerprint}};
@@ -57,11 +63,33 @@ export async function assembleAgencyOperations(config,lane,{now=Date.now}={}){
   }catch{return null}
  }))).filter(Boolean);
  if(!ready.length)return null;
+ let workerTerms;
+ const terms=config.agencyOperations.workerTerms;
+ if(ready.some(([id])=>id==='worker')&&key(terms?.password)&&sha(terms?.sha)
+  &&!used.includes(terms.password)&&!Object.entries(config.agencyOperations).some(([id,value])=>id!=='workerTerms'&&value?.password===terms.password)){
+  try{
+   const db=lane({...common,role:WORKER_TERMS_ROLE,password:terms.password,
+    functions:[{signature:WORKER_TERMS_SIGNATURE,owner:'postgres',sha256:terms.sha}],statements:[WORKER_TERMS_SQL]});
+   await db.preflight();
+   workerTerms=createWorkerTerms(db);
+  }catch{}
+ }
+ let provisioning;
+ const extra=config.agencyOperations.workerProvisioning;
+ if(ready.some(([id])=>id==='worker')&&key(extra?.password)&&sha(extra?.sha)
+  &&!used.includes(extra.password)&&!Object.entries(config.agencyOperations).some(([id,value])=>id!=='workerProvisioning'&&value?.password===extra.password)){
+  try{
+   const db=lane({...common,role:WORKER_PROVISIONING_ROLE,password:extra.password,
+    functions:[{signature:WORKER_PROVISIONING_SIGNATURE,owner:'postgres',sha256:extra.sha}],statements:[WORKER_PROVISIONING_SQL]});
+   await db.preflight();
+   provisioning=createWorkerProvisioning(db);
+  }catch{}
+ }
  const access=createWorkspaceReadStore(lane({...common,role:WORKSPACE_ROLE,password:config.workspaceReadPassword,functions:WORKSPACE_FUNCTIONS,statements:[WORKSPACE_SQL]}));
  return resolveSession=>{
   const handlers=ready.map(([name,store,inviteKey])=>{
    const spec=specs[name];
-   return [spec.match,spec.handler({origin:config.origin,now,store,inviteKey,agencyOnly:spec.agencyOnly,revokeSessions:async()=>{},
+   return [spec.match,spec.handler({origin:config.origin,now,store,inviteKey,provisioning:name==='worker'?provisioning:undefined,workerTerms:name==='worker'?workerTerms:undefined,requireWorkerTerms:name==='worker',agencyOnly:spec.agencyOnly,revokeSessions:async()=>{},
     resolveSession:async request=>{
      const session=await resolveSession(request);
      if(session.state!=='verified')return session;
@@ -72,6 +100,6 @@ export async function assembleAgencyOperations(config,lane,{now=Date.now}={}){
      return scope?.organization.kind==='agency'&&scope.membership.role==='agency_admin'&&await session.isActive()?session:{state:'anonymous'};
     }})];
   });
-  return {enabled:ready.map(([name])=>name),workerSelfService:ready.some(([name])=>name==='worker'),find:path=>handlers.find(([match])=>match.test(path))?.[1]};
+  return {enabled:[...ready.map(([name])=>name),...(provisioning?['workerProvisioning']:[]),...(workerTerms?['workerTerms']:[])],provisioning,workerSelfService:ready.some(([name])=>name==='worker'),find:path=>handlers.find(([match])=>match.test(path))?.[1]};
  };
 }

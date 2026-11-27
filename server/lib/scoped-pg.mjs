@@ -1,4 +1,6 @@
-import {SESSION_RPC} from './web-session-store.mjs';
+import {WORKER_PROVISIONING_SIGNATURE} from './worker-provisioning.mjs';
+import {WORKER_TERMS_SIGNATURE} from './worker-terms.mjs';
+import {SESSION_ROLE,SESSION_RPC} from './web-session-store.mjs';
 import {AGENCY_PROFILE_SIGNATURE} from './agency-profile.mjs';
 import {TEAM_FUNCTION} from './team-workflow.server.mjs';
 import {ACCOUNT_ADMIN_SIGNATURE} from './account-admin.mjs';
@@ -88,10 +90,10 @@ const WORKSPACE_READ_FUNCTIONS=new Set(WORKSPACE_FUNCTIONS.map(f=>f.signature));
 const PENDING_FUNCTIONS=new Set(['timeax_api.self_service_agency(text,text,text,text)','timeax_api.request_agency_registration(text,text,text,text)','timeax_api.my_agency_registration(text,text)']);
 export function isApprovedRpcOwner(signature,owner){
  return ENROLLMENT_FUNCTIONS.has(signature)?owner==='timeax_enrollment_owner'
-  :(signature===TEAM_FUNCTION.signature&&owner===TEAM_FUNCTION.owner)||(signature===OWNER_FUNCTION.signature&&owner===OWNER_FUNCTION.owner)||INTEGRATED_FUNCTIONS.some(f=>f.signature===signature&&f.owner===owner)||(signature===SESSION_RPC||signature===AGENCY_PROFILE_SIGNATURE||signature===ACCOUNT_ADMIN_SIGNATURE||PENDING_FUNCTIONS.has(signature)||WORKSPACE_READ_FUNCTIONS.has(signature))&&owner==='postgres';
+  :(signature===TEAM_FUNCTION.signature&&owner===TEAM_FUNCTION.owner)||(signature===OWNER_FUNCTION.signature&&owner===OWNER_FUNCTION.owner)||INTEGRATED_FUNCTIONS.some(f=>f.signature===signature&&f.owner===owner)||(signature===WORKER_PROVISIONING_SIGNATURE||signature===WORKER_TERMS_SIGNATURE||signature===SESSION_RPC||signature===AGENCY_PROFILE_SIGNATURE||signature===ACCOUNT_ADMIN_SIGNATURE||PENDING_FUNCTIONS.has(signature)||WORKSPACE_READ_FUNCTIONS.has(signature))&&owner==='postgres';
 }
 
-export function createScopedPgLane({host,role,password,ca,namespace,functions,statements,Client=pg.Client}){
+export function createScopedPgLane({host,role,password,ca,namespace,functions,statements,Client=pg.Client,Pool=pg.Pool}){
  if(!HOST.test(host)||!/^timeax_[a-z0-9_]+_login$/.test(role)||typeof password!=='string'||password.length<24
   ||password.length>256||/[\u0000-\u001f]/.test(password)||!['timeax_enrollment_rpc','timeax_api'].includes(namespace)
   ||!Array.isArray(functions)||!functions.length||!Array.isArray(statements)||!statements.length)throw Error('DB lane configuration denied');
@@ -100,19 +102,15 @@ export function createScopedPgLane({host,role,password,ca,namespace,functions,st
  for(const f of functions)if(typeof f.signature!=='string'||!f.signature.startsWith(namespace+'.')
   ||!/^[0-9a-f]{64}$/.test(f.sha256)||!isApprovedRpcOwner(f.signature,f.owner))throw Error('Approved RPC fingerprint missing');
  const signatures=functions.map(f=>f.signature),allowed=new Set(statements);
- async function connectAndRun(operation){
-  let tlsVerified=false;
-  const client=new Client({host,port:5432,user:role+'.rohgpgogsdtiltbocdao',password,database:'postgres',
+ const options=(markVerified)=>({host,port:5432,user:role+'.rohgpgogsdtiltbocdao',password,database:'postgres',
    application_name:'timeax-registration-scoped',connectionTimeoutMillis:7000,query_timeout:5000,
    sslnegotiation:'postgres',keepAlive:true,
    ssl:{ca:cert.toString(),rejectUnauthorized:true,minVersion:'TLSv1.2',servername:host,
     checkServerIdentity(name,peer){
      if(name!==host)return Error('TLS identity denied');
-     const error=checkServerIdentity(host,peer);if(!error)tlsVerified=true;return error;
+     const error=checkServerIdentity(host,peer);if(!error)markVerified();return error;
     }}});
-  client.on('error',()=>{});
-  try{
-   await client.connect();if(!tlsVerified)throw Error('DB TLS identity not verified');
+ async function guardedOperation(client,operation){
    const gate=await client.query(ROLE_CHECK_SQL,[role,namespace,signatures]);
    if(gate.rows?.length!==1||gate.rows[0]?.ok!==true)throw Error('DB role preflight denied');
    const result=await client.query(FUNCTION_CHECK_SQL,[signatures]);
@@ -123,7 +121,31 @@ export function createScopedPgLane({host,role,password,ca,namespace,functions,st
      ||JSON.stringify(row.proconfig)!==JSON.stringify(['search_path=pg_catalog, pg_temp'])
      ||typeof row.definition!=='string'||createHash('sha256').update(row.definition).digest('hex')!==expected.sha256)throw Error('RPC fingerprint preflight denied');
    }
-   return await operation(client);
+   return operation(client);
+ }
+ // Durable-session reads occur several times per cabinet request. Reuse only
+ // verified connections for this dedicated role, never identity results or ACLs.
+ const verified=new WeakSet();
+ class ScopedSessionClient extends Client{
+  constructor(){let instance;super(options(()=>verified.add(instance)));instance=this;}
+ }
+ const pool=role===SESSION_ROLE?new Pool({...options(()=>{}),Client:ScopedSessionClient,max:4,idleTimeoutMillis:5000,maxLifetimeSeconds:60,allowExitOnIdle:true}):null;
+ pool?.on('error',()=>{});
+ async function connectAndRun(operation){
+  if(pool){
+   const client=await pool.connect();
+   let failure;
+   try{
+    if(!verified.has(client))throw Error('DB TLS identity not verified');
+    return await guardedOperation(client,operation);
+   }catch(error){failure=error;throw error;}finally{client.release(failure);}
+  }
+  let tlsVerified=false;
+  const client=new Client(options(()=>{tlsVerified=true}));
+  client.on('error',()=>{});
+  try{
+   await client.connect();if(!tlsVerified)throw Error('DB TLS identity not verified');
+   return await guardedOperation(client,operation);
   }finally{await client.end().catch(()=>{})}
  }
  return Object.freeze({

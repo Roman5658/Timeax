@@ -1,5 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {useTranslation} from 'react-i18next';
+import {AgencyWorkerProvisioning} from './AgencyWorkerProvisioning';
 import {AgencyBookDrawer} from './AgencyBookDrawer';
 import {agencyWorkerCopy} from './agency-workers-copy';
 import {factoryCall,parseSetupContext,type SetupContext} from './factory-enrollment';
@@ -8,7 +9,7 @@ import {memberNamesCall,useMemberNames} from './MemberNames';
 import {accountCall} from './worker-account';
 import {workerCall} from './worker-enrollment';
 
-type Props={organizationId:string;enrollmentEnabled:boolean;productionsEnabled:boolean;lifecycleEnabled:boolean;namesEnabled:boolean;factoryHoursEnabled?:boolean;siteId?:string;initialSection?:'roster'|'applications'};
+type Props={organizationId:string;enrollmentEnabled:boolean;provisioningEnabled?:boolean;productionsEnabled:boolean;lifecycleEnabled:boolean;namesEnabled:boolean;factoryHoursEnabled?:boolean;siteId?:string;initialSection?:'roster'|'applications'};
 type Application={application_id:string;claimed_at:string};
 type Member={membershipId:string;state:string;endedAt:string|null};
 type WorkersResponse={organizationId:string;workers:Member[]};
@@ -19,7 +20,7 @@ const uuid=(s:unknown)=>typeof s==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a
 const localDay=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Warsaw',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const validDay=(s:string)=>/^\d{4}-\d{2}-\d{2}$/.test(s)&&Number.isFinite(Date.parse(s+'T00:00:00Z'));
 
-export function AgencyWorkersPanel({organizationId,enrollmentEnabled,productionsEnabled,lifecycleEnabled,namesEnabled,factoryHoursEnabled=false,siteId,initialSection='roster'}:Props){
+export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisioningEnabled=false,productionsEnabled,lifecycleEnabled,namesEnabled,factoryHoursEnabled=false,siteId,initialSection='roster'}:Props){
  const {t,i18n}=useTranslation();
  const lang=(i18n.resolvedLanguage??'en').toLowerCase().split('-')[0];
  const strings=agencyWorkerCopy[lang as keyof typeof agencyWorkerCopy]??agencyWorkerCopy.en;
@@ -181,6 +182,7 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,productions
   {!drawer&&status}
   {drawer&&<AgencyBookDrawer title={drawer.type==='invite'?copy('add'):copy('settings')} closeLabel={copy('close')} busy={busy} onClose={dismiss}>
    {drawer.type==='invite'?<>
+    {provisioningEnabled&&<AgencyWorkerProvisioning organizationId={organizationId}/>}
     <p>{copy('inviteInfo')}</p>
     {!invite?<button type="button" className="button button--primary" disabled={busy} onClick={createInvite}>{t('workerEnrollment.createInvite')}</button>:
     <div className="notice-box"><p>{t('workerEnrollment.inviteCreated')}</p><label className="field-label">{t('workerEnrollment.inviteLink')}<textarea rows={2} readOnly value={invite.link}/></label>

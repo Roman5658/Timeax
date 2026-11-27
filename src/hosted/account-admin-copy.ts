@@ -1,5 +1,8 @@
 export const accountAdminCopy = {
   "ru": {
+    "workerTermsAccepted": "Работник принял условия",
+    "workerTermsDocument": "Принятая версия регламента",
+    "workerTermsMethod": "отдельная галочка в аккаунте работника",
     "termsAccepted": "Условия приняты",
     "termsMethod": "галочка при регистрации",
     "organizations": "Организации",
@@ -54,6 +57,9 @@ export const accountAdminCopy = {
     "deleted": "Аккаунт удалён."
   },
   "pl": {
+    "workerTermsAccepted": "Pracownik zaakceptował regulamin",
+    "workerTermsDocument": "Zaakceptowana wersja regulaminu",
+    "workerTermsMethod": "osobne pole wyboru na koncie pracownika",
     "termsAccepted": "Zaakceptowano regulamin",
     "termsMethod": "pole wyboru w rejestracji",
     "organizations": "Organizacje",
@@ -108,6 +114,9 @@ export const accountAdminCopy = {
     "deleted": "Konto usunięto."
   },
   "uk": {
+    "workerTermsAccepted": "Працівник прийняв умови",
+    "workerTermsDocument": "Прийнята версія правил",
+    "workerTermsMethod": "окремий прапорець в обліковому записі працівника",
     "termsAccepted": "Умови прийнято",
     "termsMethod": "позначка під час реєстрації",
     "organizations": "Організації",
@@ -162,6 +171,9 @@ export const accountAdminCopy = {
     "deleted": "Обліковий запис видалено."
   },
   "en": {
+    "workerTermsAccepted": "Worker accepted the terms",
+    "workerTermsDocument": "Accepted version of the terms",
+    "workerTermsMethod": "separate worker account checkbox",
     "termsAccepted": "Terms accepted",
     "termsMethod": "registration checkbox",
     "organizations": "Organizations",

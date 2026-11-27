@@ -2,6 +2,13 @@ export type Membership={organizationId:string;name:string;kind:'agency'|'factory
 export type Application={id:string;organizationId:string;name:string;source:'nip'|'invitation';status:'pending'|'approved';claimedAt:string};
 export type EnrollmentContext={state:'verified';memberships:Membership[];applications:Application[]};
 export const isWorkerLocal=()=>import.meta.env.MODE==='worker-enrollment-local'&&location.protocol==='http:'&&location.hostname==='127.0.0.1';
+export type EmailInvitation={id:string;organizationId:string;name:string;expires_at:string};
+export function emailInvitations(result:unknown):EmailInvitation[]{
+ const {invitations}=result as {invitations?:EmailInvitation[]}??{};
+ if(!Array.isArray(invitations)||invitations.length>100||invitations.some(v=>!v||!isUuid(v.id)||!isUuid(v.organizationId)||typeof v.name!=='string'||!Number.isFinite(Date.parse(v.expires_at))))throw Error('unavailable');
+ return invitations;
+}
+const isUuid=(v:unknown)=>typeof v==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(v);
 export async function workerCall(path:string,body?:unknown,signal?:AbortSignal):Promise<unknown>{
  if(location.protocol!=='https:'&&!isWorkerLocal())throw Error('unavailable');
  const response=await fetch('/api/worker-enrollment/'+path,{method:body===undefined?'GET':'POST',credentials:'same-origin',cache:'no-store',redirect:'error',signal,headers:body===undefined?{Accept:'application/json'}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});

@@ -54,8 +54,10 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
   if(prior){if(!sessions.has(prior))await sessionStore?.delete(prior);sessions.delete(prior)}
   sessions.set(id,{...identity,credential,expiresAt:now()+ttl*1000});return {id,maxAge:ttl};
  }
+ let ops;
  const auth=createPublicEmailRoutes({origin,provider,otpLength,tagKey:randomBytes(32),localLoopback,now,admitSend,
-  retainPasswordSetup:onboardingStore!==null,maxSessionAge:sessionStore?SESSION_TTL_SECONDS:ttl,issueIdentitySession,readSessionId:request=>idFrom(request,name)
+  retainPasswordSetup:onboardingStore!==null,maxSessionAge:sessionStore?SESSION_TTL_SECONDS:ttl,
+  allowNewWorkerIdentity:email=>ops?.provisioning?.hasPending(email)??false,issueIdentitySession,readSessionId:request=>idFrom(request,name)
  });
  const onboarding=onboardingStore&&createAgencyOnboardingRoutes({origin,now,provider,store:onboardingStore,
   readSession:async request=>{purge();const id=idFrom(request,name);return sessions.get(id)??await sessionStore?.get(id)},
@@ -70,7 +72,7 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
  });
  const workspace=onboarding&&workspaceFactory?.(resolve);
  const productions=onboarding&&agencyProductionsFactory?.(resolve);
- const ops=onboarding&&agencyOperationsFactory?.(resolve);
+ ops=onboarding&&agencyOperationsFactory?.(resolve);
  const admin=accountAdminFactory?.(subject=>{
   removedSubjects.set(subject,now()+ttl*1000);
   for(const [id,s] of sessions)if(s.issuer===ISSUER&&s.subject===subject)sessions.delete(id);

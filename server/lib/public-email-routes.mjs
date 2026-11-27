@@ -27,7 +27,7 @@ export const isPublicEmailRoute=path=>path===START||path===VERIFY;
 
 // Single-process challenge lane. A deployment must supply an independent send
 // admission/abuse check and its own identity-only session issuer before enabling.
-export function createPublicEmailRoutes({origin,provider,admitSend,issueIdentitySession,tagKey,otpLength,localLoopback=false,now=Date.now,retainPasswordSetup=false,maxSessionAge=900,readSessionId=()=>null}){
+export function createPublicEmailRoutes({origin,provider,admitSend,issueIdentitySession,tagKey,otpLength,localLoopback=false,now=Date.now,retainPasswordSetup=false,maxSessionAge=900,allowNewWorkerIdentity=null,readSessionId=()=>null}){
  if(!(localLoopback?/^http:\/\/127\.0\.0\.1:[1-9][0-9]{3,4}$/.test(origin):['https://timeax.pl','https://www.timeax.pl'].includes(origin))||![6,8].includes(otpLength)
   ||typeof provider?.requestCode!=='function'||typeof provider?.verifyCode!=='function'
   ||typeof admitSend!=='function'||typeof issueIdentitySession!=='function'
@@ -73,7 +73,15 @@ export function createPublicEmailRoutes({origin,provider,admitSend,issueIdentity
     const challenge={email,flow,expires:startedAt+TTL,attempts:0,busy:false,acknowledged:false};
     challenges.set(id,challenge);lastSend.set(key,startedAt);sendTimes.push(startedAt);
     // Return the same external status for provider accept/deny; never claim delivery.
-    try{challenge.acknowledged=await provider.requestCode(email,flow)===true}catch{}
+    try{
+     let providerFlow=flow;
+     if(flow==='login'&&allowNewWorkerIdentity){
+      const isPrepared=await Promise.resolve().then(()=>allowNewWorkerIdentity(email)).catch(()=>false);
+      if(isPrepared===true)providerFlow='registration';
+     }
+     if(!request.signal.aborted&&challenges.get(id)===challenge&&challenge.expires>now())
+      challenge.acknowledged=await provider.requestCode(email,providerFlow)===true;
+    }catch{}
     return respond(202,{status:'accepted'},[issueCookie(challengeName,id,TTL/1000)]);
    }
    if(typeof body.code!=='string'||!pattern.test(body.code))return respond(400,{error:'invalid-request'});

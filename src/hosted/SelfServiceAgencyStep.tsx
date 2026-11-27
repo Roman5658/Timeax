@@ -1,7 +1,7 @@
 import {Eye,EyeOff} from 'lucide-react';
 import {useCallback,useEffect,useMemo,useRef,useState,type FormEvent} from 'react';
 import {Link,useLocation,useNavigate} from 'react-router-dom';
-import {enrollmentContext,workerCall} from './worker-enrollment';
+import {emailInvitations,enrollmentContext,workerCall} from './worker-enrollment';
 import {workerRegistrationCopy} from './worker-registration-copy';
 import {useTranslation} from 'react-i18next';
 import {LegalLink,RegistrationProgress} from '../components/PublicExperience';
@@ -47,7 +47,15 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
    setWorkerReady(true);
    try{const member=enrollmentContext(await workerCall('context',undefined,signal)).memberships.find(m=>m.role==='worker');
     if(signal.aborted)return;
-    navigate(member?'/workspace/'+member.organizationId:'/register/worker',{replace:true});return;
+    if(member&&scope.workerProvisioning){
+     try{
+      if(emailInvitations(await workerCall('email-invitations',undefined,signal)).length){
+       if(!signal.aborted)navigate('/register/worker',{replace:true});return;
+      }
+     }catch{}
+    }
+    if(!signal.aborted)navigate(member?'/workspace/'+member.organizationId:'/register/worker',{replace:true});
+    return;
    }catch{if(signal.aborted)return}
   }
   setStage('destinations');

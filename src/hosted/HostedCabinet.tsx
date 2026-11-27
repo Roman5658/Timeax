@@ -1,3 +1,4 @@
+import {WorkerTermsGate} from './WorkerTermsGate';
 import {AgencyProfile} from './AgencyProfile';
 import {AgencyWorkersPanel} from './AgencyWorkersPanel';
 import {AgencyTimecardsPanel} from './AgencyTimecardsPanel';
@@ -48,7 +49,7 @@ const workerMenu = [
 ];
 workerMenu.push(item('templates','team.templates','operations',ClipboardList),item('absence','team.absence','operations',CalendarDays));
 export function HostedCabinetRoute({organizationId, section, fallback}:{organizationId:string; section:Section; fallback:ReactNode}){
- const {t}=useTranslation();
+ const {t}=useTranslation(),navigate=useNavigate();
  const [status,setStatus]=useState<WorkspaceResult>();
  useEffect(()=>{
   const controller=new AbortController();
@@ -61,7 +62,9 @@ export function HostedCabinetRoute({organizationId, section, fallback}:{organiza
  if(status.state!=='ready' || !['agency_admin','worker'].includes(status.value.membership.role) || status.value.organization.kind!=='agency')return fallback;
  const menu=status.value.membership.role==='agency_admin'?agencyMenu:workerMenu;
  if(!menu.some(entry=>entry.section===section))return fallback;
- return <HostedCabinet access={status.value} section={section} menu={menu}/>;
+ const cabinet=<HostedCabinet access={status.value} section={section} menu={menu}/>;
+ return status.value.membership.role==='worker'&&/^https:\/\/(?:www\.)?timeax\.pl$/.test(location.origin)
+  ?<WorkerTermsGate onSessionExpired={()=>navigate('/login',{replace:true})}>{cabinet}</WorkerTermsGate>:cabinet;
 }
 
 function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Section; menu:Item[]}){
@@ -136,7 +139,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
      </section>
      <div className="form-actions agency-overview-actions">{menu.filter(x=>x.section==='timecards'||x.section==='payslips'||x.section==='workers').map(x=><Link key={x.section} className="button button--outline button--small" to={route(x.section)}>{t(x.label)}</Link>)}</div>
     </>}
-    {directory&&<AgencyWorkersPanel key={org+(agencySearch.get('site')??'')} organizationId={org} siteId={agencySearch.get('site')??undefined} initialSection={agencySearch.get('tab')==='applications'?'applications':'roster'} enrollmentEnabled={uses('worker')} productionsEnabled={agencyProfile?.productions===true} factoryHoursEnabled={uses('factoryTimecards')} namesEnabled={uses('names')} lifecycleEnabled={uses('account')}/>}
+    {directory&&<AgencyWorkersPanel key={org+(agencySearch.get('site')??'')} organizationId={org} siteId={agencySearch.get('site')??undefined} initialSection={agencySearch.get('tab')==='applications'?'applications':'roster'} enrollmentEnabled={uses('worker')} provisioningEnabled={publicAgency&&uses('workerProvisioning')} productionsEnabled={agencyProfile?.productions===true} factoryHoursEnabled={uses('factoryTimecards')} namesEnabled={uses('names')} lifecycleEnabled={uses('account')}/>}
     {!directory&&uses('worker')&&section==='workers'&&<AgencyWorkerPanel organizationId={org} verifiedAgency={publicAgency} namesEnabled={uses('names')} lifecycleEnabled={uses('account')}/> }
     {section==='setup'&&(publicAgency?<AgencyProductions key={org} organizationId={org} initialSites={access.worksites} enabled={agencyProfile?.productions===true} factoryInvites={uses('registration')} settingsEnabled={uses('profile')} namesEnabled={uses('names')} placementsEnabled={uses('factoryTimecards')}/>:loadModules?<FactorySetupPanel organizationId={org}/>:null)}
     {unifiedHours&&<AgencyTimecardsPanel key={section} organizationId={org} internalEnabled={uses('timecards')} factoryEnabled={uses('factoryTimecards')} initialSource={section==='factory-timecards'?'factory':'internal'}/>}

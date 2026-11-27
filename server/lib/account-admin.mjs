@@ -1,5 +1,6 @@
 import {createHash,randomBytes,timingSafeEqual} from 'node:crypto';
 import {readBody} from './session-router.mjs';
+import {WORKER_TERMS_METHOD} from './worker-terms.mjs';
 
 export const ACCOUNT_ADMIN_SIGNATURE='timeax_api.admin_accounts(text,uuid,text)';
 export const ACCOUNT_ADMIN_SQL='SELECT timeax_api.admin_accounts($1::text,$2::uuid,$3::text) AS result';
@@ -58,7 +59,15 @@ export function createAccountAdminHandler({origin,keySha,lane,revoked,now=Date.n
      const receipt=a.termsReceipt;
      const termsReceipt=receipt&&receipt.method==='registration-checkbox'&&typeof receipt.version==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(receipt.version)&&typeof receipt.acceptedAt==='string'&&Number.isFinite(Date.parse(receipt.acceptedAt))
       ?{version:receipt.version,acceptedAt:receipt.acceptedAt,method:receipt.method}:null;
-     return {id:a.id,email:a.email,createdAt:a.createdAt,verified:a.verified,termsReceipt};
+     const receipts=a.workerTermsReceipts??[];
+     if(!Array.isArray(receipts)||receipts.length>8)throw Error('Invalid worker terms history');
+     const workerTermsReceipts=receipts.map(r=>{
+      if(!r||r.method!==WORKER_TERMS_METHOD||typeof r.version!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(r.version)
+       ||typeof r.documentSha256!=='string'||!(/^[0-9a-f]{64}$/).test(r.documentSha256)
+       ||typeof r.acceptedAt!=='string'||!Number.isFinite(Date.parse(r.acceptedAt)))throw Error('Invalid worker terms receipt');
+      return {version:r.version,documentSha256:r.documentSha256,acceptedAt:r.acceptedAt,method:r.method};
+     });
+     return {id:a.id,email:a.email,createdAt:a.createdAt,verified:a.verified,termsReceipt,workerTermsReceipts};
     });
     return reply(200,{accounts,next:more?accounts.at(-1)?.id:null});
    }

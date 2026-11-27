@@ -1,0 +1,129 @@
+{
+  "sha256": "fb3399d1d8a5a9334310091bc247b810e189bbd92a7b2b682be890c099f2559e",
+  "document": {
+    "version": "2026-11-27",
+    "contact": "no-reply@timeax.pl",
+    "locales": {
+      "pl": {
+        "title": "Regulamin korzystania z Timeax",
+        "sections": [
+          {
+            "id": "service",
+            "title": "Przeznaczenie Timeax",
+            "body": "Timeax pomaga ewidencjonować czas pracy i wymieniać zestawienia godzin. Dostępne funkcje zależą od roli i ustawień organizacji. Rejestracja nie uruchamia płatnej subskrypcji."
+          },
+          {
+            "id": "account",
+            "title": "Konto",
+            "body": "Podaj działający adres e-mail i nie udostępniaj innym hasła ani kodów. Korzystaj z aktualnej przeglądarki z włączonym JavaScriptem i niezbędnymi plikami cookie."
+          },
+          {
+            "id": "organization",
+            "title": "Panel organizacji",
+            "body": "Jeśli tworzysz panel w imieniu organizacji, upewnij się, że masz do tego uprawnienia. Potwierdzenie adresu e-mail nie daje uprawnień do istniejącej organizacji. Dodawaj wyłącznie dane, które masz prawo przetwarzać."
+          },
+          {
+            "id": "help",
+            "title": "Wsparcie i reklamacje",
+            "body": "Problemy z dostępem, błędy i reklamacje zgłoś operatorowi Timeax, Romanowi Pysanyiemu. Opisz problem, ale nie przesyłaj hasła, kodu ani dokumentów pracowników."
+          },
+          {
+            "id": "closing",
+            "title": "Zakończenie korzystania",
+            "body": "Możesz przestać korzystać z Timeax i poprosić wsparcie o zamknięcie konta. Zamknięcie konta nie zwalnia organizacji z obowiązków dotyczących przechowywania dokumentacji pracowniczej."
+          }
+        ]
+      },
+      "uk": {
+        "title": "Умови користування Timeax",
+        "sections": [
+          {
+            "id": "service",
+            "title": "Призначення Timeax",
+            "body": "Timeax допомагає обліковувати робочий час та обмінюватися табелями. Доступні можливості залежать від ролі й налаштувань організації. Реєстрація не активує платну підписку."
+          },
+          {
+            "id": "account",
+            "title": "Обліковий запис",
+            "body": "Вкажіть чинну електронну адресу та не передавайте пароль чи коди іншим. Користуйтеся актуальним браузером з увімкненим JavaScript і необхідними файлами cookie."
+          },
+          {
+            "id": "organization",
+            "title": "Кабінет організації",
+            "body": "Якщо створюєте кабінет від імені організації, переконайтеся, що маєте на це право. Підтвердження електронної адреси не надає доступу до наявної організації. Додавайте лише ті дані, які маєте право обробляти."
+          },
+          {
+            "id": "help",
+            "title": "Підтримка та скарги",
+            "body": "З питань доступу, помилок і скарг звертайтеся до оператора Timeax, Roman Pysanyi. Опишіть проблему, але не надсилайте пароль, код чи документи працівників."
+          },
+          {
+            "id": "closing",
+            "title": "Припинення користування",
+            "body": "Ви можете припинити користування Timeax і попросити підтримку закрити обліковий запис. Закриття облікового запису не звільняє організацію від обов’язку зберігати трудові документи."
+          }
+        ]
+      },
+      "ru": {
+        "title": "Условия использования",
+        "sections": [
+          {
+            "id": "service",
+            "title": "Назначение Timeax",
+            "body": "Timeax помогает учитывать рабочее время и обмениваться табелями. Доступные функции зависят от роли и настроек организации. Регистрация не оформляет платную подписку."
+          },
+          {
+            "id": "account",
+            "title": "Учётная запись",
+            "body": "Укажите действующий email и не передавайте другим пароль и коды. Пользуйтесь актуальной версией браузера с включёнными JavaScript и необходимыми cookies."
+          },
+          {
+            "id": "organization",
+            "title": "Кабинет организации",
+            "body": "Если вы создаёте кабинет от имени организации, убедитесь, что вправе действовать от её имени. Подтверждение почты не подтверждает права на уже существующую организацию. Добавляйте только данные, которые вправе обрабатывать."
+          },
+          {
+            "id": "help",
+            "title": "Поддержка и обращения",
+            "body": "По вопросам доступа, ошибок и претензий напишите оператору Timeax, Roman Pysanyi. Опишите проблему, но не отправляйте пароль, код или документы работников."
+          },
+          {
+            "id": "closing",
+            "title": "Прекращение использования",
+            "body": "Вы можете прекратить пользоваться Timeax и запросить закрытие аккаунта у поддержки. Закрытие аккаунта не освобождает организацию от обязанностей по хранению рабочих документов."
+          }
+        ]
+      },
+      "en": {
+        "title": "Timeax terms of use",
+        "sections": [
+          {
+            "id": "service",
+            "title": "What Timeax does",
+            "body": "Timeax helps track working hours and share timesheets. Available features depend on your role and organization settings. Registration does not start a paid subscription."
+          },
+          {
+            "id": "account",
+            "title": "Your account",
+            "body": "Use a working email address and do not share your password or codes. Use an up-to-date browser with JavaScript and essential cookies enabled."
+          },
+          {
+            "id": "organization",
+            "title": "Organization workspace",
+            "body": "If you create a workspace on behalf of an organization, make sure you are authorized to do so. Email verification does not grant access to an existing organization. Only add data you are permitted to process."
+          },
+          {
+            "id": "help",
+            "title": "Support and complaints",
+            "body": "For access issues, errors or complaints, contact the Timeax operator, Roman Pysanyi. Describe the issue but do not send passwords, codes or workers’ documents."
+          },
+          {
+            "id": "closing",
+            "title": "Stopping use",
+            "body": "You can stop using Timeax and ask support to close your account. Closing an account does not release an organization from its record retention obligations."
+          }
+        ]
+      }
+    }
+  }
+}

@@ -5,7 +5,8 @@ import { RegistrationFrame } from "../components/PublicExperience";
 import { accountAdminCopy } from "./account-admin-copy";
 import "./account-admin.css";
 
-type Account = { id: string; email: string | null; createdAt: string; verified: boolean; termsReceipt?: {version: string; acceptedAt: string} | null };
+type WorkerTermsReceipt={version:string;acceptedAt:string;documentSha256:string;method:'worker-terms-checkbox'};
+type Account = { id: string; email: string | null; createdAt: string; verified: boolean; termsReceipt?: {version: string; acceptedAt: string} | null; workerTermsReceipts?: WorkerTermsReceipt[] };
 type Preview = { id: string; email: string; scope: string; canDelete: boolean; token: string | null };
 type Organization = { id: string; name: string; kind: "agency" | "factory"; state: string; activeMembers: number };
 type Summary = { accounts: number; verifiedAccounts: number; agencies: number; factories: number; newAgencies30d: number };
@@ -202,6 +203,11 @@ export function AccountAdminPage() {
                 <strong>{a.email || a.id}</strong>
                 <p>{tx(a.verified ? "verified" : "unverified")}{Number.isFinite(Date.parse(a.createdAt)) ? " · " + date.format(new Date(a.createdAt)) : ""}</p>
                 {a.termsReceipt&&<p>{tx("termsAccepted")}: <Link to={"/terms/"+a.termsReceipt.version}>{a.termsReceipt.version}</Link> · {acceptanceDate.format(new Date(a.termsReceipt.acceptedAt))} · {tx("termsMethod")}</p>}
+                {a.workerTermsReceipts?.map(receipt=><details key={receipt.version}>
+                  <summary>{tx("workerTermsAccepted")}: {receipt.version} · {acceptanceDate.format(new Date(receipt.acceptedAt))}</summary>
+                  <p><Link to={'/terms/'+receipt.version}>{tx("workerTermsDocument")}</Link> · {tx("workerTermsMethod")}</p>
+                  <p>SHA-256: <code style={{overflowWrap:'anywhere'}}>{receipt.documentSha256}</code></p>
+                </details>)}
               </div>
               <button type="button" className="button button--outline" disabled={controlsDisabled} onClick={() => void run(() => review(a.id))}>{tx("review")}</button>
             </li>)}</ul>

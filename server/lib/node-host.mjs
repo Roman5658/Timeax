@@ -2,9 +2,34 @@ import http from 'node:http';
 import {Readable} from 'node:stream';
 import {readFile,readdir} from 'node:fs/promises';
 import path from 'node:path';
+import {promisify} from 'node:util';
+import {brotliCompress,gzip,constants} from 'node:zlib';
+const zipped=promisify(gzip);
+const brotli=promisify(brotliCompress);
+const hashedText=/^\/assets\/[A-Za-z0-9_.-]+-[A-Za-z0-9_-]{8,32}\.(?:js|css)$/;
+const immutable='public, max-age=31536000, immutable';
+const brotliOptions={params:{[constants.BROTLI_PARAM_QUALITY]:5}};
+
+function preferredEncoding(header) {
+ const weights=new Map();
+ for(const token of String(header??'').split(',')){
+  const [coding,...params]=token.split(';');
+  const name=coding.trim().toLowerCase();
+  if(!['br','gzip','identity','*'].includes(name))continue;
+  const q=params.find(p=>/^\s*q\s*=/i.test(p));
+  const value=q?.split('=')[1]?.trim();
+  const weight=q===undefined?1:/^(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/.test(value??'')?Number(value):0;
+  weights.set(name,Math.max(weight,weights.get(name)??0));
+ }
+ const wildcard=weights.get('*');
+ const identity=weights.has('identity')?weights.get('identity'):wildcard===0?0:undefined;
+ const choices=['br','gzip'].map(name=>[name,weights.get(name)??wildcard??0]);
+ choices.push(['identity',identity??Number.EPSILON]);
+ return choices.filter(([,q])=>q>0).sort((a,b)=>b[1]-a[1])[0]?.[0];
+}
 const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.ico':'image/x-icon'};
 export async function createRuntimeServer({runtime,origin,publicDir,localReload=false}){
- let assets=new Map(),revision=0;
+ let assets=new Map(),compressed=new Map(),revision=0;
  const base=new URL(origin);
  if(localReload&&(base.hostname!=='127.0.0.1'||!base.port))throw Error('Live reload is local only');
  async function scan(dir,next){for(const e of await readdir(dir,{withFileTypes:true})){const p=path.join(dir,e.name);if(e.isSymbolicLink())throw Error('Static symlink denied');if(e.isDirectory())await scan(p,next);else if(e.isFile())next.set('/'+path.relative(publicDir,p).split(path.sep).join('/'),await readFile(p))}}
@@ -16,7 +41,14 @@ export async function createRuntimeServer({runtime,origin,publicDir,localReload=
    next.set('/index.html',Buffer.from(html.replace('</body>', '<script src="/__timeax-reload.js" defer></script></body>')));
    next.set('/__timeax-reload.js',Buffer.from("let rev;setInterval(async()=>{try{const r=await fetch('/__timeax-revision',{cache:'no-store'});if(!r.ok)return;const next=await r.text();if(rev!==undefined&&rev!==next)location.reload();rev=next}catch{}},1000);"));
   }
-  assets=next;revision++;
+  const variants=new Map();
+  // Only build-produced content-addressed JS/CSS is public and reusable.
+  // Do the CPU work at load time, not on the event loop for every response.
+  if(!localReload)await Promise.all([...next].filter(([key])=>hashedText.test(key)).map(async([key,value])=>{
+   const [br,gz]=await Promise.all([brotli(value,brotliOptions),zipped(value)]);
+   variants.set(key,{br,gzip:gz});
+  }));
+  assets=next;compressed=variants;revision++;
  }
  await reloadAssets();
  const server=http.createServer(async(req,res)=>{
@@ -61,7 +93,18 @@ export async function createRuntimeServer({runtime,origin,publicDir,localReload=
   let key=target.pathname;
   if(!assets.has(key)){if(!/^\/(?:[a-z0-9-]+\/?)*$/.test(key))return send(404,'Not found');key='/index.html'}
   const value=assets.get(key);if(!value)return send(404,'Not found');
-  send(200,req.method==='HEAD'?undefined:value,{'Content-Type':types[path.extname(key)]??'application/octet-stream'});
+  const responseHeaders={'Content-Type':types[path.extname(key)]??'application/octet-stream'};
+  const variants=compressed.get(key);
+  let body=value;
+  if(variants){
+   const encoding=preferredEncoding(req.headers['accept-encoding']);
+   if(!encoding)return send(406,'No acceptable asset encoding',{'Vary':'Accept-Encoding'});
+   responseHeaders['Vary']='Accept-Encoding';
+   responseHeaders['Cache-Control']=immutable;
+   if(encoding!=='identity'){body=variants[encoding];responseHeaders['Content-Encoding']=encoding}
+   responseHeaders['Content-Length']=body.length;
+  }
+  send(200,req.method==='HEAD'?undefined:body,responseHeaders);
  });
  server.requestTimeout=5000;server.headersTimeout=5000;server.on('clientError',(_e,socket)=>socket.destroy());
  if(localReload)server.reloadAssets=reloadAssets;

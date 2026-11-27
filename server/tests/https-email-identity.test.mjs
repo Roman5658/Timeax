@@ -69,3 +69,24 @@ test('unfinished registration remains a short-lived process proof, not a durable
  assert.match(verified.headers.getSetCookie()[0],/Max-Age=900;/);
  assert.equal(writes,0);
 });
+
+test('login can create a provider identity only for a prepared worker, without signup privilege',async()=>{
+ const prepared='prepared@example.test',ordinary='regular@example.test',trace=[];
+ const identity={issuer:ISSUER,subject:'91ab2f65-cee9-47c9-918b-a121efa2df4d',emailConfirmed:true,isAnonymous:false};
+ const provider={requestCode:async(email,flow)=>{trace.push({email,flow});return true},
+  verifyCode:async(email,code,options)=>{assert.equal(options,undefined);return identity},
+  setPassword:async()=>{throw Error('ordinary email login cannot set password')},passwordLogin:async()=>null};
+ const {handler}=make({provider,onboardingStore:{get:async()=>null,create:async()=>null},
+  agencyOperationsFactory:()=>({enabled:[],find:()=>null,provisioning:{hasPending:async email=>email===prepared}})});
+ for(const [email,expected] of [[prepared,'registration'],[ordinary,'login']]){
+  const start=await handler(request(api+'start',{body:{email,flow:'login'}}));
+  assert.equal(start.status,202);assert.deepEqual(await start.json(),{status:'accepted'});
+  assert.deepEqual(trace.at(-1),{email,flow:expected});
+  const cookie=start.headers.getSetCookie()[0].split(';')[0];
+  assert.equal((await (await handler(request(context,{cookie}))).json()).emailChallengeFlow,'login');
+  const verified=await handler(request(api+'verify',{body:{code:'00000001'},cookie}));
+  assert.equal(verified.status,200);
+  const session=verified.headers.getSetCookie()[0].split(';')[0];
+  assert.equal((await handler(request('/api/timeax/agency/setup',{cookie:session}))).status,403);
+ }
+});
