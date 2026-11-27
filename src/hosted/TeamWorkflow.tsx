@@ -65,26 +65,37 @@ export function TeamPanel({organizationId,section,initialDay,compact=false}:{org
  function editPlan(e:TeamEntry){E(e);S(e.siteId??'');C(e.recipients??[]);D(String(e.payload.localDate??e.payload.dateFrom));U(String(e.payload.dateTo??e.payload.localDate));A(String(e.payload.startTime??'08:00'));Z(String(e.payload.endTime??'16:00'));dirty()}
  const siteInput=(required=false)=><label className="field-label">{t('timecards.site')}<select value={site} required={required} disabled={busy||!!edit} onChange={e=>{S(e.target.value);if(section==='schedule')C([]);dirty()}}><option value="">{tx('choose')}</option>{value?.sites.filter(w=>section!=='schedule'||w.canPlan).map(w=><option key={w.id} value={w.id}>{w.name}</option>)}</select></label>;
  const person=(id:string)=>{const r=value?.recipients.find(x=>x.id===id);return r?.role==='worker'?label(id):r?t('workspaceRead.'+r.role)+' · '+r.organizationName:tx('sender')};
- const messageAudiences:TeamAudience[]=value?.role==='worker'?['agency','leader']:value?.role==='team_leader'?['workers','agency']:['workers','production','leader'];
- const capable=Boolean(value&&['worker','agency_admin','team_leader'].includes(value.role));
- const modeTitle=(mode:TeamAudience)=>t('workflow.messagesCenter.'+({agency:'toAgency',workers:'selectedWorkers',production:'allProduction',leader:'toLeader'}[mode]));
+ const workerFactoryRecipient=value?.factoryChat===true&&value.recipients.some(r=>r.role==='factory_admin'&&r.worksiteIds.length);
+ const workerAgencyRecipient=value?.recipients.some(r=>r.role==='agency_admin'&&r.organizationId===organizationId);
+ const isFactoryAdmin=value?.role==='factory_admin'&&value.factoryChat===true;
+ const messageAudiences:TeamAudience[]=value?.role==='worker'?
+  [...(workerAgencyRecipient?['agency' as const]:[]),'leader',...(workerFactoryRecipient?['factory' as const]:[])]:
+  isFactoryAdmin?['workers']:value?.role==='team_leader'?['workers','agency']:['workers','production','leader'];
+ const capable=Boolean(value&&(['worker','agency_admin','team_leader'].includes(value.role)||isFactoryAdmin));
+ const modeTitle=(mode:TeamAudience)=>isFactoryAdmin&&mode==='workers'?t('factorySubscription.chooseWorker'):
+  t('workflow.messagesCenter.'+({agency:'toAgency',workers:'selectedWorkers',production:'allProduction',leader:'toLeader',factory:'toFactory'}[mode]));
  const sites=value?.sites??[];
- const filteredRecipients=value?eligibleTeamRecipients(value,audience,site).filter(r=>!replyTo||r.id===replyTo.sender):[];
+ const replyPeers=value&&isFactoryAdmin&&replyTo&&value.messageThreads&&sites.some(s=>s.id===site)
+  ?value.recipients.filter(r=>r.id===replyTo.sender&&r.role==='worker'&&r.worksiteIds.includes(site)):undefined;
+ const filteredRecipients=replyPeers??(value?eligibleTeamRecipients(value,audience,site).filter(r=>!replyTo||r.id===replyTo.sender):[]);
  const recipients=audience==='production'?filteredRecipients.map(r=>r.id):selected.filter(id=>filteredRecipients.some(r=>r.id===id));
- const draftHasSite=audience==='leader'||audience==='production'||value?.role==='team_leader';
+ const draftHasSite=audience==='leader'||audience==='production'||audience==='factory'||value?.role==='team_leader'||isFactoryAdmin;
+ const allowMulti=audience==='workers'&&!isFactoryAdmin;
  function setAudience(mode:TeamAudience){
   SetAudience(mode);C([]);S(mode==='agency'&&value?.role==='worker'||mode==='workers'&&value?.role==='agency_admin'?'':sites.length===1?sites[0].id:'');dirty();
  }
  function newMessage(){
-  ReplyTo(undefined);Subject('');T('');Compose(true);setAudience(value?.role==='worker'?'agency':'workers');
+  ReplyTo(undefined);Subject('');T('');Compose(true);setAudience(value?.role==='worker'?(workerAgencyRecipient?'agency':workerFactoryRecipient?'factory':'leader'):'workers');
  }
  function responseMode(entry:TeamEntry){
   const target=value?.recipients.find(r=>r.id===entry.sender);
   if(!target)return null;
-  const mode:TeamAudience=target.role==='agency_admin'?'agency':target.role==='team_leader'?'leader':'workers';
-  const requireSite=mode==='leader'||value?.role==='team_leader';
+  const mode:TeamAudience=target.role==='agency_admin'?'agency':target.role==='team_leader'?'leader':target.role==='factory_admin'?'factory':'workers';
+  const requireSite=mode==='leader'||mode==='factory'||value?.role==='team_leader'||isFactoryAdmin;
   const chosen=requireSite?(entry.siteId??(sites.length===1?sites[0].id:'')):'';
-  return value&&eligibleTeamRecipients(value,mode,chosen).some(r=>r.id===target.id)?{target,mode,chosen}:null;
+  const factoryReply=isFactoryAdmin&&value?.messageThreads&&entry.siteId===chosen&&target.role==='worker'&&
+   target.worksiteIds.includes(chosen)&&sites.some(s=>s.id===chosen);
+  return factoryReply||value&&eligibleTeamRecipients(value,mode,chosen).some(r=>r.id===target.id)?{target,mode,chosen}:null;
  }
  function reply(entry:TeamEntry){
   const next=responseMode(entry);
@@ -117,7 +128,7 @@ export function TeamPanel({organizationId,section,initialDay,compact=false}:{org
     text:body.trim(),...(value.messageThreads&&subject.trim()?{subject:subject.trim()}:{}),...(value.messageThreads&&replyTo?{replyTo:replyTo.id}:{})
    }});
   }}>
-   {!replyTo&&<label className="field-label">{copy.fields}<select value={audience} disabled={busy} onChange={e=>setAudience(e.target.value as TeamAudience)}>
+   {!replyTo&&!isFactoryAdmin&&<label className="field-label">{copy.fields}<select value={audience} disabled={busy} onChange={e=>setAudience(e.target.value as TeamAudience)}>
     {messageAudiences.filter(m=>m!=='leader'||value.recipients.some(r=>r.role==='team_leader'&&(r.worksiteIds.length||sites.length===1))).map(m=><option key={m} value={m}>{modeTitle(m)}</option>)}
    </select></label>}
    {draftHasSite&&!replyTo&&<label className="field-label">{t('timecards.site')}<select required value={site} disabled={busy} onChange={e=>{S(e.target.value);C([]);dirty()}}>
@@ -125,12 +136,12 @@ export function TeamPanel({organizationId,section,initialDay,compact=false}:{org
    </select></label>}
    {filteredRecipients.length===0?<p className="notice-box">{t('workflow.messagesCenter.noRecipients')}</p>:
     <fieldset disabled={busy||!!replyTo}><legend>{copy.defaultSend}</legend>
-     {audience==='workers'&&!replyTo&&<div className="form-actions"><button className="button button--outline button--small" type="button" disabled={filteredRecipients.length>100}
+     {allowMulti&&!replyTo&&<div className="form-actions"><button className="button button--outline button--small" type="button" disabled={filteredRecipients.length>100}
        onClick={()=>{C(filteredRecipients.map(r=>r.id));dirty()}}>{copy.all}</button><button className="button button--outline button--small" type="button"
        onClick={()=>{C([]);dirty()}}>{copy.none}</button></div>}
      <div className="team-recipients">{filteredRecipients.map(r=>audience==='production'?<p key={r.id}>{person(r.id)}</p>:<label key={r.id}>
-       <input type={audience==='workers'?'checkbox':'radio'} name={'recipient-'+organizationId} disabled={!recipients.includes(r.id)&&recipients.length>=100}
-        checked={recipients.includes(r.id)} onChange={e=>{C(a=>audience==='workers'?(e.target.checked?[...a,r.id]:a.filter(x=>x!==r.id)):[r.id]);dirty()}}/>{person(r.id)}</label>)}</div>
+       <input type={allowMulti?'checkbox':'radio'} name={'recipient-'+organizationId} disabled={!recipients.includes(r.id)&&recipients.length>=100}
+        checked={recipients.includes(r.id)} onChange={e=>{C(a=>allowMulti?(e.target.checked?[...a,r.id]:a.filter(x=>x!==r.id)):[r.id]);dirty()}}/>{person(r.id)}</label>)}</div>
      <small>{recipients.length>100?copy.tooMany:copy.selection.replace('{{count}}',String(recipients.length))}</small>
     </fieldset>}
    {value.messageThreads&&<label className="field-label">{t('workflow.messagesCenter.subject')}<input maxLength={120} value={subject} disabled={busy} onChange={e=>{Subject(e.target.value);dirty()}}/></label>}

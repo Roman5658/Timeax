@@ -1,6 +1,6 @@
-export type TeamAudience='agency'|'workers'|'production'|'leader';
+export type TeamAudience='agency'|'workers'|'production'|'leader'|'factory';
 export type TeamRecipient={id:string;role:string;organizationName:string;organizationId:string;worksiteIds:string[]};
-type TeamRecipientScope={organizationId:string;role:string;sites:{id:string}[];recipients:TeamRecipient[]};
+type TeamRecipientScope={organizationId:string;role:string;factoryChat?:boolean;sites:{id:string}[];recipients:TeamRecipient[]};
 export const teamUuid=(v:unknown)=>typeof v==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(v);
 export function cleanTeamDay(raw:string|null){
  if(!raw||!/^\d{4}-\d{2}-\d{2}$/.test(raw))return '';
@@ -17,7 +17,10 @@ export function eligibleTeamRecipients(context:TeamRecipientScope,audience:TeamA
  if(context.role==='worker'){
   if(audience==='agency')return context.recipients.filter(r=>r.role==='agency_admin'&&r.organizationId===context.organizationId);
   if(audience==='leader')return context.recipients.filter(r=>r.role==='team_leader'&&matchesSite(r));
+  if(audience==='factory'&&context.factoryChat===true)return context.recipients.filter(r=>r.role==='factory_admin'&&matchesSite(r));
  }
+ if(context.role==='factory_admin'&&context.factoryChat===true&&audience==='workers')
+  return context.recipients.filter(r=>r.role==='worker'&&r.organizationId===context.organizationId&&matchesSite(r));
  if(context.role==='agency_admin'||context.role==='team_leader'){
   if(audience==='workers')return context.recipients.filter(r=>r.role==='worker'&&(context.role==='agency_admin'
    ?r.organizationId===context.organizationId:matchesSite(r)));

@@ -1,0 +1,9 @@
+.worker-history-hosted,.worker-history-hosted__day{display:grid;gap:.75rem}
+.worker-history-hosted__controls{display:flex;align-items:end;gap:.65rem;flex-wrap:wrap}
+.worker-history-hosted__controls .field-label{min-width:10rem}
+.worker-history-hosted__day{border-top:1px solid var(--line);padding-block:.75rem}
+.worker-history-hosted__day:focus{outline:2px solid var(--accent);outline-offset:.3rem}
+.worker-history-hosted__day h3,.worker-history-hosted__day p{margin:0}
+.worker-history-hosted__day .notice-box{display:grid;gap:.33rem}
+.worker-history-hosted__day .button,.worker-history-hosted>.button{justify-self:start}
+.worker-history-hosted__revisions{display:grid;gap:.33rem}

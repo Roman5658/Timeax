@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Timeax NFC probe</string>
+    <string name="intro">Read-only diagnostic. It does not send data or mark shifts. For the HTTPS check, use the same prepared test card twice, taking it away between scans. Normal SDM reading can advance the card’s read counter.</string>
+    <string name="presence_button">Detect card technology</string>
+    <string name="ndef_button">Check HTTPS record</string>
+    <string name="stop_button">Stop and clear results</string>
+    <string name="no_nfc">This phone has no Android NFC reader available.</string>
+    <string name="nfc_off">NFC is off. Turn it on in Android settings and return here.</string>
+    <string name="ready">NFC is available. Pick a test above.</string>
+    <string name="wait_presence">Bring one test card close to the phone. This mode does not ask Android to read its NDEF content.</string>
+    <string name="wait_ndef">Bring one prepared test card close. The link will not be opened or shown.</string>
+    <string name="reader_error">The NFC reader could not start. Check that NFC is enabled and try again.</string>
+    <string name="stopped">Stopped. Results were cleared.</string>
+    <string name="ndef_not_requested">HTTPS check not requested.</string>
+    <string name="no_https">No supported HTTPS URI record found.</string>
+    <string name="first_https">HTTPS record detected. Move the same card away and scan again.</string>
+    <string name="same_https">HTTPS record unchanged from the preceding detected record.</string>
+    <string name="different_https">HTTPS record differs from the preceding detected record. This is not evidence of a genuine card or a fresh tap.</string>
+    <string name="observation">Readings: %1$d\nNFC-A: %2$s\nISO-DEP: %3$s\n%4$s</string>
+    <string name="yes">yes</string>
+    <string name="no">no</string>
+</resources>

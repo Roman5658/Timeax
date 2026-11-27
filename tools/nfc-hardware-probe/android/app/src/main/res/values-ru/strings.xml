@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Timeax: проверка NFC</string>
+    <string name="intro">Только диагностика. Данные никуда не отправляются, смены не записываются. Для проверки HTTPS дважды приложи одну подготовленную тестовую карту и убери её между чтениями. Обычное чтение SDM может увеличить счётчик чтений карты.</string>
+    <string name="presence_button">Проверить технологию карты</string>
+    <string name="ndef_button">Проверить запись HTTPS</string>
+    <string name="stop_button">Остановить и очистить</string>
+    <string name="no_nfc">На этом телефоне недоступен NFC-ридер Android.</string>
+    <string name="nfc_off">NFC выключен. Включи его в настройках Android и вернись сюда.</string>
+    <string name="ready">NFC доступен. Выбери проверку выше.</string>
+    <string name="wait_presence">Поднеси одну тестовую карту. В этом режиме приложение не запрашивает чтение содержимого NDEF.</string>
+    <string name="wait_ndef">Поднеси подготовленную тестовую карту. Ссылка не откроется и не будет показана.</string>
+    <string name="reader_error">Не удалось включить чтение. Проверь NFC и попробуй ещё раз.</string>
+    <string name="stopped">Чтение остановлено, результаты очищены.</string>
+    <string name="ndef_not_requested">Проверка HTTPS не запрашивалась.</string>
+    <string name="no_https">Поддерживаемая запись HTTPS не найдена.</string>
+    <string name="first_https">Найдена запись HTTPS. Убери эту карту и приложи её ещё раз.</string>
+    <string name="same_https">Запись HTTPS не изменилась по сравнению с предыдущим чтением.</string>
+    <string name="different_https">Запись HTTPS отличается от предыдущей. Это не доказывает подлинность карты или свежее касание.</string>
+    <string name="observation">Чтений: %1$d\nNFC-A: %2$s\nISO-DEP: %3$s\n%4$s</string>
+    <string name="yes">да</string>
+    <string name="no">нет</string>
+</resources>

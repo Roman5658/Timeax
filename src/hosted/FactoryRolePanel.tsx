@@ -3,6 +3,7 @@ import {Link} from 'react-router-dom';
 import {useTranslation} from 'react-i18next';
 import {AgencyBookDrawer} from './AgencyBookDrawer';
 import {FactoryTimecardsPanel} from './FactoryTimecardsPage';
+import {FactoryOrganizationPanel} from './FactoryOrganizationPanel';
 import {factoryCall,parseSetupContext,type SetupContext} from './factory-enrollment';
 import {independenceCall,parseIndependence,type FactoryIndependenceContext} from './factory-independence';
 import {factoryHoursCall,parseFactoryHours,type FactoryHoursContext} from './factory-timecards';
@@ -10,7 +11,7 @@ import {factoryRoleCopy} from './factory-role-copy';
 import {useMemberNames} from './MemberNames';
 import type {WorkspaceAccess} from './workspace-access';
 
-export type FactoryRoleSection='home'|'setup'|'workers'|'teams'|'factory-timecards'|'timesheets'|'settings';
+export type FactoryRoleSection='home'|'setup'|'workers'|'teams'|'factory-timecards'|'timesheets'|'settings'|'schedule';
 type Action='create'|'connect'|'claim'|'leader'|'worker';
 type Result<T>={value?:T;error?:boolean};
 const uuid=(s:unknown)=>typeof s==='string'&&/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(s);
@@ -20,9 +21,13 @@ export function FactoryRolePanel({access,section}:{access:WorkspaceAccess;sectio
  const admin=access.membership.role==='factory_admin';
  const {i18n}=useTranslation(),copy=factoryRoleCopy(i18n.language);
  if(access.organization.kind!=='factory'||!(leader||admin))return null;
+ if(section==='schedule')return admin?<FactoryOrganizationPanel access={access} screen="schedule"/>:null;
  if(leader&&['factory-timecards','timesheets'].includes(section))return <FactoryTimecardsPanel key={access.membership.id+':'+section} organizationId={access.organization.id} leaderSection={section==='timesheets'?'timesheets':'hours'} expectedRole="team_leader" expectedMembershipId={access.membership.id}/>;
  if(leader&&['setup','settings'].includes(section)||admin&&['factory-timecards','timesheets'].includes(section))return <p role="status">{copy.closed}</p>;
- return <FactoryManagement key={access.organization.id+':'+access.membership.id+':'+section} access={access} section={section}/>;
+ return <>
+  <FactoryManagement key={access.organization.id+':'+access.membership.id+':'+section} access={access} section={section}/>
+  {admin&&section==='teams'&&<FactoryOrganizationPanel access={access} screen="teams"/>}
+ </>;
 }
 
 function FactoryManagement({access,section}:{access:WorkspaceAccess;section:FactoryRoleSection}){

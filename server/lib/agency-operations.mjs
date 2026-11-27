@@ -31,6 +31,7 @@ const agencyTeamActions=new Set(['context','read','message','invite-accountant',
 const workerTeamActions=new Set(['context','read','message','absence','update-plan','cancel','save-template','delete-template']);
 const agencyFactoryActions=new Set(['context','propose-placement','revoke-placement']);
 const leaderFactoryWrites=new Set(['create','correct','set-mode','review','send','history']);
+const factoryChatActions=new Set(['context','read','message']);
 const leaderTeamActions=new Set(['context','read','message','schedule','update-plan','cancel']);
 function workerWorkspaceAction(name,pathname,method){
  // Factory create is separately checked in its RPC against the worker's own
@@ -60,6 +61,9 @@ export function managedAgencyOperations(env){
   const timecardsFingerprint=env.TIMEAX_AGENCY_TIMECARDS_RPC_SHA256;
   if(sha(timecardsFingerprint)&&v.timecards&&typeof v.timecards==='object'&&!Array.isArray(v.timecards))
    v.timecards={...v.timecards,hashes:{...v.timecards.hashes,['timeax_api.timecards(text,text,text,jsonb)']:timecardsFingerprint}};
+  const factoryFingerprint=env.TIMEAX_FACTORY_TIMECARDS_RPC_SHA256;
+  if(sha(factoryFingerprint)&&v.factoryTimecards&&typeof v.factoryTimecards==='object'&&!Array.isArray(v.factoryTimecards))
+   v.factoryTimecards={...v.factoryTimecards,hashes:{...v.factoryTimecards.hashes,['timeax_api.factory_timecards(text,text,text,jsonb)']:factoryFingerprint}};
   const teamFingerprint=env.TIMEAX_AGENCY_TEAM_RPC_SHA256;
   if(sha(teamFingerprint)&&v.team&&typeof v.team==='object'&&!Array.isArray(v.team))
    v.team={...v.team,hashes:{...v.team.hashes,[TEAM_FUNCTION.signature]:teamFingerprint}};
@@ -128,11 +132,12 @@ export async function assembleAgencyOperations(config,lane,{now=Date.now}={}){
      if(scope?.organization.kind==='factory'){
       const role=scope.membership.role,method=request.method;
       const context=method==='GET'&&action==='context';
-      const allowed=role==='factory_admin'&&(name==='factoryTimecards'&&(context||method==='POST'&&['approve-placement','revoke-placement'].includes(action))
-       ||name==='names'&&(context||method==='POST'&&action==='set'))
+      const allowed=role==='factory_admin'&&(name==='factoryTimecards'&&(context||method==='GET'&&new RegExp('/read/'+id+'$').test(pathname)||method==='POST'&&['approve-placement','revoke-placement'].includes(action))
+       ||name==='names'&&(context||method==='POST'&&action==='set')||name==='team'&&factoryChatActions.has(action))
        ||role==='team_leader'&&(name==='team'&&leaderTeamActions.has(action)||name==='names'&&context
         ||name==='factoryTimecards'&&(context||method==='GET'&&new RegExp('/read/'+id+'$').test(pathname)||method==='POST'&&leaderFactoryWrites.has(action)));
-      return allowed&&await session.isActive()?{...session,workspaceRole:role,workspaceMembershipId:scope.membership.id}:{state:'anonymous'};
+      const workerChat=role==='worker'&&name==='team'&&factoryChatActions.has(action)&&await workerTerms?.accepted(session)===true;
+      return (allowed||workerChat)&&await session.isActive()?{...session,workspaceRole:role,workspaceMembershipId:scope.membership.id}:{state:'anonymous'};
      }
      if(scope?.organization.kind!=='agency')return {state:'anonymous'};
      if(scope.membership.role==='agency_admin')return (name!=='team'||agencyTeamActions.has(action))

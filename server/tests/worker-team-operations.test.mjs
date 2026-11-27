@@ -136,7 +136,9 @@ test('the hosted production workspace only mounts known role-specific operations
  assert.equal((await manager.dispatch(hours+'context')).status,200);
  assert.equal((await manager.dispatch(hours+'approve-placement',{worksiteId:site,id,operationId:op,confirmed:true})).status,200);
  assert.equal((await manager.dispatch(hours+'send',{})).status,401);
- assert.equal((await manager.dispatch(root+'context')).status,401);
+ assert.equal((await manager.dispatch(root+'context')).status,200);
+ assert.equal((await manager.dispatch(root+'schedule',{})).status,401);
+ assert.equal((await manager.dispatch(root+'invite-accountant',{})).status,401);
  assert.equal((await leader.dispatch(hours+'context')).status,200);
  assert.equal((await leader.dispatch(hours+'set-mode',{worksiteId:site,operationId:op,revision:0,mode:'attendance'})).status,200);
  assert.equal((await leader.dispatch(hours+'approve-placement',{})).status,401);

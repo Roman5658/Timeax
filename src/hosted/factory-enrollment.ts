@@ -8,7 +8,7 @@ export type SetupContext={memberships:SetupMembership[];worksites:SetupSite[];co
 export async function factoryCall(action:string,body?:unknown,signal?:AbortSignal):Promise<unknown>{
  if(location.protocol!=='https:'&&!isWorkerLocal())throw Error('unavailable');
  const r=await fetch('/api/factory-setup/'+action,{method:body===undefined?'GET':'POST',credentials:'same-origin',cache:'no-store',redirect:'error',signal,headers:body===undefined?{Accept:'application/json'}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
- if(!r.ok)throw Error(r.status===401?'login':r.status===403?'denied':'unavailable');
+ if(!r.ok)throw Error(r.status===401?'login':r.status===403?'denied':r.status===409?'conflict':r.status===400?'invalid':'unavailable');
  if(r.headers.get('content-type')?.split(';')[0]!=='application/json')throw Error('unavailable');return r.json();
 }
 export function parseSetupContext(v:unknown):SetupContext{

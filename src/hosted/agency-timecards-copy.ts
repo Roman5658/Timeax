@@ -34,7 +34,13 @@ const filters={
   "archiveFilters": "To save the entire worksite timecard, choose a month, date or date range and clear worker and weekday filters."
  }
 } as const;
+const exportsCopy={
+ en:{exportScope:'Workers in this file',fullDocument:'Everyone in this timecard',workerExtract:'Extract for one worker',extractNotice:'This file includes only the selected worker’s shifts. The full timecard is unchanged.'},
+ ru:{exportScope:'Работники в файле',fullDocument:'Все работники из табеля',workerExtract:'Выписка по одному работнику',extractNotice:'В файл войдут только смены выбранного работника. Полный табель не изменится.'},
+ uk:{exportScope:'Працівники у файлі',fullDocument:'Усі працівники з табеля',workerExtract:'Витяг за одним працівником',extractNotice:'До файлу увійдуть лише зміни вибраного працівника. Повний табель не зміниться.'},
+ pl:{exportScope:'Pracownicy w pliku',fullDocument:'Wszyscy pracownicy z ewidencji',workerExtract:'Wyciąg dla jednego pracownika',extractNotice:'Plik zawiera tylko zmiany wybranego pracownika. Pełna ewidencja pozostaje bez zmian.'},
+} as const;
 export const agencyTimecardsCopy=(language:string)=>{
  const lang=language.split('-')[0] as keyof typeof copy;
- return {...(copy[lang]??copy.en),...(filters[lang]??filters.en)};
+ return {...(copy[lang]??copy.en),...(filters[lang]??filters.en),...(exportsCopy[lang]??exportsCopy.en)};
 };

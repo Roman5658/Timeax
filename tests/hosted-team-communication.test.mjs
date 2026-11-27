@@ -41,3 +41,14 @@ test('thread grouping resolves only locally authorized entries',async()=>{
  assert.deepEqual(threads(root).map(x=>x.id),[leader,other,own]);
  assert.deepEqual(threads(disconnected),[disconnected]);
 });
+
+test('factory recipients are capability-gated and clean composition selects only directly employed workers at its owned site',()=>{
+ const adminCtx={...context('factory_admin',[site]),factoryChat:true};
+ assert.deepEqual(eligibleTeamRecipients(adminCtx,'workers',site).map(r=>r.id),[own]);
+ assert.deepEqual(eligibleTeamRecipients(adminCtx,'workers',site2),[]);
+ assert.deepEqual(eligibleTeamRecipients({...adminCtx,factoryChat:false},'workers',site),[]);
+ const workerCtx={...context('worker',[site,site2]),factoryChat:true,recipients:[{id:admin,role:'factory_admin',organizationId:other,worksiteIds:[site]}]};
+ assert.deepEqual(eligibleTeamRecipients(workerCtx,'factory',site).map(r=>r.id),[admin]);
+ assert.deepEqual(eligibleTeamRecipients(workerCtx,'factory',site2),[]);
+ assert.deepEqual(eligibleTeamRecipients({...workerCtx,factoryChat:false},'factory',site),[]);
+});

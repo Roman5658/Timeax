@@ -3,6 +3,28 @@ import {validNip} from './worker-enrollment.server.mjs';
 export const FACTORY_SQL='SELECT timeax_api.factory_setup($1::text,$2::text,$3::text,$4::jsonb) AS value';
 export function createFactorySetupStore(lane){if(typeof lane?.query!=='function')throw Error('Factory RPC lane missing');return {async invoke(actor,action,input){const r=await lane.query(FACTORY_SQL,[actor.issuer,actor.subject,action,JSON.stringify(input)]);if(r.rows?.length!==1||!r.rows[0].value||typeof r.rows[0].value!=='object')throw Error('Invalid factory result');return r.rows[0].value}}}
 const uuid=x=>typeof x==='string'&&/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(x);
+const rosterFields={
+ 'factory-roster':['organizationId','worksiteId'],
+ 'factory-schedule':['organizationId','worksiteId','dateFrom','dateTo'],
+ 'factory-unit-save':['organizationId','worksiteId','id','revision','kind','name','departmentId','leaderId','workers'],
+ 'factory-unit-archive':['organizationId','worksiteId','id','revision'],
+};
+const day=value=>{
+ if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
+ const date=new Date(value+'T00:00:00.000Z');
+ return Number.isFinite(date.getTime())&&date.toISOString().slice(0,10)===value;
+};
+function validRoster(action,b){
+ const keys=rosterFields[action];
+ if(!b||typeof b!=='object'||Array.isArray(b)||Object.keys(b).length!==keys.length||keys.some(k=>!Object.hasOwn(b,k))||!uuid(b.organizationId)||!uuid(b.worksiteId))return false;
+ if(action==='factory-roster')return true;
+ if(action==='factory-schedule')return day(b.dateFrom)&&day(b.dateTo)&&b.dateFrom<=b.dateTo&&(Date.parse(b.dateTo)-Date.parse(b.dateFrom))/86400000<=31;
+ const revision=uuid(b.id)&&Number.isSafeInteger(b.revision)&&b.revision>=1&&b.revision<2_147_483_647;
+ if(action==='factory-unit-archive')return revision;
+ return (revision||b.id===null&&b.revision===null)&&['department','group'].includes(b.kind)&&typeof b.name==='string'&&b.name.trim().length>=1&&b.name.trim().length<=80&&!/[\p{Cc}]/u.test(b.name)
+  &&(b.departmentId===null||b.kind==='group'&&uuid(b.departmentId))&&(b.leaderId===null||b.kind==='group'&&uuid(b.leaderId))
+  &&Array.isArray(b.workers)&&b.workers.length<=200&&b.workers.every(uuid)&&new Set(b.workers).size===b.workers.length;
+}
 const fields={
  'create-site':['organizationId','name','operationId'],'assign-internal':['worksiteId','membershipId','startsAt'],
  'rename-site':['worksiteId','name'],'transfer-internal':['worksiteId','fromWorksiteId','membershipId','startsAt'],
@@ -30,8 +52,10 @@ export function createFactorySetupHandler({origin,resolveSession,store=null,agen
    const url=new URL(request.url),match=url.pathname.match(/^\/api\/factory-setup\/([a-z-]+)$/);
    if(url.origin!==origin||url.search||url.hash||!match)return reply(404,{error:'not-found'});
    const action=match[1],write=action!=='context';
+   const rosterAction=Object.hasOwn(rosterFields,action);
+   if(rosterAction&&!productionRoles)return reply(404,{error:'not-found'});
    if(agencyOnly&&!productionRoles&&!['context','create-site','approve-connection','decline-connection','revoke-connection','assign-internal','revoke-assignment','transfer-internal','rename-site'].includes(action))return reply(404,{error:'not-found'});
-   if(productionRoles&&action!=='context'&&!Object.hasOwn(fields,action))return reply(404,{error:'not-found'});
+   if(productionRoles&&action!=='context'&&!rosterAction&&!Object.hasOwn(fields,action))return reply(404,{error:'not-found'});
    if(request.method!==(write?'POST':'GET'))return reply(405,{error:'not-allowed'});
    const from=request.headers.get('origin'),site=request.headers.get('sec-fetch-site');
    if((write?from!==origin:from!==null&&from!==origin)||(site!==null&&site!=='same-origin')||[...request.headers.keys()].some(k=>/^(authorization|forwarded|x-forwarded-.*|x-role|x-subject|x-issuer|x-tenant.*|x-timeax-.*)$/.test(k)))return reply(403,{error:'not-permitted'});
@@ -45,8 +69,8 @@ export function createFactorySetupHandler({origin,resolveSession,store=null,agen
     if(!/^application\/json(?:;\s*charset=utf-8)?$/i.test(request.headers.get('content-type')??'')||request.headers.has('content-encoding'))return reply(400,{error:'invalid-request'});
     const reader=request.body?.getReader();if(!reader)return reply(400,{error:'invalid-request'});
     let size=0,parts=[],timer;const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('timeout')),2500)});
-    try{for(;;){const r=await Promise.race([reader.read(),timeout]);if(r.done)break;size+=r.value.length;if(size>2048)return reply(400,{error:'invalid-request'});parts.push(r.value)}input=JSON.parse(new TextDecoder('utf8',{fatal:true}).decode(Buffer.concat(parts)))}finally{clearTimeout(timer);void reader.cancel().catch(()=>{})}
-    if(!valid(action,input)||!agencyOnly&&!productionRoles&&['transfer-internal','rename-site'].includes(action))return reply(400,{error:'invalid-request'});
+    try{for(;;){const r=await Promise.race([reader.read(),timeout]);if(r.done)break;size+=r.value.length;if(size>(action==='factory-unit-save'?10_240:2048))return reply(400,{error:'invalid-request'});parts.push(r.value)}input=JSON.parse(new TextDecoder('utf8',{fatal:true}).decode(Buffer.concat(parts)))}finally{clearTimeout(timer);void reader.cancel().catch(()=>{})}
+    if(!(rosterAction?validRoster(action,input):valid(action,input))||!agencyOnly&&!productionRoles&&['transfer-internal','rename-site'].includes(action))return reply(400,{error:'invalid-request'});
    }
    const actor={issuer:s.issuer,subject:s.subject};
    let value;
@@ -75,6 +99,6 @@ export function createFactorySetupHandler({origin,resolveSession,store=null,agen
    }else value=await store.invoke(actor,action,input);
    if(!await active())return reply(401,{error:'valid-session-required'});
    return reply(200,value);
-  }catch(e){return reply(e?.code==='42501'?403:e?.code==='22023'?400:503,{error:e?.code==='42501'?'not-permitted':'factory-unavailable'})}
+  }catch(e){if(e?.code==='23505')return reply(409,{error:'conflict'});return reply(e?.code==='42501'?403:e?.code==='22023'?400:503,{error:e?.code==='42501'?'not-permitted':'factory-unavailable'})}
  };
 }

@@ -50,7 +50,7 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
    setWorkerReady(true);
    try{const memberships=enrollmentContext(await workerCall('context',undefined,signal)).memberships;
     const member=memberships.find(m=>m.role==='worker'&&m.kind==='agency');
-    const productions=memberships.filter(m=>m.kind==='factory'&&['factory_admin','team_leader'].includes(m.role));
+    const productions=memberships.filter(m=>m.kind==='factory'&&['factory_admin','team_leader','worker'].includes(m.role));
     if(signal.aborted)return;
     if(member&&workerPasswordReauth){navigate('/account/settings',{replace:true});return;}
     if(member&&scope.workerProvisioning){

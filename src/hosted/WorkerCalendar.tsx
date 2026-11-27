@@ -108,6 +108,7 @@ export function WorkerCalendar({organizationId,membershipId,enableInternal=true,
     <div className="form-actions">
      <button type="button" className="button button--primary button--small" disabled={loading||assignment.state!=='ready'} onClick={()=>openShift()}><Plus size={15} aria-hidden="true"/>{t('workflow.worker.recordForDate')}</button>
      {enableTeam&&<button className="button button--quiet button--small" type="button" onClick={()=>setAbsenceDay(selected)}><MessageCircleWarning size={15} aria-hidden="true"/>{t('workflow.absence.reportButton')}</button>}
+     {!loading&&!!(detailRecords.shifts.length||detailRecords.absences.length||detailRecords.plans.length)&&<Link className="button button--quiet button--small" to={root+'/timecards?month='+selected.slice(0,7)+'&date='+selected}>{t('workflow.history.open')}</Link>}
     </div>
    </div>
    {!loading&&assignment.state!=='ready'&&<p className="muted-copy">{shiftCopy[assignment.state]}</p>}

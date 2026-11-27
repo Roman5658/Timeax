@@ -1,0 +1,7 @@
+.factory-organization{display:grid;gap:1rem}
+.factory-organization__filters{display:grid;gap:.9rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,10.5rem),1fr))}
+.factory-organization__list{display:grid;gap:.7rem}
+.factory-organization__employees{max-height:18rem;overflow:auto;display:grid;gap:.45rem}
+.factory-organization .form-actions{flex-wrap:wrap}
+.factory-organization .timecards-row{align-items:flex-start;gap:.75rem}
+@media(max-width:560px){.factory-organization .timecards-row{display:grid;grid-template-columns:minmax(0,1fr)}}

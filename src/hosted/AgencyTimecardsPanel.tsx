@@ -128,7 +128,7 @@ function AgencySource({organizationId,source,c}:{organizationId:string;source:So
   function shiftRow(row:TimecardShift){return <article className="notice-box timecards-row" key={row.id}>
     <strong>{row.worksiteName}</strong>
     <p>{row.data.localDate} &middot; {row.data.startTime}-{row.data.endTime} &middot; {tt('counted')}: <strong>{minutesLabel(row.data.paidMinutes)}</strong> &middot; {tt(row.state)}</p>
-    <p>{tt('break')}: {row.data.breakMinutes} &middot; {tt(row.data.breakTreatment)}</p>{row.data.comment&&<p>{row.data.comment}</p>}
+    <p>{tt('break')}: {row.data.breakStatus==='not-reported'?t('workflow.breakReport.notReported'):row.data.breakStatus==='not-taken'?t('breaks.notTaken'):row.data.breakTreatment==='paid'?t('workflow.breakReport.paidChoice'):`${t('workflow.breakReport.unpaidChoice')} · ${minutesLabel(row.data.breakMinutes)}`}</p>{row.data.comment&&<p>{row.data.comment}</p>}
     <button type="button" className="button button--outline" disabled={busy} onClick={()=>void readHistory(row.id)}>{tt('history')}</button>
     {history?.id===row.id&&<section className="notice-box"><h3>{tt('history')}</h3>{history.revisions.map(h=><p key={h.revision}>{tt('version')} {h.revision}: {h.data.localDate} {h.data.startTime}-{h.data.endTime} &middot; {h.reason==='created'?tt('created'):h.reason}</p>)}<button type="button" className="button button--outline" onClick={()=>setHistory(undefined)}>{tt('close')}</button></section>}
   </article>}
@@ -201,22 +201,36 @@ function AgencySource({organizationId,source,c}:{organizationId:string;source:So
 }
 
 function SnapshotDialog({snapshot,c,onClose}:{snapshot:AgencyTimecardSnapshot;c:Copy;onClose:()=>void}){
-  const {t}=useTranslation(),tt=(k:string)=>t('timecards.'+k);
+  const {t,i18n}=useTranslation(),tt=(k:string)=>t('timecards.'+k);
   const saving=useRef(false);
-  const [busy,setBusy]=useState(false),[failed,setFailed]=useState(false);
+  const [busy,setBusy]=useState(false),[failed,setFailed]=useState(false),[worker,setWorker]=useState('');
   const workerText=(r:AgencyTimecardSnapshot['rows'][number])=>workerLabelText(r.workerLabel,t('memberNames.historicalMissing'),t('memberNames.reference'));
+  const distinct=new Map<string,string>();
+  for(const row of snapshot.rows){
+    if(uuid(row.membershipId)&&(!distinct.has(row.membershipId)||row.workerLabel?.name))
+      distinct.set(row.membershipId,workerText(row));
+  }
+  const labelCounts=new Map<string,number>();
+  for(const name of distinct.values())labelCounts.set(name,(labelCounts.get(name)??0)+1);
+  const workerOptions=[...distinct].sort((a,b)=>a[1].localeCompare(b[1],i18n.language)||a[0].localeCompare(b[0]));
+  const rows=worker?snapshot.rows.filter(row=>row.membershipId===worker):snapshot.rows;
+  const paidMinutes=worker?rows.reduce((sum,row)=>sum+row.data.paidMinutes,0):snapshot.paidMinutes;
   async function download(){
     if(saving.current)return;saving.current=true;setBusy(true);setFailed(false);
     try{const {downloadAgencyTimecardWorkbook}=await import('./timecard-xlsx');
-      await downloadAgencyTimecardWorkbook(snapshot,{source:c.source,site:c.site,factory:c.factoryLabel,worker:tt('workerRef'),date:tt('date'),start:tt('start'),end:tt('end'),gross:c.gross,break:c.break,paid:c.paid,comment:tt('comment'),total:c.total,worksheet:c.workbook,missingName:t('memberNames.historicalMissing'),reference:t('memberNames.reference'),internal:c.internal,factorySource:c.factory,timeZone:c.timeZone});
+      await downloadAgencyTimecardWorkbook(snapshot,{source:c.source,site:c.site,factory:c.factoryLabel,worker:tt('workerRef'),date:tt('date'),start:tt('start'),end:tt('end'),gross:c.gross,break:c.break,paid:c.paid,comment:tt('comment'),total:c.total,worksheet:c.workbook,missingName:t('memberNames.historicalMissing'),reference:t('memberNames.reference'),internal:c.internal,factorySource:c.factory,timeZone:c.timeZone,scope:c.exportScope,workerExtract:c.workerExtract,breakState:t('workflow.breakReport.inputLabel'),breakUnreported:t('workflow.breakReport.notReported'),breakNotTaken:t('breaks.notTaken'),breakPaid:t('workflow.breakReport.paidChoice'),breakUnpaid:t('workflow.breakReport.unpaidChoice')},worker||undefined);
     }catch{setFailed(true)}finally{saving.current=false;setBusy(false)}
   }
   const title=snapshot.source==='connected-factory'?snapshot.factoryName+' / '+snapshot.worksiteName:snapshot.worksiteName;
   return <AgencyBookDrawer title={title} closeLabel={tt('close')} busy={busy} onClose={onClose}>
     <p>{snapshot.dateFrom} – {snapshot.dateTo} · {snapshot.timeZone}</p>
-    <p>{tt('counted')}: <strong>{minutesLabel(snapshot.paidMinutes)}</strong></p>
+    <label className="field-label">{c.exportScope}<select value={worker} disabled={busy} onChange={e=>{setWorker(e.target.value);setFailed(false)}}>
+      <option value="">{c.fullDocument}</option>{workerOptions.map(([id,name])=><option key={id} value={id}>{name}{(labelCounts.get(name)??0)>1?' · '+id.slice(0,8):''}</option>)}
+    </select></label>
+    {worker&&<p className="muted-copy">{c.extractNotice}</p>}
+    <p>{tt('counted')}: <strong>{minutesLabel(paidMinutes)}</strong></p>
     <div className="agency-hours__rows">
-      {snapshot.rows.map(row=><p key={row.id}>{workerText(row)} · {row.data.localDate} · {row.data.startTime}–{row.data.endTime} · <strong>{minutesLabel(row.data.paidMinutes)}</strong></p>)}
+      {rows.map(row=><p key={row.id}>{workerText(row)} · {row.data.localDate} · {row.data.startTime}–{row.data.endTime} · <strong>{minutesLabel(row.data.paidMinutes)}</strong></p>)}
     </div>
     <div className="timecards-actions">
       <button type="button" className="button button--primary" disabled={busy} onClick={()=>void download()}>{busy?c.exporting:c.download}</button>
