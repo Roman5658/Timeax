@@ -70,7 +70,7 @@ export function StagingSessionPanel({ onChanged, purpose = "enrollment", audienc
     {!guided&&<p className="muted-copy">{sessionText("scope")}</p>}
     {!verified && <form className="auth-form" onSubmit={submit} aria-busy={busy}>
       {!guided&&<p className="muted-copy">{t("publicExperience.codePurpose")}</p>}
-      <p className="muted-copy" id="enrollment-privacy">{t(simple?"publicSignup.emailUse":"hostedPrivacy.beforeEmail")} <Link to={simple?"/privacy#privacy-access":"/privacy"}>{t("hostedPrivacy.link")}</Link></p>
+      <p className="muted-copy" id="enrollment-privacy">{!simple&&<>{t("hostedPrivacy.beforeEmail")}{" "}</>}<Link to={simple?"/privacy#privacy-access":"/privacy"}>{t("hostedPrivacy.link")}</Link></p>
       <label className="field-label" htmlFor="enrollment-email"><span>{sessionText("email")}</span>
         <input id="enrollment-email" aria-describedby="enrollment-privacy" type="email" autoComplete="email" maxLength={254} value={email} disabled={busy} onChange={e => setEmail(e.target.value)} required={!emailIdentity || !scope?.capabilities.verify} />
       </label>
