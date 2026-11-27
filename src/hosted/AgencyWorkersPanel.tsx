@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {AgencyWorkerProvisioning} from './AgencyWorkerProvisioning';
+import {workerProvisionCopy} from './worker-provisioning-copy';
 import {AgencyBookDrawer} from './AgencyBookDrawer';
 import {agencyWorkerCopy} from './agency-workers-copy';
 import {factoryCall,parseSetupContext,type SetupContext} from './factory-enrollment';
@@ -13,7 +14,7 @@ type Props={organizationId:string;enrollmentEnabled:boolean;provisioningEnabled?
 type Application={application_id:string;claimed_at:string};
 type Member={membershipId:string;state:string;endedAt:string|null};
 type WorkersResponse={organizationId:string;workers:Member[]};
-type UiDrawer={type:'invite'}|{type:'worker';id:string};
+type UiDrawer={type:'invite'|'email'}|{type:'worker';id:string};
 type CopyKey=keyof typeof agencyWorkerCopy.en;
 type WorkAssignment={worksiteId:string;startsAt:string;endsAt?:string|null};
 const uuid=(s:unknown)=>typeof s==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(s);
@@ -25,6 +26,7 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisionin
  const lang=(i18n.resolvedLanguage??'en').toLowerCase().split('-')[0];
  const strings=agencyWorkerCopy[lang as keyof typeof agencyWorkerCopy]??agencyWorkerCopy.en;
  const copy=(key:CopyKey)=>strings[key];
+ const provision=workerProvisionCopy(lang);
  const dates=new Intl.DateTimeFormat(lang,{dateStyle:'medium',timeZone:'Europe/Warsaw'});
  const queuePath='agency/'+organizationId;
  const [section,setSection]=useState(initialSection),[revision,R]=useState(0),[queueRevision,Q]=useState(0);
@@ -148,6 +150,7 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisionin
    <button type="button" className={'button '+(section==='roster'?'button--primary':'button--outline')} aria-pressed={section==='roster'} disabled={busy} onClick={()=>{setSection('roster');U(undefined);E(false)}}>{copy('roster')}</button>
    {!siteId&&<button type="button" className={'button '+(section==='applications'?'button--primary':'button--outline')} aria-pressed={section==='applications'} disabled={busy} onClick={()=>{setSection('applications');U(undefined);E(false)}}>{copy('applications')}</button>}
    {enrollmentEnabled&&<button type="button" className="button button--outline agency-worker-add" disabled={busy} onClick={()=>{reset();open({type:'invite'})}}>{copy('add')}</button>}
+   {provisioningEnabled&&!siteId&&<button type="button" className="button button--primary" disabled={busy} onClick={()=>{reset();open({type:'email'})}}>{provision.createAccount}</button>}
   </nav>
   <div key={section} className="agency-production-leaf">
   {section==='roster'?<section className="dashboard-panel" aria-busy={rosterEnabled&&!rosterReady&&!loadFailed}>
@@ -180,8 +183,8 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisionin
   </section>}
   </div>
   {!drawer&&status}
-  {drawer&&<AgencyBookDrawer title={drawer.type==='invite'?copy('add'):copy('settings')} closeLabel={copy('close')} busy={busy} onClose={dismiss}>
-   {drawer.type==='invite'?<>
+  {drawer&&<AgencyBookDrawer title={drawer.type==='email'?provision.createAccount:drawer.type==='invite'?copy('add'):copy('settings')} closeLabel={copy('close')} busy={busy} onClose={dismiss}>
+   {drawer.type==='email'?<AgencyWorkerProvisioning organizationId={organizationId}/>:drawer.type==='invite'?<>
     {provisioningEnabled&&<AgencyWorkerProvisioning organizationId={organizationId}/>}
     <p>{copy('inviteInfo')}</p>
     {!invite?<button type="button" className="button button--primary" disabled={busy} onClick={createInvite}>{t('workerEnrollment.createInvite')}</button>:

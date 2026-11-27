@@ -99,7 +99,14 @@ BEGIN
   RAISE EXCEPTION 'worker session unavailable' USING ERRCODE='42501';
  END IF;
  v_subject:=p_subject::uuid;
- PERFORM timeax_core.check_worker_principal(p_issuer,p_subject);
+ -- The managed postgres role cannot execute private helpers owned by the
+ -- legacy NIP role. Keep the same active-principal check in this definer.
+ PERFORM 1 FROM timeax_core.identity_issuers WHERE issuer=p_issuer AND active FOR SHARE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'worker session unavailable' USING ERRCODE='42501'; END IF;
+ PERFORM 1 FROM timeax_core.identities WHERE issuer=p_issuer AND subject=p_subject FOR SHARE;
+ IF EXISTS(SELECT 1 FROM timeax_core.identities WHERE issuer=p_issuer AND subject=p_subject AND NOT active) THEN
+  RAISE EXCEPTION 'worker session unavailable' USING ERRCODE='42501';
+ END IF;
  IF p_action IN ('directory-request','claim-code','accept')
   AND NOT coalesce(timeax_core.worker_terms_current(p_issuer,p_subject),false) THEN
   RAISE EXCEPTION 'worker terms required' USING ERRCODE='42501';
@@ -167,19 +174,20 @@ BEGIN
   IF v_agency IS NULL OR v_agency IS DISTINCT FROM (p_data->>'agencyId')::uuid THEN
    RAISE EXCEPTION 'agency unavailable' USING ERRCODE='42501';
   END IF;
-  IF v_verified THEN
-   RETURN jsonb_build_object('application',(SELECT to_jsonb(a) FROM timeax_api.request_worker_agency(p_issuer,p_subject,v_agency,v_nip) a));
-  END IF;
   PERFORM id FROM timeax_core.organizations WHERE id=v_agency AND kind='agency' AND state='active' FOR SHARE;
-  IF NOT FOUND OR EXISTS(
+  IF NOT FOUND THEN RAISE EXCEPTION 'agency unavailable' USING ERRCODE='42501'; END IF;
+  SELECT * INTO v_application FROM timeax_core.agency_worker_applications WHERE agency_id=v_agency AND issuer=p_issuer AND subject=p_subject;
+  IF v_application.id IS NULL AND EXISTS(
    SELECT 1 FROM timeax_core.memberships m JOIN timeax_core.identities i ON i.id=m.identity_id
    WHERE m.organization_id=v_agency AND (i.issuer,i.subject)=(p_issuer,p_subject)
   ) THEN RAISE EXCEPTION 'agency unavailable' USING ERRCODE='42501'; END IF;
-  INSERT INTO timeax_core.agency_worker_applications(agency_id,issuer,subject,claimed_at,source_kind)
-   VALUES(v_agency,p_issuer,p_subject,v_time,'nip') ON CONFLICT(agency_id,issuer,subject) DO NOTHING;
-  SELECT * INTO v_application FROM timeax_core.agency_worker_applications WHERE agency_id=v_agency AND issuer=p_issuer AND subject=p_subject;
+  IF v_application.id IS NULL THEN
+   INSERT INTO timeax_core.agency_worker_applications(agency_id,issuer,subject,claimed_at,source_kind)
+    VALUES(v_agency,p_issuer,p_subject,v_time,'nip') ON CONFLICT(agency_id,issuer,subject) DO NOTHING;
+   SELECT * INTO v_application FROM timeax_core.agency_worker_applications WHERE agency_id=v_agency AND issuer=p_issuer AND subject=p_subject;
+  END IF;
   RETURN jsonb_build_object('application',jsonb_build_object('application_id',v_application.id,
-    'status',CASE WHEN v_application.approved_at IS NULL THEN 'pending' ELSE 'approved' END));
+    'status',CASE WHEN v_application.approved_at IS NULL THEN 'pending' ELSE 'approved' END,'claimed_at',v_application.claimed_at));
  END IF;
 
  IF p_action='claim-code' THEN

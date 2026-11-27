@@ -6,5 +6,12 @@ const options={
 };
 export function workerProvisionCopy(language:string|undefined){
  const key=(language??'en').toLowerCase().split('-')[0];
- return options[key as keyof typeof options]??options.en;
+ return {...(options[key as keyof typeof options]??options.en),...(accountFlow[key as keyof typeof accountFlow]??accountFlow.en)};
 }
+
+const accountFlow={
+ ru:{createAccount:'Создать аккаунт работника',accountHelp:'Укажи почту работника. Он сам запрашивает код при входе. После принятия условий Timeax откроет его кабинет, если это единственное подключение.',searchError:'Не удалось выполнить поиск по NIP. Попробуй ещё раз.'},
+ en:{createAccount:'Create worker account',accountHelp:'Enter the worker’s email. They request a code when signing in. After accepting the terms, Timeax opens their workspace if this is their only connection.',searchError:'Could not search by NIP. Please try again.'},
+ pl:{createAccount:'Utwórz konto pracownika',accountHelp:'Podaj adres e-mail pracownika. Pracownik sam poprosi o kod przy logowaniu. Po zaakceptowaniu regulaminu Timeax otworzy jego panel, jeśli to jedyne połączenie.',searchError:'Nie udało się wyszukać agencji po NIP-ie. Spróbuj ponownie.'},
+ uk:{createAccount:'Створити акаунт працівника',accountHelp:'Вкажи пошту працівника. Працівник сам запитує код під час входу. Після прийняття умов Timeax відкриє його кабінет, якщо це єдине підключення.',searchError:'Не вдалося виконати пошук за NIP. Спробуй ще раз.'},
+};

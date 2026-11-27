@@ -54,7 +54,7 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
       }
      }catch{}
     }
-    if(!signal.aborted)navigate(member?'/workspace/'+member.organizationId:'/register/worker',{replace:true});
+    if(!signal.aborted)navigate(member?'/workspace/'+member.organizationId:'/register/worker',{replace:true,...(!member?{state:{fromWorkerLogin:true}}:{})});
     return;
    }catch{if(signal.aborted)return}
   }

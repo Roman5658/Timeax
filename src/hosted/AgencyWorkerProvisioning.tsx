@@ -32,10 +32,10 @@ export function AgencyWorkerProvisioning({organizationId}:{organizationId:string
   });
  }
  return <section className="agency-book-section">
-  <h3>{label.prepare}</h3><p>{label.info}</p>
+  <p>{label.accountHelp}</p>
   <form className="auth-form" onSubmit={add}>
    <label className="field-label">{label.email}<input type="email" required maxLength={254} value={email} disabled={saving} onChange={e=>E(e.target.value)}/></label>
-   <button className="button button--primary" disabled={saving}>{label.prepare}</button>
+   <button className="button button--primary" disabled={saving}>{label.createAccount}</button>
   </form>
   {directory?.available&&<label className="agency-worker-confirm">
    <input type="checkbox" checked={directory.enabled} disabled={saving} onChange={e=>void run('directory',{enabled:e.target.checked},res=>{

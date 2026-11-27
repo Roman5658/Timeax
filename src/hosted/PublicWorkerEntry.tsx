@@ -1,4 +1,4 @@
-import {useEffect,useMemo,useRef,useState,type FormEvent} from 'react';
+import {useCallback,useEffect,useMemo,useRef,useState,type FormEvent} from 'react';
 import {Link,useLocation,useNavigate} from 'react-router-dom';
 import {useTranslation} from 'react-i18next';
 import {RegistrationFrame,LegalLink} from '../components/PublicExperience';
@@ -29,6 +29,7 @@ function normalizeNip(raw:string){
 
 export function PublicWorkerEntry(){
  const {t,i18n}=useTranslation(),copy=workerRegistrationCopy(i18n.resolvedLanguage),loc=useLocation();
+ const fromLogin=loc.state?.fromWorkerLogin===true;
  const [initialInvite]=useState(()=>invitation(new URLSearchParams(loc.hash.slice(1)).get('invite')??new URLSearchParams(loc.search).get('invite')??new URLSearchParams(loc.search).get('invitation')??''));
  const client=useMemo(()=>createWorkingRegistrationClient(location.origin,fetch.bind(window),'enrollment'),[]);
  const [purpose,setPurpose]=useState<'enrollment'|'existing'>('enrollment');
@@ -58,7 +59,7 @@ export function PublicWorkerEntry(){
   <ol className="enrollment-progress"><li aria-current={!confirmed?'step':undefined} className={confirmed?'complete':undefined}>{copy.account}</li><li aria-current={confirmed?'step':undefined}>{copy.connect}</li></ol>
   {!scope&&checking?<p role="status">{t('closedHosted.checking')}</p>:!ready?
    <div role="status" className="notice-box"><p>{copy.unavailable}</p><button className="button button--outline" type="button" onClick={()=>R(n=>n+1)}>{copy.retry}</button></div>:
-   confirmed?<><WorkerTermsGate onSessionExpired={()=>R(n=>n+1)}><WorkerAgencyConnection provisioning={scope?.workerProvisioning===true} initialInvite={initialInvite} onSessionExpired={()=>R(n=>n+1)}/></WorkerTermsGate>
+   confirmed?<><WorkerTermsGate onSessionExpired={()=>R(n=>n+1)}><WorkerAgencyConnection provisioning={scope?.workerProvisioning===true} initialInvite={initialInvite} autoConnect={fromLogin&&!initialInvite} onSessionExpired={()=>R(n=>n+1)}/></WorkerTermsGate>
     <p><button className="button button--outline" type="button" disabled={switching} onClick={()=>void switchAccount()}>{copy.switchAccount}</button></p>
     {switchFailed&&<p role="alert">{copy.unavailable}</p>}
    </>:<>
@@ -73,12 +74,12 @@ export function PublicWorkerEntry(){
  </RegistrationFrame>;
 }
 
-function WorkerAgencyConnection({initialInvite,onSessionExpired,provisioning}:{initialInvite:string;onSessionExpired:()=>void;provisioning:boolean}){
+function WorkerAgencyConnection({initialInvite,onSessionExpired,provisioning,autoConnect}:{initialInvite:string;onSessionExpired:()=>void;provisioning:boolean;autoConnect:boolean}){
  const {i18n}=useTranslation(),copy=workerRegistrationCopy(i18n.resolvedLanguage),inviteCopy=workerProvisionCopy(i18n.resolvedLanguage),navigate=useNavigate();
  const [invitations,Inv]=useState<EmailInvitation[]>([]),[invitationError,InviteError]=useState(false);
  const [method,M]=useState<'nip'|'invite'>(initialInvite?'invite':'nip'),[nip,N]=useState(''),[code,I]=useState(initialInvite);
  const [value,V]=useState<EnrollmentContext>(),[agency,A]=useState<FoundAgency|null>(),[notice,T]=useState(''),[err,E]=useState('');
- const [busy,B]=useState(false),[revision,R]=useState(0),pending=useRef(false);
+ const [busy,B]=useState(false),[revision,R]=useState(0),pending=useRef(false),autoAttempted=useRef(false);
  const expired=useRef(onSessionExpired);expired.current=onSessionExpired;
  useEffect(()=>{
   const c=new AbortController();
@@ -93,7 +94,7 @@ function WorkerAgencyConnection({initialInvite,onSessionExpired,provisioning}:{i
    .catch(e=>{if(!c.signal.aborted&&e?.message!=='denied')InviteError(true)});
   return()=>c.abort();
  },[revision,provisioning]);
- async function acceptInvite(invite:EmailInvitation){
+ const acceptInvite=useCallback(async(invite:EmailInvitation)=>{
   if(pending.current)return;pending.current=true;B(true);E('');T('');InviteError(false);
   try{
    const res=await workerCall('accept-email-invitation',{invitationId:invite.id}) as {state?:string;organizationId?:string};
@@ -101,11 +102,16 @@ function WorkerAgencyConnection({initialInvite,onSessionExpired,provisioning}:{i
    navigate('/workspace/'+invite.organizationId,{replace:true});
   }catch(e){if(e instanceof Error&&e.message==='login')expired.current();else E(inviteCopy.inviteError)}
   finally{pending.current=false;B(false)}
- }
+ },[inviteCopy.inviteError,navigate]);
+ useEffect(()=>{
+  if(!autoConnect||autoAttempted.current||pending.current||!value||value.memberships.length!==0||invitations.length!==1)return;
+  autoAttempted.current=true;
+  void acceptInvite(invitations[0]);
+ },[autoConnect,value,invitations,acceptInvite]);
  const normalized=normalizeNip(nip);
- async function run(task:()=>Promise<void>){
+ async function run(task:()=>Promise<void>,errorMessage:string=copy.cannotApply){
   if(pending.current)return;pending.current=true;B(true);E('');T('');
-  try{await task()}catch(e){if(e instanceof Error&&e.message==='login')expired.current();else E(copy.cannotApply)}
+  try{await task()}catch(e){if(e instanceof Error&&e.message==='login')expired.current();else E(errorMessage)}
   finally{pending.current=false;B(false)}
  }
  function search(e:FormEvent){
@@ -116,7 +122,7 @@ function WorkerAgencyConnection({initialInvite,onSessionExpired,provisioning}:{i
    const result=await workerCall('lookup',{nip:normalized}) as {agency?:FoundAgency|null};
    if(result?.agency!==null&&(!membershipId(result?.agency?.agency_id)||typeof result.agency?.name!=='string'||result.agency.nip!==normalized))throw Error('unavailable');
    A(result.agency);
-  });
+  },inviteCopy.searchError);
  }
  function apply(kind:'request'|'claim'){
   const body=kind==='request'&&agency?.nip===normalized?{agencyId:agency.agency_id,nip:normalized}:kind==='claim'&&invitation(code)?{code:invitation(code)}:null;
