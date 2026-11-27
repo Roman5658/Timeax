@@ -1,0 +1,55 @@
+/* Forest green with sky-blue controls and warm yellow highlights. */
+:root[data-theme="aurora"] {
+  color-scheme: dark;
+  background: #081b16;
+  color: #edf9f3;
+  --page: #081b16;
+  --page-warm: #0d261e;
+  --surface: #102e26;
+  --surface-soft: #153c31;
+  --surface-muted: #1a473b;
+  --ink: #edf9f3;
+  --text: var(--ink);
+  --ink-soft: #d0efe0;
+  --muted: #a9c8bd;
+  --muted-strong: #bfd8cf;
+  --line: #31574d;
+  --line-strong: #729e90;
+  --navy: #d8edff;
+  --navy-deep: #102739;
+  --lime: #86c7ff;
+  --lime-dark: #6ab2f3;
+  --mint: #1a513e;
+  --blue: #193f56;
+  --peach: #4d4228;
+  --violet: #363956;
+  --accent: #86c7ff;
+  --danger: #ffc1c9;
+  --theme-focus: #f8d980;
+  --aurora-gold: #f8d980;
+  --aurora-ink: #102633;
+  --aurora-hover: #afd9ff;
+  --shadow: 0 20px 55px rgb(0 11 18 / .45);
+  --shadow-soft: 0 8px 25px rgb(0 12 20 / .30);
+}
+:root[data-theme="aurora"] :is(body, .public-experience, .landing-page, .public-page, .auth-page, .portal-layout) {
+  background: radial-gradient(ellipse at 84% 0%, #16583e 0%, transparent 57%), var(--page);
+}
+:root[data-theme="aurora"] :is(.workspace-card,.feature-card--dark,.auth-book.enrollment-card) {
+  background: linear-gradient(152deg, #194d3e 0%, var(--surface) 60%, #172e45 100%);
+  border-color: var(--line-strong);
+  box-shadow: 0 18px 60px rgb(0 12 16 / .46), 0 0 32px rgb(109 198 255 / .14);
+}
+:root[data-theme="aurora"] :is(.public-kicker,.workspace-overline,.floating-chip--top,.preview-spark) { color:var(--aurora-gold); }
+:root[data-theme="aurora"] :is(.workspace-mark,.floating-chip--bottom,.flow-icon,.registration-option-icon) {
+  background:var(--blue); color:var(--accent); border-color:#537f99;
+}
+:root[data-theme="aurora"] .workspace-stat--lime { background:var(--mint); color:var(--ink); border-color:#578b73; }
+:root[data-theme="aurora"] .workspace-stat--blue { background:var(--blue); color:var(--accent); border-color:#537f99; }
+:root[data-theme="aurora"] .workspace-stat--peach { background:var(--peach); color:var(--aurora-gold); border-color:#87744c; }
+:root[data-theme="aurora"] :is(.preview-orbit--one,.preview-orbit--two) { background:radial-gradient(circle, #3982c5, transparent 68%); }
+:root[data-theme="aurora"] .chip-pulse { background:var(--aurora-gold); }
+:root[data-theme="aurora"] .button--primary { background:var(--accent); color:var(--aurora-ink); box-shadow:0 0 22px rgb(134 199 255 / .21); }
+:root[data-theme="aurora"] .button--primary:hover:not(:disabled) { background:var(--aurora-hover); color:var(--aurora-ink); }
+:root[data-theme="aurora"] :is(button,a,input,select,textarea):focus-visible { outline-color:var(--theme-focus); }
+:root[data-theme="aurora"] :is(.public-legal-links,.public-footer-links) a:hover { color:var(--accent); }

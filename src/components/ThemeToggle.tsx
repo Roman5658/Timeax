@@ -1,4 +1,4 @@
-import { ChevronDown, Droplets, Leaf, Moon, Sun, Zap } from "lucide-react";
+import { ChevronDown, Droplets, Leaf, Moon, Sparkles, Sun, Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../app/ThemeContext";
 import { isThemeName, themes } from "../app/theme-preference";
@@ -15,7 +15,7 @@ function PinkThemeIcon({ size, className }: { size: number; className: string })
   );
 }
 
-const icons = { light: Sun, dark: Moon, mint: Leaf, turquoise: Droplets, pink: PinkThemeIcon, neon: Zap };
+const icons = { light: Sun, dark: Moon, mint: Leaf, turquoise: Droplets, pink: PinkThemeIcon, neon: Zap, aurora: Sparkles };
 
 export function ThemeToggle({ expanded = false }: { expanded?: boolean }) {
   const { theme, setTheme } = useTheme();
