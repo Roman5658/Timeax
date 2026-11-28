@@ -52,7 +52,7 @@ export function useAgencyJoinCards(mark:(id:string)=>Promise<void>){
  const date=new Intl.DateTimeFormat(i18n.resolvedLanguage??'en',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Warsaw'});
  const [busy,B]=useState<string>(),[error,E]=useState(false);
  async function read(id:string){if(busy)return;B(id);E(false);try{await mark(id)}catch{E(true)}finally{B(undefined)}}
- return {error:error?c[4]:undefined,card:(e:JoinEvent)=><>
+ return {read,error:error?c[4]:undefined,card:(e:JoinEvent)=><>
    <h3>{c[0]}</h3>
    <div><strong>{e.name??(c[1]+(e.reference?' #'+e.reference:''))}</strong><p>{c[2]} · {date.format(new Date(e.joinedAt))}</p></div>
    {!e.read&&<button type="button" className="button button--outline button--small" disabled={!!busy} onClick={()=>void read(e.id)}>{c[3]}</button>}

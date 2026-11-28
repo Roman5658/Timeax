@@ -104,6 +104,7 @@ function rpcFingerprintMatches(expected,definition){
  const digest=createHash('sha256').update(definition).digest('hex');
  if(digest===expected.sha256)return true;
  const transitions={
+  [INBOX_SIGNATURE]:['e69f5e968803ecf74e5a1c2748603e42a8ccce73e6562839d2f01ff3d5ac425a','1d3cf474b619e7205682c6211313d43c998068f9da7cf4f322a27c6dcbdd4923'],
   [WORKER_PROVISIONING_SIGNATURE]:['60e0d2a0cf091e454f8baa60777895c4de14a81d19ea97d837de5e8902f7a878','27ecd91ddddf38cebcde7f1bd1ead78a834582f37b43f1275779dc6ec78b0f56'],
   'timeax_api.team_workflow(text,text,text,jsonb,jsonb)':['bc946a1d445103b82b39512e08afaf73545fe3d29b7b30ad671bc418a54f9fa2','c8d09a03067adccecffc7bfd1ff41eb10d1a80553ec2a637ca831664b053d721'],
   'timeax_api.account_lifecycle(text,text,text,jsonb)':['185ca20355303ae01801381d4e5a41e255991120625bf92debf17050e293326f','32b4f1d0453723efc0da00786e95447317e22ee4099b8a0716fad85834d0f065'],

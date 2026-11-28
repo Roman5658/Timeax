@@ -150,6 +150,16 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
  const joinEntries=inbox.data?.joins??joins.value?.entries??[];
  const shiftEntries=inbox.data?.backdated??backdated.feed?.notices??[];
  const joinCards=useAgencyJoinCards(async id=>{await joins.mark(id);inbox.refresh()});
+ const openedJoin=useRef('');
+ useEffect(()=>{
+  if(section!=='messages'||!where.hash.startsWith('#agency-join-'))return;
+  const id=where.hash.slice('#agency-join-'.length);
+  if(!joinEntries.some(j=>j.id===id&&!j.read)||inbox.state('agency-join-'+id)!=='active')return;
+  const key=where.key+'/'+org+'/'+id;
+  if(openedJoin.current===key)return;
+  openedJoin.current=key;
+  void joinCards.read(id);
+ },[section,where.key,where.hash,org,joinEntries,inbox,joinCards]);
  const shiftCards=useBackdatedCards(publicAgency&&section==='messages'&&uses('timecards')?org:undefined,()=>{backdated.refresh();inbox.refresh()});
  const requests=inbox.data?.requests??backdated.feed?.requests??[];
  const needsReview=inbox.data?requests.filter(e=>e.state==='pending').length:backdated.feed?.pending??0;
