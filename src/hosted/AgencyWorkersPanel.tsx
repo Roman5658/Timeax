@@ -11,9 +11,10 @@ import {factoryHoursCall,parseFactoryHours,type FactoryHoursContext} from './fac
 import {memberNamesCall,useMemberNames} from './MemberNames';
 import {accountCall} from './worker-account';
 import {workerCall} from './worker-enrollment';
+import type {useAgencyApplications} from './agency-applications';
+import {useBellAnchor} from './notification-navigation';
 
-type Props={organizationId:string;enrollmentEnabled:boolean;provisioningEnabled?:boolean;productionsEnabled:boolean;lifecycleEnabled:boolean;namesEnabled:boolean;factoryHoursEnabled?:boolean;timecardsEnabled?:boolean;absencesEnabled?:boolean;estimatesEnabled?:boolean;siteId?:string;initialSection?:'roster'|'applications'};
-type Application={application_id:string;claimed_at:string};
+type Props={organizationId:string;enrollmentEnabled:boolean;applicationQueue:ReturnType<typeof useAgencyApplications>;provisioningEnabled?:boolean;productionsEnabled:boolean;lifecycleEnabled:boolean;namesEnabled:boolean;factoryHoursEnabled?:boolean;timecardsEnabled?:boolean;absencesEnabled?:boolean;estimatesEnabled?:boolean;siteId?:string;initialSection?:'roster'|'applications'};
 type Member={membershipId:string;state:string;endedAt:string|null};
 type WorkersResponse={organizationId:string;workers:Member[]};
 type UiDrawer={type:'invite'}|{type:'email';cardId?:string}|{type:'worker';id:string}|{type:'activity';id:string};
@@ -23,7 +24,7 @@ const uuid=(s:unknown)=>typeof s==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a
 const localDay=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Warsaw',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const validDay=(s:string)=>/^\d{4}-\d{2}-\d{2}$/.test(s)&&Number.isFinite(Date.parse(s+'T00:00:00Z'));
 
-export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisioningEnabled=false,productionsEnabled,lifecycleEnabled,namesEnabled,factoryHoursEnabled=false,timecardsEnabled=false,absencesEnabled=false,estimatesEnabled=false,siteId,initialSection='roster'}:Props){
+export function AgencyWorkersPanel({organizationId,enrollmentEnabled,applicationQueue,provisioningEnabled=false,productionsEnabled,lifecycleEnabled,namesEnabled,factoryHoursEnabled=false,timecardsEnabled=false,absencesEnabled=false,estimatesEnabled=false,siteId,initialSection='roster'}:Props){
  const {t,i18n}=useTranslation();
  const lang=(i18n.resolvedLanguage??'en').toLowerCase().split('-')[0];
  const strings=agencyWorkerCopy[lang as keyof typeof agencyWorkerCopy]??agencyWorkerCopy.en;
@@ -31,10 +32,12 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisionin
  const provision=workerProvisionCopy(lang);
  const dates=new Intl.DateTimeFormat(lang,{dateStyle:'medium',timeZone:'Europe/Warsaw'});
  const queuePath='agency/'+organizationId;
- const [section,setSection]=useState(initialSection),[revision,R]=useState(0),[queueRevision,Q]=useState(0);
+ const [section,setSection]=useState(initialSection),[revision,R]=useState(0);
+ const {rows:applications,failed:queueFailed,refresh:refreshQueue,remove:removeApplication}=applicationQueue;
+ useBellAnchor(section==='applications');
  const [setup,S]=useState<SetupContext>(),[factory,F]=useState<FactoryHoursContext>();
- const [members,M]=useState<WorkersResponse>(),[applications,A]=useState<Application[]>();
- const [failed,RF]=useState(false),[queueFailed,QF]=useState(false);
+ const [members,M]=useState<WorkersResponse>();
+ const [failed,RF]=useState(false);
  const [filter,G]=useState(siteId??''),[query,Search]=useState('');
  const [drawer,open]=useState<UiDrawer>(),[invite,I]=useState<{code:string;link:string}>();
  const [workerCards,WC]=useState<WorkerCards>(),[cardsError,WE]=useState(false),[cardsRevision,WR]=useState(0);
@@ -71,17 +74,6 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisionin
   }).catch(()=>{if(!c.signal.aborted)RF(true)});
   return()=>c.abort();
  },[organizationId,productionsEnabled,lifecycleEnabled,factoryHoursEnabled,revision]);
- useEffect(()=>{
-  A(undefined);QF(false);
-  if(section!=='applications'||!enrollmentEnabled)return;
-  const c=new AbortController();
-  void workerCall(queuePath,undefined,c.signal).then(result=>{
-   const rows=(result as {applications?:Application[]})?.applications;
-   if(!Array.isArray(rows)||rows.some(r=>!uuid(r.application_id)||!Number.isFinite(Date.parse(r.claimed_at))))throw Error('unavailable');
-   if(!c.signal.aborted)A(rows);
-  }).catch(()=>{if(!c.signal.aborted)QF(true)});
-  return()=>c.abort();
- },[queuePath,section,enrollmentEnabled,queueRevision]);
  useEffect(()=>{
   setSection(initialSection);G(siteId??'');Search('');open(undefined);U(undefined);E(false);
  },[organizationId,siteId,initialSection]);
@@ -184,11 +176,11 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,provisionin
    <h2>{copy('applications')}</h2>
    {!enrollmentEnabled?<p>{copy('noPermission')}</p>:<>
    <p>{t('workerEnrollment.reviewHint')}</p>
-   {queueFailed?<div className="agency-worker-status" role="alert"><p>{copy('applicationsUnavailable')}</p><button type="button" className="button button--outline button--small" onClick={()=>Q(n=>n+1)}>{copy('retry')}</button></div>
+   {queueFailed?<div className="agency-worker-status" role="alert"><p>{copy('applicationsUnavailable')}</p><button type="button" className="button button--outline button--small" onClick={refreshQueue}>{copy('retry')}</button></div>
    :!applications?<p role="status">{copy('load')}</p>:!applications.length?<p>{t('workerEnrollment.emptyQueue')}</p>:
-   <ul className="agency-worker-applications">{applications.map(a=><li key={a.application_id}><div><strong>{t('workerEnrollment.reference')}</strong><br/><code>{a.application_id}</code><p>{dates.format(new Date(a.claimed_at))}</p></div>
+   <ul className="agency-worker-applications">{applications.map(a=><li key={a.application_id} id={'agency-application-'+a.application_id} tabIndex={-1}><div><strong>{t('workerEnrollment.reference')}</strong><br/><code>{a.application_id}</code><p>{dates.format(new Date(a.claimed_at))}</p></div>
     <button type="button" className="button button--primary button--small" disabled={busy} onClick={()=>void run(async()=>{
-     await workerCall(queuePath+'/approve',{applicationId:a.application_id});Q(n=>n+1);R(n=>n+1);
+     await workerCall(queuePath+'/approve',{applicationId:a.application_id});removeApplication(a.application_id);R(n=>n+1);
     },'approved')}>{t('workerEnrollment.approve')}</button></li>)}</ul>}
    </>}
   </section>}

@@ -14,7 +14,7 @@ import {AgencySchedule} from './AgencySchedule';
 import {WorkerTemplateDrawer} from './WorkerTemplateDrawer';
 import {inboxPage,inboxPageSize,type Inbox} from './inbox';
 import {InboxActions,InboxPagination,useInboxCopy} from './InboxControls';
-import {bellTarget,latestBellPreviews,noticeDestination,previewText,useBellAnchor,type BellPreview} from './notification-navigation';
+import {bellTarget,isActionNotice,latestBellPreviews,noticeDestination,previewText,useBellAnchor,type BellPreview} from './notification-navigation';
 import '../styles/team-workflow.css';
 export type TeamSection='messages'|'schedule'|'templates'|'absence'|'accountants';
 const workerHelp={
@@ -30,7 +30,7 @@ export function TeamBell({organizationId,additionalUnread=0,additional=[],inboxS
  const {label}=useMemberNames(expanded?organizationId:undefined);
  const [page,setPage]=useState(0),root='/workspace/'+organizationId+'/',inbox=root+'messages';
  const inboxLoading=inboxState?.enabled===true&&!inboxState.data;
- const isVisible=(anchor:string)=>anchor.startsWith('earlier-shift-')||!inboxLoading&&(!inboxState||inboxState.state(anchor)==='active');
+ const isVisible=(anchor:string)=>isActionNotice(anchor)||!inboxLoading&&(!inboxState||inboxState.state(anchor)==='active');
  const teamRows=(value?.entries??[]).filter(e=>!e.outgoing);
  const count=Math.max(0,(value?.unread??0)-teamRows.filter(e=>!e.read&&!isVisible((e.kind==='message'?'team-message-':'team-notice-')+e.id)).length)+additionalUnread;
  const previews=expanded?latestBellPreviews([...additional,...teamRows.map(e=>{

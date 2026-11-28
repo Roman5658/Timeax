@@ -2457,6 +2457,7 @@
     "codesHelp": "Kody e-mail i zaproszenia"
   },
   "workerEnrollment": {
+    "newApplication": "Nowe zgłoszenie pracownika",
     "destinations": "Twoje organizacje",
     "workspace": "Panel",
     "manage": "Wnioski pracowników",

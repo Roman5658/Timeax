@@ -89,6 +89,7 @@ test('inbox pages list at most ten and earlier requests go to timekeeping',async
  assert.deepEqual(inboxPage([],4),{page:0,pages:1,rows:[]});
  assert.equal(noticeDestination('earlier-shift-any'),'timecards');
  assert.equal(noticeDestination('backdated-internal-any'),'messages');
+ assert.equal(noticeDestination('agency-application-any'),'workers?tab=applications');
 });
 
 test('shift review groups keep pending, approved and rejected independent and newest first',async()=>{

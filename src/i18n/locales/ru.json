@@ -2457,6 +2457,7 @@
     "codesHelp": "О кодах подтверждения и приглашения"
   },
   "workerEnrollment": {
+    "newApplication": "Новая заявка работника",
     "destinations": "Ваши организации",
     "workspace": "Кабинет",
     "manage": "Заявки работников",

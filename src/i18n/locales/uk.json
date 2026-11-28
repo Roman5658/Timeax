@@ -2457,6 +2457,7 @@
     "codesHelp": "Про коди підтвердження та запрошення"
   },
   "workerEnrollment": {
+    "newApplication": "Нова заявка працівника",
     "destinations": "Ваші організації",
     "workspace": "Кабінет",
     "manage": "Заявки працівників",

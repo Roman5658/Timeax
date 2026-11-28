@@ -2457,6 +2457,7 @@
     "codesHelp": "About email and invitation codes"
   },
   "workerEnrollment": {
+    "newApplication": "New worker application",
     "destinations": "Your organizations",
     "workspace": "Workspace",
     "manage": "Worker requests",
