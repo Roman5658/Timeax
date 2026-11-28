@@ -10,6 +10,7 @@ type Account = { id: string; email: string | null; createdAt: string; verified: 
 type Preview = { id: string; email: string; scope: string; canDelete: boolean; token: string | null };
 type Organization = { id: string; name: string; kind: "agency" | "factory"; state: string; activeMembers: number };
 type Summary = { accounts: number; verifiedAccounts: number; agencies: number; factories: number; newAgencies30d: number };
+type OrganizationKindFilter = "all" | Organization["kind"];
 const keyPattern = /^[-_A-Za-z0-9]{43,128}$/;
 const summaryMetrics = ["accounts", "verifiedAccounts", "agencies", "factories", "newAgencies30d"] as const;
 
@@ -40,6 +41,9 @@ export function AccountAdminPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [organizations, setOrganizations] = useState<Organization[] | null>(null);
+  const [organizationName, setOrganizationName] = useState("");
+  const [organizationKind, setOrganizationKind] = useState<OrganizationKindFilter>("all");
+  const [organizationState, setOrganizationState] = useState("all");
   const [cursor, setCursor] = useState<{ section: string; after: string } | null>(null);
   const [next, setNext] = useState<string | null>(null);
   const [draftSearch, setDraftSearch] = useState("");
@@ -55,11 +59,25 @@ export function AccountAdminPage() {
   const date = new Intl.DateTimeFormat(lang, { dateStyle: "medium" });
   const acceptanceDate = new Intl.DateTimeFormat(lang,{dateStyle:"medium",timeStyle:"long",timeZone:"Europe/Warsaw"});
   const number = new Intl.NumberFormat(lang);
+  const normalizeOrganizationName = (value: string) => value.trim().normalize("NFKC").toLocaleLowerCase(lang);
+  const nameFilter = normalizeOrganizationName(organizationName);
+  const organizationStates = Array.from(new Set(["active", "suspended", "closed", ...(organizations?.map(o => o.state) ?? []), ...(organizationState !== "all" ? [organizationState] : [])]));
+  const filteredOrganizations = organizations?.filter(o =>
+    (!nameFilter || normalizeOrganizationName(o.name).includes(nameFilter))
+    && (organizationKind === "all" || o.kind === organizationKind)
+    && (organizationState === "all" || o.state === organizationState)
+  );
+  const filtersActive = !!nameFilter || organizationKind !== "all" || organizationState !== "all";
+
+  function clearOrganizationFilters() {
+    setOrganizationName(""); setOrganizationKind("all"); setOrganizationState("all");
+  }
 
   function lock() {
     setDraftKey(""); setKey(""); setSummary(null); setAccounts(null); setOrganizations(null);
     setCursor(null); setNext(null); setDraftSearch(""); setSearch(null);
     setPreview(null); setConfirm(""); setListBusy(false); setListError(""); setStatus("");
+    clearOrganizationFilters();
   }
 
   useEffect(() => {
@@ -180,11 +198,37 @@ export function AccountAdminPage() {
           <p>{tx("statsScope")}</p>
         </>}
         {section === "organizations" && !listError && organizations && <section className="owner-panel__card" aria-label={tx("organizations")}>
-          {!organizations.length && <p>{tx("emptyOrganizations")}</p>}
-          <ul className="owner-panel__accounts">{organizations.map(o => <li key={o.id}>
+          <div className="owner-panel__filters">
+            <label className="field-label">{tx("orgSearch")}
+              <input type="search" maxLength={120} value={organizationName} onChange={e => setOrganizationName(e.target.value)} />
+            </label>
+            <label className="field-label">{tx("orgKind")}
+              <select value={organizationKind} onChange={e => setOrganizationKind(e.target.value as OrganizationKindFilter)}>
+                <option value="all">{tx("orgAll")}</option>
+                <option value="agency">{tx("agency")}</option>
+                <option value="factory">{tx("factory")}</option>
+              </select>
+            </label>
+            <label className="field-label">{tx("orgState")}
+              <select value={organizationState} onChange={e => setOrganizationState(e.target.value)}>
+                <option value="all">{tx("orgAll")}</option>
+                {organizationStates.map(state => <option value={state} key={state}>{strings["org-" + state] ?? state}</option>)}
+              </select>
+            </label>
+            {filtersActive && <button type="button" className="button button--outline" onClick={clearOrganizationFilters}>{tx("orgClearFilters")}</button>}
+          </div>
+          <p className="muted-copy">{tx("orgFilterScope")}</p>
+          {!listBusy && <p role="status">{tx("orgShown")}: {number.format(filteredOrganizations?.length ?? 0)} / {number.format(organizations.length)}</p>}
+          {!organizations.length && !listBusy && <p>{tx("emptyOrganizations")}</p>}
+          {!!organizations.length && !filteredOrganizations?.length && !listBusy && <p>{tx("orgNoMatches")}</p>}
+          <ul className="owner-panel__accounts">{filteredOrganizations?.map(o => <li key={o.id}>
             <div><strong>{o.name}</strong><p>{tx(o.kind)} · {strings["org-" + o.state] ?? o.state}</p></div>
             <p>{tx("activeMembers")}: {number.format(o.activeMembers)}</p>
           </li>)}</ul>
+          <div className="owner-panel__review-links">
+            <Link to="/factory/review" target="_blank" rel="noopener noreferrer">{tx("factoryReviewLink")}</Link>
+            <p className="muted-copy">{tx("factoryReviewAccess")}</p>
+          </div>
         </section>}
         {section === "users" && <>
           <form className="owner-panel__search" onSubmit={e => {

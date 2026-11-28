@@ -34,3 +34,8 @@
 .owner-panel__stats dd { margin: 8px 0 0; font-weight: 750; font-size: 1.6rem; }
 .owner-panel__search { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-top: 20px; }
 .owner-panel__search .field-label { flex: 1 1 14rem; }
+.owner-panel__filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.owner-panel__filters .field-label { flex: 1 1 9rem; }
+.owner-panel__filters .field-label:first-child { flex-basis: 15rem; }
+.owner-panel__review-links { margin-top: 20px; }
+.owner-panel__review-links p { margin-block: 6px 0; }

@@ -3,6 +3,7 @@ import {Link,useSearchParams} from 'react-router-dom';
 import {Settings2} from 'lucide-react';
 import {useTranslation} from 'react-i18next';
 import {AgencyBookDrawer} from './AgencyBookDrawer';
+import {AgencyFactoryConnect} from './AgencyFactoryConnect';
 import {FactoryIndependencePanel} from './FactoryIndependencePanel';
 import {FactoryTimecardsPanel} from './FactoryTimecardsPage';
 import {useMemberNames} from './MemberNames';
@@ -15,6 +16,7 @@ export function AgencyProductions({organizationId,initialSites,enabled,factoryIn
  const copy=getProductionCopy(i18n.resolvedLanguage);
  const [search,setSearch]=useSearchParams();
  const [tab,setTab]=useState<'internal'|'connections'>('internal'),[value,setValue]=useState<SetupContext>();
+ const [issued,setIssued]=useState(0);
  const [name,setName]=useState(''),[rename,setRename]=useState(''),[busy,setBusy]=useState(false),[status,setStatus]=useState(''),[loadError,setLoadError]=useState(false),[attempt,setAttempt]=useState(0);
  const [createOpen,setCreateOpen]=useState(false),[selectedConnection,setConnection]=useState<SetupConnection>();
  const [settings,setSettings]=useState(false),[settingsBusy,setSettingsBusy]=useState(false),[confirmDisconnect,setConfirmDisconnect]=useState(false);
@@ -76,7 +78,7 @@ export function AgencyProductions({organizationId,initialSites,enabled,factoryIn
  return <section className="dashboard-panel worker-enrollment agency-site-panel" aria-busy={busy||enabled&&!value&&!loadError}>
   <div className="form-actions">
    <button type="button" className={'button '+(!showingConnections?'button--primary':'button--outline')} aria-pressed={!showingConnections} onClick={()=>{setStatus('');setTab('internal')}}>{tx('internalList')}</button>
-   <button type="button" className={'button '+(showingConnections?'button--primary':'button--outline')} aria-pressed={showingConnections} onClick={()=>{setStatus('');setTab('connections')}}>{ft('connections')}</button>
+   <button type="button" className={'button '+(showingConnections?'button--primary':'button--outline')} aria-pressed={showingConnections} onClick={()=>{setStatus('');setTab('connections')}}>{t('agencyFactoryConnect.title')}</button>
   </div>
   {!enabled&&<p className="notice-box" role="status">{tx('notEnabled')}</p>}
   {enabled&&!value&&!loadError&&<p role="status">{t('workspaceRead.checking')}</p>}
@@ -93,7 +95,7 @@ export function AgencyProductions({organizationId,initialSites,enabled,factoryIn
     <button type="button" className="button button--outline agency-site-open" onClick={()=>showConnection(c)}>{c.factoryName} &middot; {c.worksiteName}<span>{ft(c.state)}</span></button>
     {c.state==='active'&&<button type="button" className="button button--outline agency-site-settings" aria-label={copy.settings+': '+c.worksiteName} onClick={()=>showConnection(c,true)}><Settings2 size={16} aria-hidden="true"/>{copy.settings}</button>}
    </li>)}</ul>:<p>{tx('noConnections')}</p>)}
-   {value&&factoryInvites&&<FactoryIndependencePanel organizationId={organizationId} agencyOnly/>}
+   {value&&factoryInvites&&<><AgencyFactoryConnect organizationId={organizationId} onIssued={()=>setIssued(n=>n+1)}/><FactoryIndependencePanel organizationId={organizationId} revision={issued} agencyOnly/></>}
   </>}
   </div>
   {!createOpen&&!site&&!connection&&notice}

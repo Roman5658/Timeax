@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {Link} from 'react-router-dom';
 import {useTranslation} from 'react-i18next';
+import {AlertCircle,Building2,ClipboardCheck,ClipboardList,Clock3,Link2,UsersRound} from 'lucide-react';
 import {AgencyBookDrawer} from './AgencyBookDrawer';
 import {FactoryTimecardsPanel} from './FactoryTimecardsPage';
 import {FactoryOrganizationPanel} from './FactoryOrganizationPanel';
@@ -9,6 +10,7 @@ import {independenceCall,parseIndependence,type FactoryIndependenceContext} from
 import {factoryHoursCall,parseFactoryHours,type FactoryHoursContext} from './factory-timecards';
 import {factoryRoleCopy} from './factory-role-copy';
 import {useMemberNames} from './MemberNames';
+import {minutesLabel} from './timecards';
 import type {WorkspaceAccess} from './workspace-access';
 
 export type FactoryRoleSection='home'|'setup'|'workers'|'teams'|'factory-timecards'|'timesheets'|'settings'|'schedule';
@@ -16,6 +18,13 @@ type Action='create'|'connect'|'claim'|'leader'|'worker';
 type Result<T>={value?:T;error?:boolean};
 const uuid=(s:unknown)=>typeof s==='string'&&/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(s);
 const inviteCode=(s:unknown)=>typeof s==='string'&&/^[0-9a-f]{64}$/.test(s);
+const overviewCopy={
+ pl:{linked:'Aktywne połączenia',pending:'Oczekują na decyzję agencji',past:'Zakończone połączenia',entriesToday:'Osoby z wpisem za dziś',hours:'Zatwierdzony czas pracy',sent:'Przekazane ewidencje',waiting:'Zmiany do sprawdzenia lub potwierdzenia'},
+ en:{linked:'Active connections',pending:'Awaiting the agency’s decision',past:'Closed connections',entriesToday:'People with an entry today',hours:'Confirmed work time',sent:'Sent timesheets',waiting:'Shifts awaiting review or confirmation'},
+ ru:{linked:'Активные связи',pending:'Ожидают решения агентства',past:'Завершённые связи',entriesToday:'Работники с записью за сегодня',hours:'Подтверждённое время работы',sent:'Переданные табели',waiting:'Смены на проверке или подтверждении'},
+ uk:{linked:'Активні зв’язки',pending:'Очікують на рішення агентства',past:'Завершені зв’язки',entriesToday:'Працівники із записом за сьогодні',hours:'Підтверджений час роботи',sent:'Передані табелі',waiting:'Зміни на перевірці або підтвердженні'},
+};
+const warsawDay=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 export function FactoryRolePanel({access,section}:{access:WorkspaceAccess;section:FactoryRoleSection}){
  const leader=access.membership.role==='team_leader';
  const admin=access.membership.role==='factory_admin';
@@ -31,7 +40,7 @@ export function FactoryRolePanel({access,section}:{access:WorkspaceAccess;sectio
 }
 
 function FactoryManagement({access,section}:{access:WorkspaceAccess;section:FactoryRoleSection}){
- const {t,i18n}=useTranslation(),c=factoryRoleCopy(i18n.language),f=(name:string)=>t('factoryEnrollment.'+name),ind=(name:string)=>t('factoryIndependent.'+name),h=(name:string)=>t('factoryHours.'+name);
+ const {t,i18n}=useTranslation(),c=factoryRoleCopy(i18n.language),v=overviewCopy[i18n.language.split('-')[0] as keyof typeof overviewCopy]??overviewCopy.pl,f=(name:string)=>t('factoryEnrollment.'+name),ind=(name:string)=>t('factoryIndependent.'+name),h=(name:string)=>t('factoryHours.'+name);
  const org=access.organization.id,admin=access.membership.role==='factory_admin',base='/workspace/'+org;
  const [setup,setSetup]=useState<Result<SetupContext>>({}),[independent,setIndependent]=useState<Result<FactoryIndependenceContext>>({}),[hours,setHours]=useState<Result<FactoryHoursContext>>({});
  const [refresh,reload]=useState(0),[selected,setSelected]=useState(''),[modal,setModal]=useState<Action>(),[formSite,setFormSite]=useState('');
@@ -39,7 +48,7 @@ function FactoryManagement({access,section}:{access:WorkspaceAccess;section:Fact
  const [initialAgencyInvite,setInitialAgencyInvite]=useState(()=>section==='setup'?new URLSearchParams(window.location.hash.slice(1)).get('agencyInvite')??'':'');
  const [invite,setInvite]=useState<{url:string;expiresAt:string}>(),[confirm,setConfirm]=useState<{label:string;run:()=>Promise<unknown>}>(),pending=useRef(false),operation=useRef(crypto.randomUUID());
  const listPeople=section==='workers'||section==='teams';
- const needSetup=admin,needHours=listPeople,needInvites=admin&&section==='workers';
+ const needSetup=admin,needHours=listPeople||section==='home',needInvites=admin&&section==='workers';
  const {label}=useMemberNames(org,refresh);
  useEffect(()=>{
   const a=new AbortController();
@@ -50,12 +59,14 @@ function FactoryManagement({access,section}:{access:WorkspaceAccess;section:Fact
   return()=>a.abort();
  },[needSetup,needHours,needInvites,org,access.membership.id,access.membership.role,refresh]);
  const sites=admin&&setup.value?setup.value.worksites.filter(s=>s.ownerKind==='factory'&&s.ownerId===org&&s.organizationId===org&&s.role==='factory_admin'):access.worksites;
- const siteIds=new Set(sites.map(s=>s.id)),scoped=(site:string)=>siteIds.has(site)&&(!selected||selected===site),siteLabel=(id:string)=>sites.find(s=>s.id===id)?.name??'';
+ const siteIds=new Set(sites.map(s=>s.id)),filterSite=siteIds.has(selected)?selected:'';
+ const scoped=(site:string)=>siteIds.has(site)&&(!filterSite||filterSite===site),siteLabel=(id:string)=>sites.find(s=>s.id===id)?.name??'';
  const links=(setup.value?.connections??[]).filter(s=>s.factoryId===org&&scoped(s.worksiteId));
  const leaders=(setup.value?.assignments??[]).filter(s=>s.organizationId===org&&s.role==='team_leader'&&s.state==='active'&&scoped(s.worksiteId));
  const direct=(setup.value?.assignments??[]).filter(s=>s.organizationId===org&&s.role==='worker'&&s.state==='active'&&scoped(s.worksiteId));
  const placements=(hours.value?.placements??[]).filter(p=>uuid(p.id)&&scoped(p.worksiteId));
  const assigned=(hours.value?.assignments??[]).filter(p=>uuid(p.membershipId)&&scoped(p.worksiteId));
+ const activeLinks=links.filter(link=>link.state==='active'),pendingLinks=links.filter(link=>link.state==='pending'),endedLinks=links.filter(link=>link.state==='rejected'||link.state==='revoked');
  const workerInvites=(independent.value?.workerInvitations??[]).filter(x=>x.factoryId===org&&scoped(x.worksiteId));
  const leaderInvites=(setup.value?.invitations??[]).filter(x=>x.factoryId===org&&x.state==='pending'&&scoped(x.worksiteId));
  const actionLabel=(a:Action)=>a==='create'?f('createSite'):a==='connect'?f('requestTitle'):a==='claim'?ind('agencyInvite'):a==='leader'?f('leaderInvite'):ind('inviteWorker');
@@ -101,12 +112,52 @@ function FactoryManagement({access,section}:{access:WorkspaceAccess;section:Fact
  const revoke=(label:string,run:()=>Promise<unknown>)=>button(label,()=>{setNotice({text:'',error:false});setConfirm({label,run})});
  const sectionTitle=section==='home'?(admin?c.home:c.leader):section==='setup'?c.setup:section==='workers'?c.workers:section==='teams'?c.teams:c.settings;
  const actionReady=!!setup.value&&!setup.error;
+ const locationSelect=!!sites.length&&<label className="field-label">{c.locations}<select value={filterSite} disabled={busy} onChange={e=>setSelected(e.target.value)}><option value="">{c.allSites}</option>{sites.map(s=><option value={s.id} key={s.id}>{s.name}</option>)}</select></label>;
+ const orgName=setup.value?.memberships.find(m=>m.id===access.membership.id)?.name;
+ const stat=(Icon:typeof UsersRound,color:string,title:string,value:string|number|null,section:string)=><Link className="workflow-stat-card workflow-stat-link" to={base+'/'+section}>
+  <span className={'stat-icon stat-icon--'+color}><Icon size={18} aria-hidden="true"/></span><span>{title}</span><strong>{value??'—'}</strong></Link>;
+ const readyHours=!!hours.value&&!hours.error,fullHours=readyHours&&(!admin||hours.value?.factoryAdminRead===true);
+ const shownShifts=hours.value?.shifts.filter(s=>scoped(s.worksite_id))??[];
+ const countPeople=(rows:{membershipId:string}[])=>new Set(rows.map(m=>m.membershipId)).size;
+ const connectionRows=(rows:typeof links)=>rows.map(link=>row(link.agencyName,siteLabel(link.worksiteId)+' · '+f(link.state),link.id));
  return <section className="timecards workflow-stack" aria-busy={busy}>
-  <header><h2>{sectionTitle}</h2>{setup.value?.memberships.find(m=>m.id===access.membership.id)?.name&&<p>{setup.value.memberships.find(m=>m.id===access.membership.id)?.name}</p>}</header>
-  {section!=='home'&&section!=='settings'&&!!sites.length&&<label className="field-label">{c.locations}<select value={selected} disabled={busy} onChange={e=>setSelected(e.target.value)}><option value="">{c.allSites}</option>{sites.map(s=><option value={s.id} key={s.id}>{s.name}</option>)}</select></label>}
-  {section==='home'&&<><h3>{c.locations}</h3>{sites.length?sites.map(s=>row(s.name,'',s.id)):<p>{c.noSites}</p>}<nav className="timecards-pair" aria-label={sectionTitle}><Link className="button button--outline" to={base+'/workers'}>{c.workers}</Link><Link className="button button--outline" to={base+(admin?'/setup':'/factory-timecards')}>{admin?c.setup:h('title')}</Link></nav></>}
+  {section!=='home'&&<header><h2>{sectionTitle}</h2>{orgName&&<p>{orgName}</p>}</header>}
+  {section!=='home'&&section!=='settings'&&locationSelect}
+  {section==='home'&&<>
+   <section className="dashboard-panel leader-context-panel">
+    <div><span className="eyebrow">{orgName||sectionTitle}</span><h2>{admin?t('workflow.factory.dailyOverview'):sectionTitle}</h2>
+    <p className="muted-copy">{filterSite?siteLabel(filterSite):sites.length>1?c.allSites:sites[0]?.name??c.noSites}</p></div>
+    {locationSelect}
+   </section>
+   <nav className={'workflow-stat-grid'+(admin?'':' workflow-stat-grid--four')} aria-label={sectionTitle}>
+    {admin?<>
+     {stat(UsersRound,'mint',c.directWorkers,actionReady?countPeople(direct):null,'workers')}
+     {stat(UsersRound,'blue',c.agencyWorkers,readyHours?countPeople(assigned):null,'workers')}
+     {stat(Clock3,'violet',v.hours,fullHours?minutesLabel(shownShifts.filter(s=>s.state==='ready').reduce((n,s)=>n+s.data.paidMinutes,0)):null,'factory-timecards')}
+     {stat(ClipboardList,'mint',v.sent,fullHours?hours.value!.archive.filter(a=>scoped(a.worksiteId)).length:null,'timesheets')}
+     {stat(Link2,'blue',v.linked,actionReady?activeLinks.length:null,'setup')}
+     {stat(Building2,'peach',v.pending,actionReady?pendingLinks.length:null,'setup')}
+    </>:<>
+     {stat(UsersRound,'mint',c.workers,readyHours?countPeople(assigned):null,'workers')}
+     {stat(ClipboardCheck,'blue',v.waiting,readyHours?shownShifts.filter(s=>s.state==='needs-review'||s.state==='needs-confirmation').length:null,'factory-timecards')}
+     {stat(AlertCircle,'peach',t('workflow.leader.disputes'),readyHours?shownShifts.filter(s=>s.state==='disputed').length:null,'factory-timecards')}
+     {stat(Clock3,'violet',v.entriesToday,readyHours?new Set(shownShifts.filter(s=>s.data.localDate===warsawDay()).map(s=>s.membership_id)).size:null,'factory-timecards')}
+    </>}
+   </nav>
+   {(hours.error||setup.error)&&<p className="muted-copy" role="status">{c.resourceError}</p>}
+  </>}
   {section==='settings'&&<><h3>{c.locations}</h3>{body(setup,()=>sites.length?sites.map(s=>row(s.name,'',s.id)):<p>{c.noSites}</p>)}{button(actionLabel('create'),()=>open('create'),!actionReady)}</>}
-  {section==='setup'&&<>{body(setup,()=>links.length?links.map(x=>row(x.agencyName,siteLabel(x.worksiteId)+' · '+f(x.state),x.id)):<p>{c.noLinks}</p>)}<div className="timecards-pair">{button(actionLabel('connect'),()=>open('connect'),!actionReady||!sites.length)}{button(actionLabel('claim'),()=>open('claim'),!actionReady||!sites.length)}</div>{!sites.length&&<Link to={base+'/settings'}>{c.goSettings}</Link>}</>}
+  {section==='setup'&&<>
+   {body(setup,()=><>
+    <section className="dashboard-panel"><div className="panel-heading"><h3>{v.pending}</h3><span className="panel-period">{pendingLinks.length}</span></div>
+    {pendingLinks.length?connectionRows(pendingLinks):<p className="muted-copy">{c.emptyRequests}</p>}</section>
+    <section className="dashboard-panel"><div className="panel-heading"><h3>{v.linked}</h3><span className="panel-period">{activeLinks.length}</span></div>
+    {activeLinks.length?connectionRows(activeLinks):<p className="muted-copy">{c.noLinks}</p>}</section>
+    {!!endedLinks.length&&<details className="dashboard-panel"><summary>{v.past} · {endedLinks.length}</summary>{connectionRows(endedLinks)}</details>}
+   </>)}
+   <div className="timecards-pair">{button(actionLabel('connect'),()=>open('connect'),!actionReady||!sites.length)}{button(actionLabel('claim'),()=>open('claim'),!actionReady||!sites.length)}</div>
+   {!sites.length&&<Link to={base+'/settings'}>{c.goSettings}</Link>}
+  </>}
   {listPeople&&!admin&&body(hours,()=>assigned.length?assigned.map(x=>row(label(x.membershipId),siteLabel(x.worksiteId)+' · '+x.agencyName,x.worksiteId+':'+x.membershipId)):<p>{c.noWorkers}</p>)}
   {section==='teams'&&admin&&<>
    {body(setup,()=>leaders.length?leaders.map(x=>row(label(x.membershipId),siteLabel(x.worksiteId)+' · '+dateText(x.startsAt),x.worksiteId+':'+x.membershipId,revoke(f('revokeAssignment'),()=>factoryCall('revoke-assignment',{worksiteId:x.worksiteId,membershipId:x.membershipId})))):<p>{c.noLeaders}</p>)}

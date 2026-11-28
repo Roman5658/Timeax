@@ -6,7 +6,9 @@ const uuid=x=>typeof x==='string'&&/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}
 const fields={
  'submit':['name','nip','siteName','confirmed'],'review':['id','decision','reference','confirmed'],
  'invite-worker':['worksiteId','startsAt'],'claim-worker':['code'],'revoke-worker':['id'],
- 'invite-factory':['agencyId','factoryNip'],'claim-agency-invitation':['worksiteId','code'],'revoke-agency-invitation':['id']
+ 'invite-factory':['agencyId','factoryNip'],'claim-agency-invitation':['worksiteId','code'],'revoke-agency-invitation':['id'],
+ 'lookup-factory':['agencyId','factoryNip'],'prepare-factory':['agencyId','factoryNip','name','address'],
+ 'preview-factory-invitation':['code'],'submit-invited-factory':['code','confirmed']
 };
 const valid=(action,b)=>{
  const keys=fields[action];if(!keys||!b||Array.isArray(b)||typeof b!=='object'||Object.keys(b).length!==keys.length||keys.some(k=>!Object.hasOwn(b,k)))return false;
@@ -15,7 +17,7 @@ const valid=(action,b)=>{
   if((key==='id'||key.endsWith('Id'))&&!uuid(v))return false;
   if(key==='startsAt'&&(typeof v!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(v)||!Number.isFinite(Date.parse(v))))return false;
   if(['nip','factoryNip'].includes(key)&&!validNip(v))return false;
-  if(['name','siteName','reference'].includes(key)&&(typeof v!=='string'||v.trim().length<1||v.trim().length>(key==='reference'?200:120)||/[\p{Cc}]/u.test(v)))return false;
+  if(['name','siteName','reference','address'].includes(key)&&(typeof v!=='string'||v.trim().length<1||v.trim().length>(['reference','address'].includes(key)?200:120)||/[\p{Cc}]/u.test(v)))return false;
   if(key==='decision'&&!['approved','rejected'].includes(v))return false;
   if(key==='confirmed'&&v!==true)return false;
   if(key==='code'&&(typeof v!=='string'||!/^[0-9a-f]{64}$/.test(v)))return false;

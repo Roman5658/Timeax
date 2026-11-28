@@ -1,4 +1,25 @@
 {
+  "agencyFactoryConnect": {
+    "title": "Connect a factory",
+    "find": "Find by NIP",
+    "name": "Factory name",
+    "address": "Factory address",
+    "found": "This factory is already registered in Timeax. The link will not create a duplicate workspace.",
+    "notFound": "This factory is not registered in Timeax yet. Enter its name and address to prepare registration.",
+    "create": "Create invitation link",
+    "share": "Share the link with the factory representative. Workspace access is granted after their authority is verified.",
+    "copy": "Copy link",
+    "another": "Connect another factory",
+    "copied": "Link copied.",
+    "copyManually": "Select the link and copy it manually.",
+    "badNip": "Check the NIP: it must have 10 digits and a valid check digit.",
+    "failed": "Could not complete this action. Try again.",
+    "invalidInvite": "The link is invalid, expired or revoked.",
+    "openExisting": "Open workspace and connect the agency",
+    "existingAccount": "Open this link after signing in to this factory's administrator account.",
+    "beginRegistration": "Start factory registration",
+    "issued": "Issued invitations"
+  },
   "selfService": {
     "terms-required": "Read and accept the current terms to create your workspace.",
     "password": "Password",

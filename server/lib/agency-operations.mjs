@@ -30,7 +30,7 @@ const specs={
  payroll:{handler:createPayslipsHandler,match:orgRoute('payslips','context|settings|group|group-member|rate|create|assign|save|issue|read/'+id)},
  names:{handler:createMemberNamesHandler,match:orgRoute('member-names','context|set')},
  account:{handler:createAccountHandler,match:/^\/api\/personal-account\/(?:context|export|agency-context|end-membership)$/},
- registration:{handler:createFactoryRegistrationHandler,match:/^\/api\/factory-registration\/(?:context|submit|review|invite-worker|claim-worker|revoke-worker|invite-factory|claim-agency-invitation|revoke-agency-invitation)$/},
+ registration:{handler:createFactoryRegistrationHandler,match:/^\/api\/factory-registration\/(?:context|submit|review|invite-worker|claim-worker|revoke-worker|invite-factory|claim-agency-invitation|revoke-agency-invitation|lookup-factory|prepare-factory|preview-factory-invitation|submit-invited-factory)$/},
  team:{handler:createTeamHandler,match:orgRoute('team','context|read|message|absence|schedule|update-plan|cancel|save-template|delete-template|invite-accountant|revoke-accountant')}
 };
 const agencyTeamActions=new Set(['context','read','message','invite-accountant','revoke-accountant']);
@@ -75,6 +75,9 @@ export function managedAgencyOperations(env){
   const teamFingerprint=env.TIMEAX_AGENCY_TEAM_RPC_SHA256;
   if(sha(teamFingerprint)&&v.team&&typeof v.team==='object'&&!Array.isArray(v.team))
    v.team={...v.team,hashes:{...v.team.hashes,[TEAM_FUNCTION.signature]:teamFingerprint}};
+  const registrationFingerprint=env.TIMEAX_FACTORY_REGISTRATION_RPC_SHA256;
+  if(sha(registrationFingerprint)&&v.registration&&typeof v.registration==='object'&&!Array.isArray(v.registration))
+   v.registration={...v.registration,hashes:{...v.registration.hashes,['timeax_api.factory_registration(text,text,text,jsonb)']:registrationFingerprint}};
   if(key(env.TIMEAX_INBOX_DB)&&sha(env.TIMEAX_INBOX_RPC_SHA256))v.inbox={password:env.TIMEAX_INBOX_DB,hashes:{[INBOX_SIGNATURE]:env.TIMEAX_INBOX_RPC_SHA256}};
   if(key(env.TIMEAX_PAY_ESTIMATE_DB)&&sha(env.TIMEAX_PAY_ESTIMATE_RPC_SHA256))v.estimates={password:env.TIMEAX_PAY_ESTIMATE_DB,hashes:{[PAY_ESTIMATE_SIGNATURE]:env.TIMEAX_PAY_ESTIMATE_RPC_SHA256}};
   if(key(env.TIMEAX_PAY_NOTICE_DB)&&sha(env.TIMEAX_PAY_NOTICE_RPC_SHA256))v.payNotices={password:env.TIMEAX_PAY_NOTICE_DB,hashes:{[PAY_NOTICE_SIGNATURE]:env.TIMEAX_PAY_NOTICE_RPC_SHA256}};

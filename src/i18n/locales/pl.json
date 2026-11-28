@@ -1,4 +1,25 @@
 {
+  "agencyFactoryConnect": {
+    "title": "Podłącz zakład",
+    "find": "Znajdź po NIP",
+    "name": "Nazwa zakładu",
+    "address": "Adres zakładu",
+    "found": "Zakład jest już zarejestrowany w Timeax. Link nie utworzy drugiego konta organizacji.",
+    "notFound": "Nie znaleziono zakładu w Timeax. Podaj nazwę i adres, aby przygotować rejestrację.",
+    "create": "Utwórz link z zaproszeniem",
+    "share": "Przekaż link przedstawicielowi zakładu. Dostęp do panelu zostanie przyznany po weryfikacji uprawnień.",
+    "copy": "Skopiuj link",
+    "another": "Podłącz inny zakład",
+    "copied": "Skopiowano link.",
+    "copyManually": "Zaznacz link i skopiuj go ręcznie.",
+    "badNip": "Sprawdź NIP: wymagane jest 10 cyfr i poprawna cyfra kontrolna.",
+    "failed": "Nie udało się wykonać tej czynności. Spróbuj ponownie.",
+    "invalidInvite": "Link jest nieprawidłowy, wygasł lub został cofnięty.",
+    "openExisting": "Otwórz panel i podłącz agencję",
+    "existingAccount": "Otwórz ten link po zalogowaniu na konto administratora tego zakładu.",
+    "beginRegistration": "Rozpocznij rejestrację zakładu",
+    "issued": "Wystawione zaproszenia"
+  },
   "selfService": {
     "terms-required": "Aby utworzyć panel agencji, zapoznaj się z aktualnym regulaminem i zaakceptuj go.",
     "password": "Hasło",

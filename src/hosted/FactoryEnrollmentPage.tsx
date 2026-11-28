@@ -82,7 +82,9 @@ function PublicFactoryEntry({leader,worker,review}:{leader:boolean;worker:boolea
  const key=leader?'invite':worker?'factoryWorker':'agencyInvite';
  const [initialInvite]=useState(()=>new URLSearchParams(window.location.hash.slice(1)).get(key)??'');
  const client=useMemo(()=>createWorkingRegistrationClient(window.location.origin,window.fetch.bind(window),purpose),[purpose]);
- useEffect(()=>{if(new URLSearchParams(window.location.hash.slice(1)).has(key))history.replaceState(history.state,'',window.location.pathname+window.location.search)},[key]);
+ // Retain the factory invitation fragment through email-code verification and reloads.
+ // The fragment is not sent to the server; the agency token is only sent in a guarded request body.
+ useEffect(()=>{if(key!=='agencyInvite'&&new URLSearchParams(window.location.hash.slice(1)).has(key))history.replaceState(history.state,'',window.location.pathname+window.location.search)},[key]);
  useEffect(()=>{const c=new AbortController();setChecking(true);void client.context(c.signal).then(v=>{if(!c.signal.aborted)setScope(v)}).finally(()=>{if(!c.signal.aborted)setChecking(false)});return()=>c.abort()},[client,revision]);
  return <RegistrationFrame title={t(leader?'factoryEnrollment.claimTitle':worker?'factoryIndependent.ownWorkerTitle':review?'factoryIndependent.reviewTitle':'factoryIndependent.registerTitle')} lead={t(leader?'factoryEnrollment.codeHint':worker?'factoryIndependent.workerCodeHint':review?'factoryIndependent.reviewHint':'factoryIndependent.independentHint')}>
   {checking?<p role="status">{t('closedHosted.checking')}</p>:scope?.state==='verified'?
