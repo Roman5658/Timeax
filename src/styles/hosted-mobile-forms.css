@@ -1,0 +1,16 @@
+/* Portalled drawers sit outside the cabinet, so its mobile form rules do not
+   reach them. Keep edit controls readable to avoid iOS focus zoom, without
+   changing the page's viewport or restricting manual zoom. */
+@media (max-width: 850px), (pointer: coarse) {
+  body :is(#root, .right-drawer-backdrop) :is(
+    input:not([type="checkbox"], [type="radio"], [type="range"], [type="button"], [type="submit"], [type="reset"], [type="image"], [type="color"]),
+    select, textarea
+  ) {
+    font-size: max(16px, 1em) !important;
+  }
+
+  .right-drawer-content :is(input, select, textarea) {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+}

@@ -14,4 +14,5 @@ import {HostedApp} from "./HostedApp";
 import {InstalledAppResume} from "./InstalledAppResume";
 import {RoutePageTurn} from "../app/RoutePageTurn";
 import "../styles/page-turn.css";
+import "../styles/hosted-mobile-forms.css";
 void hostedTranslationsReady.then(()=>createRoot(document.getElementById("root")!).render(<StrictMode><ThemeProvider><BrowserRouter><InstalledAppResume><HostedApp/></InstalledAppResume><RoutePageTurn hostedAuthPanels/></BrowserRouter></ThemeProvider></StrictMode>));

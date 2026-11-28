@@ -55,7 +55,7 @@ export function RightDrawer({
     const previousInert = underlyingDialogs.map((item) => item.inert);
     underlyingDialogs.forEach((item) => { item.inert = true; });
     const focusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]') ?? []).filter((item) => item.getClientRects().length > 0);
-    focusable()[0]?.focus();
+    focusable()[0]?.focus({ preventScroll: true });
     const onKeyDown = (event: KeyboardEvent) => {
       const dialogs = document.querySelectorAll('[role="dialog"]');
       if (dialogs[dialogs.length - 1] !== dialog) return;
@@ -74,7 +74,7 @@ export function RightDrawer({
       window.removeEventListener("keydown", onKeyDown);
       underlyingDialogs.forEach((item, index) => { item.inert = previousInert[index]; });
       document.body.style.overflow = previousOverflow;
-      if (previousFocus?.isConnected) previousFocus.focus();
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     };
   }, []);
 
