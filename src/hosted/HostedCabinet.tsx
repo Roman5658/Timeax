@@ -23,6 +23,8 @@ import { useMemberNames } from './MemberNames';
 import { PageHeading } from '../components/PageHeading';
 import { AgencyWorkerPanel } from './WorkerEnrollmentPage';
 import { loadWorkspaceAccess, type WorkspaceAccess, type WorkspaceResult } from './workspace-access';
+import {useWorkerConnections} from './use-worker-connections';
+import {shouldOfferAgencyJoin} from './worker-account-navigation';
 import '../styles/hosted-cabinet.css';
 
 const AgencyProductions=lazy(()=>import('./AgencyProductions').then(m=>({default:m.AgencyProductions})));
@@ -97,6 +99,8 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
  const factoryAdmin=access.membership.role==='factory_admin';
  const production=hasProductionRole(access),worker=!agency&&!production;
  const agencyWorker=worker&&access.organization.kind==='agency';
+ const otherWorkerConnections=useWorkerConnections(worker&&!agencyWorker);
+ const canJoinAgency=worker&&!agencyWorker&&shouldOfferAgencyJoin(otherWorkerConnections);
  const [agencyProfile,setAgencyProfile]=useState<{public:boolean;productions:boolean;ops:string[]}>();
  useEffect(()=>{
   const c=new AbortController();
@@ -167,7 +171,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
      {group!==visibleMenu[index-1]?.group&&<div className="portal-nav-group-label">{t('nav.groups.'+group)}</div>}
      <Link className={'portal-nav-link'+(id===section||unifiedHours&&id==='timecards'?' is-active':'')} aria-current={id===section||unifiedHours&&id==='timecards'?'page':undefined} to={route(id)} onClick={()=>setMenuOpen(false)}><Icon size={17} aria-hidden="true"/><span>{t(label)}</span>{publicAgency&&id==='timecards'&&needsReview>0&&<span className="timeax-review-count" aria-label={t('team.notifications',{count:needsReview})}>{needsReview}</span>}</Link>
     </Fragment>)}
-    {worker&&<><div className="portal-nav-group-label">{t('nav.groups.account')}</div><Link className="portal-nav-link" to="/account"><Settings2 size={17} aria-hidden="true"/><span>{t('nav.profile')}</span></Link>{agencyWorker&&<Link className="portal-nav-link" to="/register/worker"><Building2 size={17} aria-hidden="true"/><span>{t('workerEnrollment.join')}</span></Link>}</>}
+    {worker&&<><div className="portal-nav-group-label">{t('nav.groups.account')}</div><Link className="portal-nav-link" to="/account" state={{workspaceReturn:root}}><Settings2 size={17} aria-hidden="true"/><span>{t('nav.profile')}</span></Link>{canJoinAgency&&<Link className="portal-nav-link" to="/register/worker" state={{workspaceReturn:root}}><Building2 size={17} aria-hidden="true"/><span>{t('workerEnrollment.join')}</span></Link>}</>}
    </nav>
    <div className="sidebar-spacer"/>
    <div className="hosted-cabinet-sign-out"><CabinetSignOut/></div>

@@ -53,11 +53,11 @@ export function LegalLink({ kind, to }: { kind: LegalDocument; to: string }) {
   if(kind === "support")return <a href={to} onClick={show}>{t("common.support")}: no-reply@timeax.pl</a>;
   return <Link to={to} onClick={show}>{t(kind === "terms" ? "hostedLegal.termsLink" : "hostedPrivacy.link")}</Link>;
 }
-export function RegistrationFrame({ children, title, lead, back = "/register" }: { children: ReactNode; title: string; lead: string; back?: string }) {
+export function RegistrationFrame({ children, title, lead, back = "/register", backLabel }: { children: ReactNode; title: string; lead: string; back?: string; backLabel?: string }) {
   const { t } = useTranslation();
   const inPanel=useContext(AuthPanelContext);
   if(inPanel)return <section className="enrollment-card auth-book-content">
-    {back!=="/"&&<Link className="back-link" to={back}><ArrowLeft size={16}/>{t("common.back")}</Link>}
+    {back!=="/"&&<Link className="back-link" to={back}><ArrowLeft size={16}/>{backLabel??t("common.back")}</Link>}
     <h1 id="auth-book-title">{title}</h1>{lead&&<p className="enrollment-lead">{lead}</p>}{children}
   </section>;
   return <div className="public-experience"><PublicHeader /><main className="enrollment-layout">
@@ -65,7 +65,7 @@ export function RegistrationFrame({ children, title, lead, back = "/register" }:
       <div className="enrollment-trust"><ShieldCheck size={24} /><p>{t("publicExperience.access")}</p></div>
       <p className="enrollment-existing">{t("publicExperience.already")} <Link to="/login">{t("common.login")} <ArrowRight size={16} /></Link></p>
     </aside>
-    <section className="enrollment-card"><Link className="back-link" to={back}><ArrowLeft size={16} />{t(back === "/" ? "common.backHome" : "common.back")}</Link>
+    <section className="enrollment-card"><Link className="back-link" to={back}><ArrowLeft size={16} />{backLabel??t(back === "/" ? "common.backHome" : "common.back")}</Link>
       <h1>{title}</h1><p className="enrollment-lead">{lead}</p>{children}
     </section>
   </main><PublicFooter /></div>;

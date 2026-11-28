@@ -2889,7 +2889,7 @@
     "closedBody": "All personal sessions are invalid. Employer archives remain separate. Provider cleanup and retention review are pending. No email was sent.",
     "refresh": "Refresh",
     "loginAction": "Sign in",
-    "recoveryTitle": "Lost access to email",
+    "recoveryTitle": "Sign-in help",
     "recoveryLead": "Request independent identity review. This does not change access.",
     "proofBoundary": "Email, name or knowledge of an organization cannot prove identity. Access transfer stays closed until an authorized reviewer and verified provider process are connected.",
     "contactEmail": "New contact email",
