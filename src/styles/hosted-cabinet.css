@@ -68,3 +68,15 @@
   flex-shrink: 0;
  }
 }
+
+.hosted-notification-controls { display:flex; align-items:center; gap:5px; flex:0 0 auto; }
+.hosted-notification-controls .phone-push-trigger {
+ min-width:44px; min-height:44px; padding:0 .35rem; justify-content:center;
+ font-size:.65rem; font-weight:750; letter-spacing:.02em; flex-direction:column; gap:0;
+}
+.hosted-notification-controls .phone-push-trigger[data-state="on"] { border-color:currentColor; }
+.phone-push-options { display:grid; justify-items:start; gap:.85rem; }
+.phone-push-options p { margin:0; }
+@media (max-width:650px){
+ .hosted-cabinet .portal-top-actions .hosted-notification-controls { margin-inline-end:auto; }
+}

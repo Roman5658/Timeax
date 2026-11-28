@@ -184,7 +184,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
      <button className="portal-mobile-menu" type="button" aria-controls="hosted-cabinet-menu" aria-label={t('common.openMenu')} aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}><Menu size={19}/></button>
      <div className="portal-breadcrumb"><span className="breadcrumb-dot"/>{agencyName||home}</div>
     </div>
-    <div className="portal-top-actions">{uses('team')&&<TeamBell organizationId={org} inboxState={inbox} additionalUnread={extraUnread} additional={[...payBell,...bellEntries]}/>}
+    <div className="portal-top-actions">{uses('team')&&<div className='hosted-notification-controls'><TeamBell organizationId={org} inboxState={inbox} additionalUnread={extraUnread} additional={[...payBell,...bellEntries]}/>{section==='home'&&<PhonePushSettings key={org+access.membership.id}/>}</div>}
     <LanguageSwitcher compact/><ThemeToggle/></div>
    </header>
    <main className="portal-content">
@@ -195,7 +195,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
     {publicAgency&&section!=='home'&&section!=='setup'&&!directory&&!unifiedHours&&!sectionReady&&<p className="notice-box" role="status">{t('agencyProductions.moduleNotEnabled')}</p>}
 
     {uses('team')&&!(factoryAdmin&&section==='schedule')&&(['messages','schedule','templates','absence','accountants'] as string[]).includes(section)&&<TeamPanel organizationId={org} section={section as TeamSection} inboxState={inbox} externalNotices={externalNotices}
-     notificationExtras={section==='messages'?<>{joinCards.error&&<p role="alert">{joinCards.error}</p>}{shiftCards.failure&&<p role="alert">{t('team.closed')}</p>}<PhonePushSettings/></>:undefined}/>}
+     notificationExtras={section==='messages'?<>{joinCards.error&&<p role="alert">{joinCards.error}</p>}{shiftCards.failure&&<p role="alert">{t('team.closed')}</p>}</>:undefined}/>}
     {section==='settings'&&agencyProfile?.ops.includes('profile')&&<AgencyProfile key={org} organizationId={org} onSaved={setAgencyName}/>}
     {section==='settings'&&publicAgency&&uses('workerProvisioning')&&<AgencyNipVisibility key={org} organizationId={org}/>}
     {!production&&section==='home'&&<>

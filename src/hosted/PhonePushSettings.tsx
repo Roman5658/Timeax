@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {Bell,BellOff} from 'lucide-react';
+import {Bell,BellOff,Smartphone} from 'lucide-react';
+import {AgencyBookDrawer} from './AgencyBookDrawer';
 
 const words={
  en:['Phone notifications','Enable notifications','Disable notifications','On iPhone: in Safari, choose Share → Add to Home Screen → Open as Web App. Then open Timeax from its icon and enable notifications here.','Allow notifications in your phone or browser settings, then try again.','Notifications are on for this device. The lock screen won’t show private details.','Could not change notifications. Try again.','This browser does not support Web Push.'],
@@ -15,8 +16,9 @@ async function call(body?:unknown,signal?:AbortSignal){
  return r.json();
 }
 export function PhonePushSettings(){
- const {i18n}=useTranslation(),locale=(i18n.resolvedLanguage??'en').split('-')[0] as keyof typeof words,c=words[locale]??words.en;
+ const {i18n,t}=useTranslation(),locale=(i18n.resolvedLanguage??'en').split('-')[0] as keyof typeof words,c=words[locale]??words.en;
  const [key,K]=useState(''),[ready,R]=useState(false),[enabled,E]=useState(false),[busy,B]=useState(false),[notice,N]=useState(0);
+ const [open,setOpen]=useState(false),[checked,setChecked]=useState(false),[available,setAvailable]=useState(true),[revision,setRevision]=useState(0);
  const registration=useRef<ServiceWorkerRegistration>(undefined),currentSubscription=useRef<PushSubscription|null>(null);
  const ios=/iP(?:hone|ad|od)/.test(navigator.userAgent)||navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1;
  const installed=window.matchMedia('(display-mode: standalone)').matches||(navigator as Navigator&{standalone?:boolean}).standalone===true;
@@ -24,28 +26,38 @@ export function PhonePushSettings(){
  useEffect(()=>{
   const ctrl=new AbortController();
   void call(undefined,ctrl.signal).then(async data=>{
-   if(ctrl.signal.aborted||typeof data?.publicKey!=='string'||!/^[A-Za-z0-9_-]{87}$/.test(data.publicKey))return;
+   if(ctrl.signal.aborted)return;
+   if(typeof data?.publicKey!=='string'||!/^[A-Za-z0-9_-]{87}$/.test(data.publicKey))throw Error();
    K(data.publicKey);
-   if(!supported||ios&&!installed)return;
-   try{
-    await navigator.serviceWorker.register('/timeax-push-sw.js',{scope:'/',updateViaCache:'none'});
-    if(ctrl.signal.aborted)return;
-    const reg=await navigator.serviceWorker.ready;
-    if(ctrl.signal.aborted)return;
+   if(!supported||ios&&!installed){setChecked(true);return}
+   const reg=await navigator.serviceWorker.getRegistration('/');
+   if(ctrl.signal.aborted)return;
+   if(reg?.active){
     registration.current=reg;
     const subscription=await reg.pushManager.getSubscription();
     if(ctrl.signal.aborted)return;
     currentSubscription.current=subscription;
-    if(subscription&&Notification.permission==='granted'){
+    if(subscription){
      const s=await call({action:'status',endpoint:subscription.endpoint},ctrl.signal);
-     if(!ctrl.signal.aborted)E(s?.enabled===true);
+     if(ctrl.signal.aborted)return;
+     if(typeof s?.enabled!=='boolean')throw Error();
+     E(s.enabled);
     }
-    if(!ctrl.signal.aborted)R(true);
-   }catch{if(!ctrl.signal.aborted)N(6)}
-  }).catch(()=>{});
+    R(true);
+   }
+   if(!ctrl.signal.aborted)setChecked(true);
+  }).catch(()=>{if(!ctrl.signal.aborted){setAvailable(false);N(6)}});
   return()=>ctrl.abort();
- },[supported,ios,installed]);
- if(!key)return null;
+ },[supported,ios,installed,revision]);
+ useEffect(()=>{
+  if(!open||!checked||!key||!supported||ios&&!installed||ready||!available)return;
+  let canceled=false;
+  void navigator.serviceWorker.register('/timeax-push-sw.js',{scope:'/',updateViaCache:'none'})
+   .then(()=>navigator.serviceWorker.ready)
+   .then(reg=>{if(!canceled){registration.current=reg;R(true)}})
+   .catch(()=>{if(!canceled){setAvailable(false);N(6)}});
+  return()=>{canceled=true};
+ },[open,checked,key,supported,ios,installed,ready,available]);
  async function toggle(){
   const reg=registration.current;if(!reg||busy)return;
   B(true);N(0);let created:PushSubscription|undefined;
@@ -67,11 +79,30 @@ export function PhonePushSettings(){
    if(r?.enabled!==true)throw Error();currentSubscription.current=subscription;E(true);
   }catch{await created?.unsubscribe().catch(()=>false);N(Notification.permission==='denied'?4:6)}finally{B(false)}
  }
- return <section className="dashboard-panel" aria-label={c[0]}><h2>{c[0]}</h2>
-  {ios&&!installed?<p>{c[3]}</p>:!supported?<p>{c[7]}</p>:<>
-   <button type="button" className="button button--outline" disabled={!ready||busy} onClick={()=>void toggle()}>
-    {enabled?<BellOff size={17} aria-hidden="true"/>:<Bell size={17} aria-hidden="true"/>}{enabled?c[2]:c[1]}
-   </button>{enabled&&<p role="status">{c[5]}</p>}{notice>0&&<p role="alert">{c[notice]}</p>}
-  </>}
- </section>;
+ const detail={
+  en:"Get work alerts on this device even when Timeax is closed. Turning them off does not affect the bell or in-app notifications.",
+  ru:"Получайте рабочие уведомления на этом устройстве, даже когда Timeax закрыт. Если выключить пуши, уведомления в колокольчике останутся.",
+  pl:"Otrzymuj powiadomienia służbowe na tym urządzeniu nawet po zamknięciu Timeax. Wyłączenie nie wpływa na dzwonek ani powiadomienia w aplikacji.",
+  uk:"Отримуйте робочі сповіщення на цьому пристрої, навіть коли Timeax закрито. Вимкнення не впливає на дзвіночок і сповіщення в застосунку.",
+ }[locale]??"The bell still shows work notifications when push is off.";
+ const on=enabled&&supported&&Notification.permission==='granted';
+ const indicator=checked&&available?(on?'ON':'OFF'):'—';
+ return <>
+  <button type="button" className="button button--outline button--small phone-push-trigger" data-state={on?'on':'off'}
+   aria-haspopup="dialog" aria-expanded={open} aria-label={c[0]+': '+indicator} onClick={()=>setOpen(true)}>
+   <Smartphone size={13} aria-hidden="true"/><span aria-hidden="true">{indicator}</span>
+  </button>
+  {open&&<AgencyBookDrawer title={c[0]} closeLabel={t('common.close')} busy={busy} centered onClose={()=>setOpen(false)}>
+   <div className="phone-push-options">
+    <p>{detail}</p>
+    {ios&&!installed?<p>{c[3]}</p>:!supported?<p>{c[7]}</p>:<>
+     <button type="button" className="button button--outline" disabled={!ready||busy||!available} onClick={()=>void toggle()}>
+      {enabled?<BellOff size={17} aria-hidden="true"/>:<Bell size={17} aria-hidden="true"/>}{enabled?c[2]:c[1]}
+     </button>{on&&<p role="status">{c[5]}</p>}
+    </>}
+    {notice>0&&<p role="alert">{c[notice]}</p>}
+    {!available&&<button type="button" className="button button--outline" onClick={()=>{N(0);R(false);setChecked(false);setAvailable(true);setRevision(v=>v+1)}}>{t("auth.tryAgain")}</button>}
+   </div>
+  </AgencyBookDrawer>}
+ </>;
 }
