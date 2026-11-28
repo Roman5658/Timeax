@@ -19,7 +19,7 @@ const endpoint=v=>{
   return u.href===v&&u.protocol==='https:'&&!u.username&&!u.password&&!u.port&&!u.search&&!u.hash&&
    ((u.hostname==='fcm.googleapis.com'&&u.pathname.startsWith('/fcm/send/'))||
     (u.hostname==='updates.push.services.mozilla.com'&&u.pathname.startsWith('/wpush/'))||
-    (u.hostname==='web.push.apple.com'&&u.pathname.length>16))&&
+    (/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.push\.apple\.com$/.test(u.hostname)&&u.pathname.length>16))&&
    /^\/[A-Za-z0-9_:\-/.]+$/.test(u.pathname);
  }catch{return false}
 };

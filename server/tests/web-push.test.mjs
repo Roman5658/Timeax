@@ -11,6 +11,10 @@ const key=()=>{const e=createECDH('prime256v1');const p=e.generateKeys();return 
 const sub={endpoint:'https://fcm.googleapis.com/fcm/send/fixture-registration-token',keys:{p256dh:key().publicKey,auth}};
 test('sends encrypted generic Web Push on a pinned provider endpoint, never follows redirects',async()=>{
  assert.equal(validatePushSubscription(sub),true);
+ for(const apple of ['web.push.apple.com','fixture.push.apple.com'])
+  assert.equal(validatePushSubscription({...sub,endpoint:`https://${apple}/fixture-registration-token`}),true);
+ for(const outsideApple of ['push.apple.com','evil.push.apple.com.example','other.apple.com'])
+  assert.equal(validatePushSubscription({...sub,endpoint:`https://${outsideApple}/fixture-registration-token`}),false);
  for(const unsafe of ['https://127.0.0.1/fcm/send/a','https://fcm.googleapis.com.evil.example/fcm/send/a','https://fcm.googleapis.com:444/fcm/send/a','https://user@fcm.googleapis.com/fcm/send/a','https://fcm.googleapis.com/fcm/send/abc?redirect=bad'])
   assert.equal(validatePushSubscription({...sub,endpoint:unsafe}),false);
  let calls=0;
@@ -47,7 +51,7 @@ test('Web Push settings allow only the current verified browser and drain bounde
  }finally{service.stop()}
 });
 
-test('SQL queues a generic push for enrolled recipients, preserves time on normal expiry, and revokes it on sign-out',async()=>{
+test('SQL queues a generic push for enrolled recipients even without a worksite, preserves it on normal expiry, and revokes it on sign-out',async()=>{
  const db=new PGlite();
  try{
   await db.exec(`

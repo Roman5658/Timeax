@@ -9,57 +9,67 @@ const words={
  pl:['Powiadomienia na telefon','Włącz powiadomienia','Wyłącz powiadomienia','Na iPhonie w Safari wybierz Udostępnij → Do ekranu początkowego → Otwórz jako aplikację internetową. Następnie otwórz Timeax z ikony i włącz powiadomienia tutaj.','Zezwól na powiadomienia w ustawieniach telefonu lub przeglądarki i spróbuj ponownie.','Powiadomienia są włączone na tym urządzeniu. Ekran blokady nie pokaże prywatnych informacji.','Nie udało się zmienić ustawień. Spróbuj ponownie.','Ta przeglądarka nie obsługuje Web Push.'],
  uk:['Сповіщення на телефон','Увімкнути сповіщення','Вимкнути сповіщення','На iPhone у Safari вибери «Поширити» → «На початковий екран» → «Відкрити як вебпрограму». Потім відкрий Timeax з іконки й увімкни сповіщення тут.','Дозволь сповіщення в налаштуваннях телефона або браузера й спробуй знову.','Сповіщення ввімкнено на цьому пристрої. На екрані замкнення немає особистих даних.','Не вдалося змінити налаштування. Спробуй знову.','Цей браузер не підтримує Web Push.'],
 };
+const preparationCopy={
+ en:['Preparing phone notifications…','Could not prepare notifications on this device. Try again.','Your session expired. Sign in again to set up notifications.','Phone notifications are unavailable right now. Try again later.','Sign in'],
+ ru:['Готовим уведомления на телефон…','Не удалось подготовить уведомления на этом устройстве. Попробуй ещё раз.','Сеанс закончился. Войди снова, чтобы настроить уведомления.','Уведомления на телефон сейчас недоступны. Попробуй позже.','Войти'],
+ pl:['Przygotowujemy powiadomienia na telefon…','Nie udało się przygotować powiadomień na tym urządzeniu. Spróbuj ponownie.','Sesja wygasła. Zaloguj się ponownie, aby ustawić powiadomienia.','Powiadomienia na telefon są teraz niedostępne. Spróbuj później.','Zaloguj się'],
+ uk:['Готуємо сповіщення на телефон…','Не вдалося підготувати сповіщення на цьому пристрої. Спробуй ще раз.','Сеанс завершився. Увійди знову, щоб налаштувати сповіщення.','Сповіщення на телефон зараз недоступні. Спробуй пізніше.','Увійти'],
+};
+type Preparation='loading'|'ready'|'device'|'login'|'unavailable';
 async function call(body?:unknown,signal?:AbortSignal){
  const r=await fetch('/api/web-push',{method:body===undefined?'GET':'POST',credentials:'same-origin',cache:'no-store',
   redirect:'error',signal,...(body===undefined?{}:{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})});
- if(!r.ok||r.headers.get('content-type')?.split(';')[0]!=='application/json')throw Error();
+ if(r.status===401)throw Error('login');
+ if(!r.ok||r.headers.get('content-type')?.split(';')[0]!=='application/json')throw Error('unavailable');
  return r.json();
+}
+// The browser's ready promise can wait indefinitely after activation fails.
+async function activePushRegistration(signal:AbortSignal){
+ const root=new URL('/',location.href).href,script=new URL('/timeax-push-sw.js',root).href;
+ const suitable=(reg:ServiceWorkerRegistration|undefined)=>reg?.scope===root&&reg.active?.scriptURL===script;
+ let reg=await navigator.serviceWorker.getRegistration(root);
+ if(!suitable(reg)){
+  if(signal.aborted)throw Error('device');
+  reg=await navigator.serviceWorker.register(script,{scope:'/',updateViaCache:'none'});
+  if(!suitable(reg))reg=await navigator.serviceWorker.ready;
+ }
+ if(!reg||!suitable(reg)||!reg.pushManager)throw Error('device');
+ return reg;
 }
 export function PhonePushSettings(){
  const {i18n,t}=useTranslation(),locale=(i18n.resolvedLanguage??'en').split('-')[0] as keyof typeof words,c=words[locale]??words.en;
- const [key,K]=useState(''),[ready,R]=useState(false),[enabled,E]=useState(false),[busy,B]=useState(false),[notice,N]=useState(0);
- const [open,setOpen]=useState(false),[checked,setChecked]=useState(false),[available,setAvailable]=useState(true),[revision,setRevision]=useState(0);
+ const prep=preparationCopy[locale]??preparationCopy.en;
+ const [key,K]=useState(''),[enabled,E]=useState(false),[busy,B]=useState(false),[notice,N]=useState(0);
+ const [open,setOpen]=useState(false),[phase,setPhase]=useState<Preparation>('loading'),[revision,setRevision]=useState(0);
  const registration=useRef<ServiceWorkerRegistration>(undefined),currentSubscription=useRef<PushSubscription|null>(null);
  const ios=/iP(?:hone|ad|od)/.test(navigator.userAgent)||navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1;
  const installed=window.matchMedia('(display-mode: standalone)').matches||(navigator as Navigator&{standalone?:boolean}).standalone===true;
  const supported=window.isSecureContext&&'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
+ const usable=supported&&(!ios||installed);
  useEffect(()=>{
+  if(!usable)return;
   const ctrl=new AbortController();
-  void call(undefined,ctrl.signal).then(async data=>{
+  let failed:Preparation='unavailable';
+  const timeout=window.setTimeout(()=>{setPhase(failed);ctrl.abort()},8000);
+  void (async()=>{
+   const data=await call(undefined,ctrl.signal);
    if(ctrl.signal.aborted)return;
-   if(typeof data?.publicKey!=='string'||!/^[A-Za-z0-9_-]{87}$/.test(data.publicKey))throw Error();
-   K(data.publicKey);
-   if(!supported||ios&&!installed){setChecked(true);return}
-   const reg=await navigator.serviceWorker.getRegistration('/');
+   if(typeof data?.publicKey!=='string'||!/^[A-Za-z0-9_-]{87}$/.test(data.publicKey))throw Error('unavailable');
+   failed='device';
+   const reg=await activePushRegistration(ctrl.signal);
    if(ctrl.signal.aborted)return;
-   if(reg?.active){
-    registration.current=reg;
-    const subscription=await reg.pushManager.getSubscription();
-    if(ctrl.signal.aborted)return;
-    currentSubscription.current=subscription;
-    if(subscription){
-     const s=await call({action:'status',endpoint:subscription.endpoint},ctrl.signal);
-     if(ctrl.signal.aborted)return;
-     if(typeof s?.enabled!=='boolean')throw Error();
-     E(s.enabled);
-    }
-    R(true);
-   }
-   if(!ctrl.signal.aborted)setChecked(true);
-  }).catch(()=>{if(!ctrl.signal.aborted){setAvailable(false);N(6)}});
-  return()=>ctrl.abort();
- },[supported,ios,installed,revision]);
- useEffect(()=>{
-  if(!open||!checked||!key||!supported||ios&&!installed||ready||!available)return;
-  let canceled=false;
-  void navigator.serviceWorker.register('/timeax-push-sw.js',{scope:'/',updateViaCache:'none'})
-   .then(()=>navigator.serviceWorker.ready)
-   .then(reg=>{if(!canceled){registration.current=reg;R(true)}})
-   .catch(()=>{if(!canceled){setAvailable(false);N(6)}});
-  return()=>{canceled=true};
- },[open,checked,key,supported,ios,installed,ready,available]);
+   const subscription=await reg.pushManager.getSubscription();
+   if(ctrl.signal.aborted)return;
+   failed='unavailable';
+   const status=subscription?await call({action:'status',endpoint:subscription.endpoint},ctrl.signal):{enabled:false};
+   if(typeof status?.enabled!=='boolean')throw Error('unavailable');
+   if(ctrl.signal.aborted)return;
+   K(data.publicKey);registration.current=reg;currentSubscription.current=subscription;E(status.enabled);setPhase('ready');
+  })().catch(e=>{if(!ctrl.signal.aborted)setPhase(e?.message==='login'?'login':failed)}).finally(()=>window.clearTimeout(timeout));
+  return()=>{window.clearTimeout(timeout);ctrl.abort()};
+ },[usable,revision]);
  async function toggle(){
-  const reg=registration.current;if(!reg||busy)return;
+  const reg=registration.current;if(phase!=='ready'||!reg||busy)return;
   B(true);N(0);let created:PushSubscription|undefined;
   try{
    if(!enabled&&Notification.permission==='denied'){N(4);return}
@@ -86,7 +96,7 @@ export function PhonePushSettings(){
   uk:"Отримуйте робочі сповіщення на цьому пристрої, навіть коли Timeax закрито. Вимкнення не впливає на дзвіночок і сповіщення в застосунку.",
  }[locale]??"The bell still shows work notifications when push is off.";
  const on=enabled&&supported&&Notification.permission==='granted';
- const indicator=checked&&available?(on?'ON':'OFF'):'—';
+ const indicator=usable&&phase!=='ready'?'-':on?'ON':'OFF';
  return <>
   <button type="button" className="button button--outline button--small phone-push-trigger" data-state={on?'on':'off'}
    aria-haspopup="dialog" aria-expanded={open} aria-label={c[0]+': '+indicator} onClick={()=>setOpen(true)}>
@@ -96,12 +106,15 @@ export function PhonePushSettings(){
    <div className="phone-push-options">
     <p>{detail}</p>
     {ios&&!installed?<p>{c[3]}</p>:!supported?<p>{c[7]}</p>:<>
-     <button type="button" className="button button--outline" disabled={!ready||busy||!available} onClick={()=>void toggle()}>
+     <button type="button" className="button button--outline" disabled={phase!=='ready'||busy} onClick={()=>void toggle()}>
       {enabled?<BellOff size={17} aria-hidden="true"/>:<Bell size={17} aria-hidden="true"/>}{enabled?c[2]:c[1]}
      </button>{on&&<p role="status">{c[5]}</p>}
+     {phase==='loading'&&<p role="status">{prep[0]}</p>}
+     {(phase==='device'||phase==='login'||phase==='unavailable')&&<p role="alert">{prep[phase==='device'?1:phase==='login'?2:3]}</p>}
+     {phase==='login'&&<a className="button button--outline" href="/login">{prep[4]}</a>}
+     {(phase==='device'||phase==='unavailable')&&<button type="button" className="button button--outline" onClick={()=>{N(0);setPhase('loading');setRevision(v=>v+1)}}>{t('auth.tryAgain')}</button>}
     </>}
     {notice>0&&<p role="alert">{c[notice]}</p>}
-    {!available&&<button type="button" className="button button--outline" onClick={()=>{N(0);R(false);setChecked(false);setAvailable(true);setRevision(v=>v+1)}}>{t("auth.tryAgain")}</button>}
    </div>
   </AgencyBookDrawer>}
  </>;

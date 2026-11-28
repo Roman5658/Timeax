@@ -26,6 +26,13 @@ test('agency list and production group do not include workers from another agenc
  assert.deepEqual(eligibleTeamRecipients(agency,'production',site2),[]);
  assert.deepEqual(eligibleTeamRecipients(agency,'production','bad'),[]);
 });
+test('an approved worker without a worksite can exchange direct messages with their agency',()=>{
+ const unassigned=recipients.map(r=>r.id===own?{...r,worksiteIds:[]}:r);
+ const base={organizationId:org,sites:[],recipients:unassigned};
+ assert.deepEqual(eligibleTeamRecipients({...base,role:'worker'},'agency','').map(r=>r.id),[admin]);
+ assert.deepEqual(eligibleTeamRecipients({...base,role:'agency_admin'},'workers','').map(r=>r.id),[own]);
+ assert.deepEqual(eligibleTeamRecipients({...base,role:'worker'},'leader',site),[]);
+});
 test('selected absence date must be exact, real and passed without offset',()=>{
  assert.equal(cleanTeamDay('2026-11-27'),'2026-11-27');
  assert.equal(cleanTeamDay('2024-02-29'),'2024-02-29');
