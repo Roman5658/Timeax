@@ -8,6 +8,13 @@ const reply=(status,body)=>Response.json(body,{status,headers:{
 }});
 const exact=(body)=>body&&typeof body==='object'&&!Array.isArray(body)&&Object.keys(body).length===1&&Object.hasOwn(body,'password');
 
+export function hasWorkerPasswordScope(context){
+ const {memberships,applications}=context??{};
+ if(!Array.isArray(memberships)||memberships.some(m=>m?.role!=='worker'))return false;
+ return memberships.length>0||Array.isArray(applications)&&applications.some(a=>a?.status==='pending'&&
+  ['nip','invitation'].includes(a.source)&&typeof a.id==='string'&&typeof a.organizationId==='string');
+}
+
 export function createWorkerPasswordHandler({origin,provider,resolveSession,eligible,getProof,now=Date.now}){
  return async request=>{
   try{

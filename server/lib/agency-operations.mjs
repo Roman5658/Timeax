@@ -5,6 +5,7 @@ import {WORKSPACE_ROLE,WORKSPACE_FUNCTIONS} from './workspace-read.contract.mjs'
 import {createWorkerProvisioning,WORKER_PROVISIONING_SIGNATURE,WORKER_PROVISIONING_ROLE,WORKER_PROVISIONING_SQL} from './worker-provisioning.mjs';
 import {createWorkerEnrollmentHandler} from './worker-enrollment.server.mjs';
 import {createWorkerInvitationMailer} from './worker-invitation-mail.mjs';
+import {hasWorkerPasswordScope} from './worker-password.server.mjs';
 import {createWorkerTerms,WORKER_TERMS_ROLE,WORKER_TERMS_SIGNATURE,WORKER_TERMS_SQL} from './worker-terms.mjs';
 import {createTimecardsHandler} from './timecards.server.mjs';
 import {createFactoryTimecardsHandler} from './factory-timecards.server.mjs';
@@ -123,10 +124,10 @@ export async function assembleAgencyOperations(config,lane,{now=Date.now,sharedW
  }
  const workerStore=ready.find(([id])=>id==='worker')?.[1];
  const workerPassword=workerStore&&workerTerms?async actor=>{
-  const rows=await workerStore.call('context',actor),members=rows.length===1?rows[0].value?.memberships:null;
+  const rows=await workerStore.call('context',actor);
   // The provider's credential belongs to the person, so a worker-only route
   // must never change a password for an account with another active role.
-  return Array.isArray(members)&&members.length>0&&members.every(m=>m?.role==='worker')&&await workerTerms.accepted(actor)===true;
+  return rows.length===1&&hasWorkerPasswordScope(rows[0].value)&&await workerTerms.accepted(actor)===true;
  }:undefined;
  const access=sharedWorkspaceStore??createWorkspaceReadStore(lane({...common,role:WORKSPACE_ROLE,password:config.workspaceReadPassword,functions:WORKSPACE_FUNCTIONS,statements:[WORKSPACE_SQL]}));
  const invitationMailer=provisioning?createWorkerInvitationMailer():null;

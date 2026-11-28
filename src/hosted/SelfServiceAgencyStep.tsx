@@ -53,11 +53,12 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
   if(signal.aborted)return;
   if(scope?.workerSelfService){
    setWorkerReady(true);
-   try{const memberships=enrollmentContext(await workerCall('context',undefined,signal)).memberships;
+   try{const {memberships,applications}=enrollmentContext(await workerCall('context',undefined,signal));
     const member=memberships.find(m=>m.role==='worker'&&m.kind==='agency');
+    const pending=memberships.every(m=>m.role==='worker')&&applications.some(a=>a.status==='pending');
     const productions=memberships.filter(m=>m.kind==='factory'&&['factory_admin','team_leader','worker'].includes(m.role));
     if(signal.aborted)return;
-    if(workerPasswordReauth&&memberships.length&&memberships.every(m=>m.role==='worker')){navigate('/account/settings',{replace:true});return;}
+    if(workerPasswordReauth&&(pending||memberships.length&&memberships.every(m=>m.role==='worker'))){navigate('/account/settings',{replace:true});return;}
     if(member&&scope.workerProvisioning){
      try{
       if(emailInvitations(await workerCall('email-invitations',undefined,signal)).length){
@@ -68,6 +69,7 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
     if(signal.aborted)return;
     if(!member&&productions.length===1){navigate('/workspace/'+productions[0].organizationId,{replace:true});return;}
     if(productions.length>0){setProductionDestinations(memberships.filter(m=>m===member||productions.includes(m)));setStage('destinations');return;}
+    if(pending&&!member){navigate('/account',{replace:true});return;}
     if(onlyKnown&&!member){setStage('password');return;}
     navigate(member?'/workspace/'+member.organizationId:'/register/worker',{replace:true,...(!member?{state:{fromWorkerLogin:true}}:{})});
     return;

@@ -1,5 +1,6 @@
 const text={
  ru:{
+  pendingHours:"Записывать часы можно будет после того, как агентство подтвердит заявку.",
   title:'Подключение работника',
   lead:'Подтверди почту, затем найди своё агентство по NIP или используй его приглашение.',
   account:'1. Аккаунт работника', connect:'2. Подключение к агентству',
@@ -25,6 +26,7 @@ const text={
   loginRoute:'Обычный вход', checkApplication:'Проверить заявку',
  },
  en:{
+  pendingHours:"You can record hours after the agency approves your application.",
   title:'Connect as a worker',
   lead:'Verify your email, then find your agency by NIP or use its invitation.',
   account:'1. Worker account', connect:'2. Agency connection',
@@ -50,6 +52,7 @@ const text={
   loginRoute:'Back to sign-in', checkApplication:'Check application status',
  },
  pl:{
+  pendingHours:"Godziny pracy będzie można zapisywać, gdy agencja zatwierdzi zgłoszenie.",
   title:'Dołącz jako pracownik',
   lead:'Potwierdź swój e-mail, a następnie znajdź agencję po NIP-ie lub skorzystaj z jej zaproszenia.',
   account:'1. Konto pracownika', connect:'2. Połączenie z agencją',
@@ -75,6 +78,7 @@ const text={
   loginRoute:'Wróć do logowania', checkApplication:'Sprawdź status zgłoszenia',
  },
  uk:{
+  pendingHours:"Записувати години можна буде після того, як агенція підтвердить заявку.",
   title:'Підключення працівника',
   lead:'Підтвердь пошту, а потім знайди свою агенцію за NIP або скористайся її запрошенням.',
   account:'1. Обліковий запис працівника', connect:'2. Підключення до агенції',

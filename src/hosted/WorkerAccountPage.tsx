@@ -7,7 +7,8 @@ import {RegistrationFrame} from '../components/PublicExperience';import {Private
 import {WorkerPasswordPanel} from './WorkerPasswordPanel';
 import {PASSWORD_RESET_PATH,passwordResetHeading} from './PasswordResetForm';
 import {hasCurrentWorkerWorkspace,shouldOfferAgencyJoin,workerWorkspaceHint,workerWorkspaceReturn} from './worker-account-navigation';
-import {useWorkerConnections} from './use-worker-connections';
+import {useWorkerEnrollmentStatus} from './use-worker-connections';
+import {workerRegistrationCopy} from './worker-registration-copy';
 import {loadWorkspaceAccess} from './workspace-access';
 import {StagingSessionPanel} from '../modules/auth/pages/StagingSessionPanel';
 import {accountCall,parsePersonal,savePersonalExport,type PersonalAccount} from './worker-account';
@@ -26,7 +27,11 @@ export function WorkerAccountPage(){
  const [email,setEmail]=useState(''),[reference,setReference]=useState(''),[requestId,setRequestId]=useState('');
  const recovery=loc.pathname==='/account/recovery',reauth=loc.pathname==='/account/reauth',settings=loc.pathname==='/account/settings';
  const publicRecovery=recovery&&isCanonicalEmailOrigin(location.origin);
- const connections=useWorkerConnections(!recovery&&!reauth&&!closed&&status!=='login',revision);
+ const enrollment=useWorkerEnrollmentStatus(!recovery&&!reauth&&!closed&&status!=='login',revision,true);
+ const connections=enrollment?.memberships;
+ const pending=enrollment?.applications.filter(a=>a.status==='pending')??[];
+ const waiting=pending.length>0&&!connections?.some(c=>c.role==='worker');
+ const workerCopy=workerRegistrationCopy(i18n.resolvedLanguage);
  const canJoin=shouldOfferAgencyJoin(connections);
  const [opening,setOpening]=useState(''),[workspaceProblem,setWorkspaceProblem]=useState<{id:string;status:'workspaceEnded'|'workspaceUnavailable'|'workspaceLogin'}>();
  const workspaceRequest=useRef<AbortController|null>(null);
@@ -61,7 +66,7 @@ export function WorkerAccountPage(){
   }finally{if(workspaceRequest.current===c){workspaceRequest.current=null;setOpening('')}}
  }
  const workspaces=<>
-  <h2>{tx('organizations')}</h2>{!listed.length&&<p>{tx('emptyOrganizations')}</p>}
+  {(!waiting||listed.length>0)&&<h2>{tx('organizations')}</h2>}{!waiting&&!listed.length&&<p>{tx('emptyOrganizations')}</p>}
   {listed.map(m=>{
    const active=m.state==='active'&&(!connections||hasCurrentWorkerWorkspace(connections,m.organizationId,m.membershipId));
    return <article className="notice-box" key={m.membershipId}><h3>{m.name}</h3>
@@ -70,10 +75,16 @@ export function WorkerAccountPage(){
     {workspaceProblem?.id===m.membershipId&&<p role="alert">{copy[workspaceProblem.status]} {workspaceProblem.status==='workspaceLogin'&&<Link to="/login">{tx('loginAction')}</Link>}</p>}
    </article>;
   })}
-  {canJoin&&<Link className="button button--primary" to="/register/worker" state={returnState}>{tx('join')}</Link>}
+  {canJoin&&!waiting&&<Link className="button button--primary" to="/register/worker" state={returnState}>{tx('join')}</Link>}
  </>;
  return <RegistrationFrame title={tx(recovery?'recoveryTitle':reauth?'reauthTitle':'title')} lead={publicRecovery?'':tx(recovery?'recoveryLead':'lead')} back={back} backLabel={backLabel}>
  <div className="personal-account" aria-busy={busy}>
+ {pending.length>0&&<section className="notice-box" aria-labelledby="pending-agency-title">
+  <h2 id="pending-agency-title">{workerCopy.pending}</h2>
+  <ul>{pending.map(application=><li key={application.id}>{application.name}</li>)}</ul>
+  {waiting&&<p>{workerCopy.pendingHours}</p>}
+  <button className="button button--outline" type="button" disabled={busy} onClick={reload}>{workerCopy.checkApplication}</button>
+ </section>}
  {!recovery&&!reauth&&!closed&&status!=='login'&&<WorkerPasswordPanel/>}
  {publicRecovery?<><p>{copy.recovery}</p><div className="form-actions"><Link className="button button--primary" to={PASSWORD_RESET_PATH}>{passwordResetHeading(i18n.resolvedLanguage??'en')}</Link><Link className="button button--outline" to="/login?method=code">{tx('loginAction')}</Link></div></>:
  recovery?<><p className="notice-box">{tx('proofBoundary')}</p>{requestId?<div role="status"><h2>{tx('requestSaved')}</h2><p>{tx('requestPending')}</p><code>{requestId}</code></div>:<form className="auth-form" onSubmit={e=>{e.preventDefault();void run(async()=>{const r=await accountCall('recovery-request',{contactEmail:email,reference}) as {status:string;requestId:string;accessChanged:boolean;mailSent:boolean};if(r.status!=='received-awaiting-independent-proof'||r.accessChanged||r.mailSent)throw Error();setRequestId(r.requestId);setEmail('');setReference('')})}}>
@@ -96,8 +107,8 @@ export function WorkerAccountPage(){
  <><label className="personal-confirm"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/><span>{tx('confirmDelete')}</span></label><button className="button button--primary button--full" disabled={busy||!confirmed} onClick={()=>void run(async()=>{const r=await accountCall('delete',{operationId:crypto.randomUUID(),confirmed:true}) as {state:string};if(r.state!=='closed-provider-cleanup-pending')throw Error();setClosed(true);setValue(undefined);setConfirmed(false)})}>{tx('deleteAction')}</button></>}</section>}
  <button className="button button--outline button--full" disabled={busy} onClick={reload}>{tx('refresh')}</button></>:null}
  {!value&&!recovery&&!reauth&&!closed&&connections&&workspaces}
- {status&&<p className="notice-box" role="status">{!recovery&&!reauth&&status==='unavailable'?copy.archiveUnavailable:tx(status)}</p>}
- {!recovery&&!reauth&&!value&&!closed&&<button className="button button--outline button--full" disabled={busy} onClick={reload}>{tx('refresh')}</button>}
+ {status&&(!waiting||!['denied','checking'].includes(status))&&<p className="notice-box" role="status">{!recovery&&!reauth&&status==='unavailable'?copy.archiveUnavailable:tx(status)}</p>}
+ {!recovery&&!reauth&&!value&&!closed&&!waiting&&<button className="button button--outline button--full" disabled={busy} onClick={reload}>{tx('refresh')}</button>}
  {!recovery&&!reauth&&status==='login'&&!value&&!closed&&<div className="form-actions"><Link className="button button--primary" to="/login">{tx('loginAction')}</Link><Link to="/account/recovery" state={returnState}>{tx('recoveryTitle')}</Link></div>}
  </div></RegistrationFrame>
 }

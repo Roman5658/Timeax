@@ -130,6 +130,9 @@ function WorkerAgencyConnection({initialInvite,onSessionExpired,provisioning,aut
   void run(async()=>{
    const result=await workerCall(kind,body) as {application?:{application_id?:string;status?:string}};
    if(!membershipId(result?.application?.application_id))throw Error('unavailable');
+   if(result.application?.status==='pending'){
+    navigate('/account',{replace:true,state:{offerWorkerPassword:true}});return;
+   }
    A(undefined);if(kind==='claim')I('');T(result.application?.status==='approved'?copy.approved:copy.applied);R(n=>n+1);
   });
  }

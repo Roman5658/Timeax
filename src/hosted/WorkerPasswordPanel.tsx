@@ -23,7 +23,7 @@ async function call(signal:AbortSignal,password?:string):Promise<State>{
  if(!r.ok||r.headers.get('content-type')?.split(';')[0]!=='application/json')throw Error('unavailable');
  const v=await r.json();
  if(v?.state==='saving')return 'reauthentication-required';
- if(password===undefined&&(v?.state==='ready'||v?.state==='reauthentication-required'))return v.state;
+ if(password===undefined&&(v?.state==='ready'||v?.state==='reauthentication-required'||v?.state==='saved'))return v.state;
  if(password!==undefined&&v?.state==='saved')return 'saved';
  throw Error('unavailable');
 }
