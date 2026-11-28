@@ -3,15 +3,15 @@ import {createWorkingRegistrationClient,isEmailIdentityOrigin} from "../modules/
 export const installedAppPath="/app";
 type LaunchLocation=Pick<Location,"pathname"|"search"|"hash">;
 export type InstalledLaunch="app"|"home-icon";
-type LaunchResult={state:"workspace";path:`/workspace/${string}`}|{state:"unavailable"}|{state:"landing"}|{state:"login";path:"/login"|"/login?method=code"};
+type LaunchResult={state:"workspace";path:`/workspace/${string}`}|{state:"unavailable"}|{state:"landing"}|{state:"profile";path:"/account"};
 
 export function installedLaunch(location:LaunchLocation,origin:string,standalone:boolean):InstalledLaunch|undefined{
  if(!isEmailIdentityOrigin(origin)||location.search||location.hash)return undefined;
  if(location.pathname===installedAppPath||location.pathname===installedAppPath+"/")return "app";
- if(location.pathname==="/"&&standalone)return "home-icon";
+ if(standalone&&(location.pathname==="/"||location.pathname==="/login"))return "home-icon";
 }
 
-export async function checkInstalledLaunch(origin:string,transport:typeof fetch,signal:AbortSignal,launch:InstalledLaunch):Promise<LaunchResult>{
+export async function checkInstalledLaunch(origin:string,transport:typeof fetch,signal:AbortSignal,_launch:InstalledLaunch):Promise<LaunchResult>{
  try{
   if(!isEmailIdentityOrigin(origin)||signal.aborted)return {state:"unavailable"};
   const context=await createWorkingRegistrationClient(origin,transport,"existing").context(signal);
@@ -20,25 +20,21 @@ export async function checkInstalledLaunch(origin:string,transport:typeof fetch,
    if(context.selfService){
     const desk='/api/timeax/agency/setup';
     const members='/api/worker-enrollment/context';
-    const invites='/api/worker-enrollment/email-invitations';
     const agencyRead=launchRead(origin,desk,transport,signal);
     const memberRead=context.workerSelfService?launchRead(origin,members,transport,signal):undefined;
-    const inviteRead=context.workerSelfService&&context.workerProvisioning?launchRead(origin,invites,transport,signal):undefined;
     const agency=await agencyRead;
     if(signal.aborted)return {state:"unavailable"};
     const own=object(agency?.data);
     if(agency?.status===200&&own?.state==='ready'&&org(own.organizationId))
      return {state:"workspace",path:`/workspace/${own.organizationId}`};
-    const [memberResult,invitationResult]=await Promise.all([memberRead,inviteRead]);
+    const memberResult=await memberRead;
     if(signal.aborted)return {state:"unavailable"};
-    const path=installedWorkspace(agency,memberResult,invitationResult,context.workerProvisioning===true);
+    const path=installedWorkspace(agency,memberResult);
     if(path)return {state:"workspace",path};
    }
-   return {state:"login",path:"/login"};
+   return {state:"profile",path:"/account"};
   }
-  if(context.state==="verification-required"&&context.emailChallengeFlow==="login")return {state:"login",path:"/login?method=code"};
-  // A pending registration should not be reinterpreted as an existing account.
-  if(launch==="app"&&context.state==="anonymous")return {state:"login",path:"/login"};
+  // The icon is not an explicit request to sign in or to resume an OTP challenge.
   return {state:"landing"};
  }catch{return {state:"unavailable"};}
 }
@@ -56,7 +52,7 @@ async function launchRead(origin:string,path:string,transport:typeof fetch,signa
   return {status:r.status,data:await r.json()};
  }catch{return undefined;}
 }
-function installedWorkspace(agency:LaunchRead|undefined,memberResult:LaunchRead|undefined,invitationResult:LaunchRead|undefined,checkInvites:boolean):`/workspace/${string}`|undefined{
+function installedWorkspace(agency:LaunchRead|undefined,memberResult:LaunchRead|undefined):`/workspace/${string}`|undefined{
  if(!agency)return;
  const own=object(agency.data);
 
@@ -66,9 +62,7 @@ function installedWorkspace(agency:LaunchRead|undefined,memberResult:LaunchRead|
  if(body?.state!=='verified'||!Array.isArray(body.memberships)||body.memberships.length!==1)return;
  const item=object(body.memberships[0]);
  if(!item||!org(item.organizationId)||!org(item.membershipId))return;
- if(item.kind==='agency'&&item.role==='worker'){
-  const invitations=object(invitationResult?.data)?.invitations;
-  if(checkInvites&&(invitationResult?.status!==200||!Array.isArray(invitations)||invitations.length!==0))return;
- }else if(item.kind!=='factory'||!['worker','factory_admin','team_leader'].some(role=>role===item.role))return;
+ const roles=item.kind==='agency'?['worker','accountant']:item.kind==='factory'?['worker','team_leader','factory_admin']:[];
+ if(typeof item.role!=='string'||!roles.includes(item.role))return;
  return `/workspace/${item.organizationId}`;
 }

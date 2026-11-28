@@ -16,8 +16,8 @@ function isStandalone(){
  * Password reauthentication, invitation and workspace deep links stay on their own routes. */
 export function InstalledAppResume({children}:{children:ReactNode}){
  const location=useLocation(),navigate=useNavigate(),{t}=useTranslation();
- const [fromHomeIcon,setFromHomeIcon]=useState(()=>installedLaunch(location,window.location.origin,isStandalone())==="home-icon");
- const launch=installedLaunch(location,window.location.origin,fromHomeIcon);
+ const [initialIconPath,setInitialIconPath]=useState(()=>installedLaunch(location,window.location.origin,isStandalone())==="home-icon"?location.pathname:undefined);
+ const launch=installedLaunch(location,window.location.origin,initialIconPath===location.pathname);
  const [attempt,setAttempt]=useState(0),[unavailable,setUnavailable]=useState(false);
  useEffect(()=>{
   if(!launch){setUnavailable(false);return;}
@@ -29,19 +29,16 @@ export function InstalledAppResume({children}:{children:ReactNode}){
    if(controller.signal.aborted)return;
    window.clearTimeout(timer);
    if(result.state==="unavailable"){setUnavailable(true);return;}
-   setFromHomeIcon(false);
-   if(result.state==="workspace"){
+   setInitialIconPath(undefined);
+   if(result.state==="workspace"||result.state==="profile"){
     // The workspace still verifies current access before showing any private data.
     navigate(result.path,{replace:true});
-   }else if(result.state==="login"){
-    // This existing route checks the session again and resolves an allowed workspace.
-    navigate(result.path,{replace:true});
-   }else if(launch==="app")navigate("/",{replace:true});
+   }else if(location.pathname!=="/")navigate("/",{replace:true});
   });
   return()=>{window.clearTimeout(timer);controller.abort();};
- },[attempt,launch,navigate]);
+ },[attempt,launch,navigate,location.pathname]);
  // A route change during verification cancels this launch, even if later returning to '/'.
- useEffect(()=>{if(location.pathname!=="/"||location.search||location.hash)setFromHomeIcon(false);},[location.pathname,location.search,location.hash]);
+ useEffect(()=>{if(location.pathname!==initialIconPath||location.search||location.hash)setInitialIconPath(undefined);},[location.pathname,location.search,location.hash,initialIconPath]);
  if(!launch)return children;
  if(!unavailable)return <HostedLoading/>;
  return <main className="auth-page">
@@ -49,7 +46,7 @@ export function InstalledAppResume({children}:{children:ReactNode}){
    <img className="brand-mark-image" src={brandLogo} alt="Timeax" />
    <><p role="status">{t("auth.sessionUnavailable")}</p><div className="auth-form">
         <button className="button button--primary" type="button" onClick={()=>{setUnavailable(false);setAttempt(value=>value+1);}}>{t("auth.tryAgain")}</button>
-        <button className="button button--outline" type="button" onClick={()=>{setUnavailable(false);setFromHomeIcon(false);navigate("/",{replace:true});}}>{t("common.backHome")}</button>
+        <button className="button button--outline" type="button" onClick={()=>{setUnavailable(false);setInitialIconPath(undefined);navigate("/",{replace:true});}}>{t("common.backHome")}</button>
        </div></>
 
   </section></div>

@@ -31,6 +31,8 @@ test('Home Screen launch starts at /app; earlier standalone shortcuts resume fro
  assert.equal(manifest.display,'standalone');
  assert.equal(installedLaunch(loc('/'),origin,true),'home-icon');
  assert.equal(installedLaunch(loc('/'),origin,false),undefined);
+ assert.equal(installedLaunch(loc('/login'),origin,true),'home-icon');
+ assert.equal(installedLaunch(loc('/login'),origin,false),undefined);
  assert.equal(installedLaunch(loc('/app'),origin,false),'app');
  assert.equal(installedLaunch(loc('/app'),'https://www.timeax.pl',true),'app');
  for(const location of [loc('/login','?method=code'),loc('/account/reauth'),loc('/register/worker'),loc('/workspace/a'),loc('/app','?next=https://untrusted.test'),loc('/','','#section')])
@@ -38,13 +40,13 @@ test('Home Screen launch starts at /app; earlier standalone shortcuts resume fro
  assert.equal(installedLaunch(loc('/app'),'https://different-host.invalid',true),undefined);
 });
 
-test('verified resume always goes through current login/workspace resolution, never a cached role or organization',async()=>{
+test('verified startup falls back to the profile; anonymous and unfinished code flows open the landing page',async()=>{
  for(const launch of ['app','home-icon']){
-  assert.deepEqual(await check({...granted,next:'https://untrusted.test',workspace:'invented'},launch),{state:'login',path:'/login'});
-  assert.deepEqual(await check(challenge('login'),launch),{state:'login',path:'/login?method=code'});
+  assert.deepEqual(await check({...granted,next:'https://untrusted.test',workspace:'invented'},launch),{state:'profile',path:'/account'});
+  assert.deepEqual(await check(challenge('login'),launch),{state:'landing'});
   assert.deepEqual(await check(challenge('registration'),launch),{state:'landing'});
  }
- assert.deepEqual(await check(absent),{state:'login',path:'/login'});
+ assert.deepEqual(await check(absent),{state:'landing'});
  assert.deepEqual(await check(absent,'home-icon'),{state:'landing'});
 });
 
@@ -56,7 +58,7 @@ test('expired, malformed, untrusted, unavailable, or aborted checks never resume
  assert.deepEqual(await checkInstalledLaunch(origin,()=>{throw Error('should not fetch')},signal,'app'),{state:'unavailable'});
 });
 
-test('installed worker resumes directly after parallel fresh workspace and invite checks',async()=>{
+test('installed worker resumes directly after parallel fresh workspace checks',async()=>{
  const setup='/api/timeax/agency/setup',team='/api/worker-enrollment/context',invites='/api/worker-enrollment/email-invitations';
  const agency={status:403,value:{error:'registration-required'}};
  const worker={organizationId:'11111111-1111-4111-8111-111111111111',membershipId:'22222222-2222-4222-8222-222222222222',kind:'agency',role:'worker'};
@@ -69,7 +71,7 @@ test('installed worker resumes directly after parallel fresh workspace and invit
   return checkInstalledLaunch(origin,async(url,init)=>{
    const path=new URL(url).pathname;seen.push(path);
    assert.equal(new URL(url).origin,origin);assert.equal(init.method,'GET');assert.equal(init.credentials,'same-origin');
-   if(path===setup){await Promise.resolve();assert.ok(seen.includes(team)&&seen.includes(invites));}
+   if(path===setup){await Promise.resolve();assert.ok(seen.includes(team));assert.ok(!seen.includes(invites));}
    return transportForPath(url,paths[path]);
   },new AbortController().signal,'app');
  }
@@ -77,10 +79,10 @@ test('installed worker resumes directly after parallel fresh workspace and invit
   const r=Response.json(value,{status,headers:{'Cache-Control':'private, no-store'}});
   Object.defineProperty(r,'url',{value:url});return r;
  }
- const direct={state:'workspace',path:'/workspace/'+worker.organizationId},fallback={state:'login',path:'/login'};
+ const direct={state:'workspace',path:'/workspace/'+worker.organizationId},fallback={state:'profile',path:'/account'};
  assert.deepEqual(await run(),direct);
- assert.deepEqual(await run({pending:[{}]}),fallback);
- assert.deepEqual(await run({inviteStatus:503}),fallback);
+ assert.deepEqual(await run({pending:[{}]}),direct);
+ assert.deepEqual(await run({inviteStatus:503}),direct);
  assert.deepEqual(await run({rows:[worker,{...worker,kind:'factory',role:'team_leader'}]}),fallback);
  assert.deepEqual(await run({rows:[{...worker,organizationId:'https://bad.example'}]}),fallback);
  assert.deepEqual(await run({desk:{status:503,value:{} }}),fallback);
