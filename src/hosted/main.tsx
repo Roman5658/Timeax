@@ -1,7 +1,7 @@
 import {StrictMode} from "react";
 import {createRoot} from "react-dom/client";
 import {BrowserRouter} from "react-router-dom";
-import "../i18n";
+import {hostedTranslationsReady} from "./hosted-i18n";
 import "../styles/global.css";
 import "../styles/theme-mint.css";
 import "../styles/theme-turquoise.css";
@@ -14,4 +14,4 @@ import {HostedApp} from "./HostedApp";
 import {InstalledAppResume} from "./InstalledAppResume";
 import {RoutePageTurn} from "../app/RoutePageTurn";
 import "../styles/page-turn.css";
-createRoot(document.getElementById("root")!).render(<StrictMode><ThemeProvider><BrowserRouter><InstalledAppResume><HostedApp/></InstalledAppResume><RoutePageTurn hostedAuthPanels/></BrowserRouter></ThemeProvider></StrictMode>);
+void hostedTranslationsReady.then(()=>createRoot(document.getElementById("root")!).render(<StrictMode><ThemeProvider><BrowserRouter><InstalledAppResume><HostedApp/></InstalledAppResume><RoutePageTurn hostedAuthPanels/></BrowserRouter></ThemeProvider></StrictMode>));

@@ -1,3 +1,4 @@
+import {HostedLoading} from "./HostedLoading";
 import {WorkerTermsGate} from './WorkerTermsGate';
 import {WorkerPasswordPanel} from './WorkerPasswordPanel';
 import {AgencyProfile} from './AgencyProfile';
@@ -69,7 +70,7 @@ const leaderMenu=[item('home','nav.leaderHome','workspace',LayoutDashboard),item
  item('messages','nav.messages','operations',MessageCircle),item('timesheets','nav.monthlyTimesheets','reports',ClipboardList)];
 const hasProductionRole=(access:WorkspaceAccess)=>access.organization.kind==='factory'&&['factory_admin','team_leader'].includes(access.membership.role);
 export function HostedCabinetRoute({organizationId, section, fallback}:{organizationId:string; section:Section; fallback:ReactNode}){
- const {t}=useTranslation(),navigate=useNavigate();
+ const navigate=useNavigate();
  const [status,setStatus]=useState<WorkspaceResult>();
  useEffect(()=>{
   const controller=new AbortController();
@@ -78,7 +79,7 @@ export function HostedCabinetRoute({organizationId, section, fallback}:{organiza
   });
   return()=>controller.abort();
  },[organizationId]);
- if(!status)return <main className="portal-content"><p role="status">{t('workspaceRead.checking')}</p></main>;
+ if(!status)return <HostedLoading/>;
  if(status.state!=='ready')return fallback;
  const value=status.value,role=value.membership.role;
  if(!hasProductionRole(value)&&role!=='worker'&&!(value.organization.kind==='agency'&&role==='agency_admin'))return fallback;
@@ -188,7 +189,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
    </header>
    <main className="portal-content">
     <PageHeading eyebrow={worker?organizationLabel(access.membership.id):undefined} title={t(unifiedHours?'nav.timekeeping':heading)} />
-    <Suspense fallback={<p role="status">{t("workspaceRead.checking")}</p>}>
+    <Suspense fallback={<HostedLoading compact/>}>
     {production&&section!=='messages'&&(section!=='schedule'||factoryAdmin)&&!(factoryAdmin&&['factory-timecards','timesheets'].includes(section))&&<FactoryRolePanel key={org+section} access={access} section={section as FactoryRoleSection}/>}
     {factoryAdmin&&(section==='factory-timecards'||section==='timesheets')&&<FactoryTimecardsPanel key={org+section} organizationId={org} expectedRole='factory_admin' expectedMembershipId={access.membership.id} archiveOnly={section==='timesheets'} leaderSection={section==='timesheets'?'timesheets':'hours'}/>}
     {publicAgency&&section!=='home'&&section!=='setup'&&!directory&&!unifiedHours&&!sectionReady&&<p className="notice-box" role="status">{t('agencyProductions.moduleNotEnabled')}</p>}

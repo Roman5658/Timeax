@@ -1,3 +1,4 @@
+import {HostedLoading} from "./HostedLoading";
 import {useEffect,useRef,useState,type FormEvent,type ReactNode} from 'react';
 import {useTranslation} from 'react-i18next';
 import {LegalLink} from '../components/PublicExperience';
@@ -47,7 +48,7 @@ export function WorkerTermsGate({children,onSessionExpired}:{children:ReactNode;
   S(next);if(next==='expired')expired.current?.();
  }
  if(state==='accepted')return <>{children}</>;
- if(state==='loading')return <p role="status">{c.checking}</p>;
+ if(state==='loading')return <HostedLoading/>;
  const legal=<p className="muted-copy"><LegalLink kind="terms" to={'/terms/'+HOSTED_TERMS_VERSION}/> · <LegalLink kind="privacy" to="/privacy"/></p>;
  return <section className="notice-box" aria-label={c.title}>
   <h2>{c.title}</h2>

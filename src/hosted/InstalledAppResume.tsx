@@ -1,3 +1,5 @@
+import {loadHostedCabinetModule} from "./load-hosted-cabinet";
+import {HostedLoading} from "./HostedLoading";
 import {useEffect,useState,type ReactNode} from "react";
 import {useLocation,useNavigate} from "react-router-dom";
 import {useTranslation} from "react-i18next";
@@ -19,6 +21,8 @@ export function InstalledAppResume({children}:{children:ReactNode}){
  const [attempt,setAttempt]=useState(0),[unavailable,setUnavailable]=useState(false);
  useEffect(()=>{
   if(!launch){setUnavailable(false);return;}
+  // Download code while resolving the session; do not read or expose workspace data here.
+  void loadHostedCabinetModule().catch(()=>{});
   const controller=new AbortController();
   const timer=window.setTimeout(()=>{setUnavailable(true);controller.abort();},launchTimeoutMs);
   void checkInstalledLaunch(window.location.origin,window.fetch.bind(window),controller.signal,launch).then(result=>{
@@ -39,15 +43,15 @@ export function InstalledAppResume({children}:{children:ReactNode}){
  // A route change during verification cancels this launch, even if later returning to '/'.
  useEffect(()=>{if(location.pathname!=="/"||location.search||location.hash)setFromHomeIcon(false);},[location.pathname,location.search,location.hash]);
  if(!launch)return children;
+ if(!unavailable)return <HostedLoading/>;
  return <main className="auth-page">
   <div className="auth-main"><section className="auth-card" aria-label="Timeax">
    <img className="brand-mark-image" src={brandLogo} alt="Timeax" />
-   {unavailable
-    ? <><p role="status">{t("auth.sessionUnavailable")}</p><div className="auth-form">
+   <><p role="status">{t("auth.sessionUnavailable")}</p><div className="auth-form">
         <button className="button button--primary" type="button" onClick={()=>{setUnavailable(false);setAttempt(value=>value+1);}}>{t("auth.tryAgain")}</button>
         <button className="button button--outline" type="button" onClick={()=>{setUnavailable(false);setFromHomeIcon(false);navigate("/",{replace:true});}}>{t("common.backHome")}</button>
        </div></>
-    : <p role="status">{t("auth.sessionLoading")}</p>}
+
   </section></div>
  </main>;
 }

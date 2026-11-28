@@ -1,3 +1,5 @@
+import {loadHostedCabinetModule} from "./load-hosted-cabinet";
+import {HostedLoading} from "./HostedLoading";
 import {SelfServiceAgencyStep} from './SelfServiceAgencyStep';
 import {PASSWORD_RESET_PATH,PasswordResetForm,passwordResetHeading} from './PasswordResetForm';
 import {workerRegistrationCopy} from './worker-registration-copy';
@@ -22,7 +24,7 @@ const WorkerEnrollmentEntry=lazy(()=>import('./WorkerEnrollmentPage').then(m=>({
 const AgencyWorkerPanel=lazy(()=>import('./WorkerEnrollmentPage').then(m=>({default:m.AgencyWorkerPanel})));
 const WorkerWorkspacePanel=lazy(()=>import('./WorkerEnrollmentPage').then(m=>({default:m.WorkerWorkspacePanel})));
 const EnrollmentDestinations=lazy(()=>import('./WorkerEnrollmentPage').then(m=>({default:m.EnrollmentDestinations})));
-const HostedCabinetRoute=lazy(()=>import('./HostedCabinet').then(m=>({default:m.HostedCabinetRoute})));
+const HostedCabinetRoute=lazy(()=>loadHostedCabinetModule().then(m=>({default:m.HostedCabinetRoute})));
 const AccountAdminPage=lazy(()=>import('./AccountAdminPage').then(m=>({default:m.AccountAdminPage})));
 const WorkerAccountPage=lazy(()=>import('./WorkerAccountPage').then(m=>({default:m.WorkerAccountPage})));
 const PayslipsPage=lazy(()=>import('./PayslipsPage').then(m=>({default:m.PayslipsPage})));
@@ -160,8 +162,7 @@ function PublicLanding({pathname}:{pathname:string}){
  </>;
 }
 export function HostedApp(){
- const {t}=useTranslation();
- return <Suspense fallback={<main className="portal-content"><p role="status">{t("workspaceRead.checking")}</p></main>}><HostedRoutes/></Suspense>;
+ return <Suspense fallback={<HostedLoading/>}><HostedRoutes/></Suspense>;
 }
 function HostedRoutes(){
  const {t,i18n}=useTranslation(),loc=useLocation(),tx=(k:string)=>t("closedHosted."+k);
