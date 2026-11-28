@@ -102,9 +102,10 @@ export async function assembleHostedEmailAuth(config,{fetchImpl=globalThis.fetch
  if(sessionStore&&/^[-_A-Za-z0-9]{43,128}$/.test(password??'')&&/^[a-f0-9]{64}$/.test(sha??'')&&
   ![config.password,config.agencyOnboardingPassword,config.workspaceReadPassword,config.webSessions?.password,config.accountAdmin?.password,config.agencyProductions?.password,...Object.values(config.agencyOperations??{}).map(v=>v?.password)].includes(password)){
   try{
-   const send=createPushSender({publicKey,privateKey},fetchImpl);
+   const report=event=>console.info('[timeax-web-push] '+JSON.stringify(event));
+   const send=createPushSender({publicKey,privateKey,report},fetchImpl);
    const db=scoped({host:config.host,ca:config.ca,role:PUSH_ROLE,password,namespace:'timeax_api',functions:[{signature:PUSH_SIGNATURE,owner:'postgres',sha256:sha}],statements:[PUSH_SQL]});
-   await db.preflight();pushService=createPushService({origin:config.origin,lane:db,publicKey,send});
+   await db.preflight();pushService=createPushService({origin:config.origin,lane:db,publicKey,send,report});
   }catch{}
  }
  return createEmailIdentityRuntime({origin:config.origin,provider,pendingStore,otpLength:config.otpLength,admitSend,signupHook,now,onboardingStore,workspaceFactory,accountAdminFactory,agencyProductionsFactory,agencyOperationsFactory,sessionStore,pushService});

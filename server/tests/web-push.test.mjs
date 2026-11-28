@@ -51,6 +51,47 @@ test('Web Push settings allow only the current verified browser and drain bounde
  }finally{service.stop()}
 });
 
+test('Apple delivery diagnostics distinguish provider acceptance, rejection, expiry, retry and network failure without private values',async()=>{
+ const events=[],apple={...sub,endpoint:'https://web.push.apple.com/private-fixture-registration-token'},workspace=id(4);
+ const secret='fixture-secret';
+ let status=201;
+ const send=createPushSender({...key(),report:event=>events.push(event)},async()=>{
+  if(status===null)throw Error(apple.endpoint+' '+workspace+' '+secret);
+  return new Response(secret,{status});
+ });
+ const job={subscription:apple,language:'pl',organizationId:workspace};
+ assert.equal(await send(job),'delivered');
+ for(const [http,expected] of [[403,'discard'],[410,'expired'],[429,'retry']]){
+  status=http;assert.equal(await send(job),expected);
+ }
+ status=null;await assert.rejects(()=>send(job));
+ assert.deepEqual(events.map(({at,...fields})=>{
+  assert.equal(new Date(at).toISOString(),at);return fields;
+ }),[
+  {phase:'delivery',provider:'apple',status:201,outcome:'provider-accepted'},
+  {phase:'delivery',provider:'apple',status:403,outcome:'discard'},
+  {phase:'delivery',provider:'apple',status:410,outcome:'expired'},
+  {phase:'delivery',provider:'apple',status:429,outcome:'retry'},
+  {phase:'delivery',provider:'apple',outcome:'transport-error'},
+ ]);
+ for(const privateValue of [apple.endpoint,workspace,secret,sub.keys.auth,sub.keys.p256dh])assert.equal(JSON.stringify(events).includes(privateValue),false);
+});
+
+test('push queue diagnostics report failed claims and finishes without logging payloads or repeated errors',async()=>{
+ const events=[],origin='https://timeax.pl';let claim=0;
+ const service=createPushService({origin,publicKey:key().publicKey,interval:8,report:e=>events.push(e),send:async()=> 'delivered',lane:{
+  async query(_sql,args){
+   if(args[2]==='claim'&&++claim>2)return {rows:[{value:[{id:id(9)}]}]};
+   throw Error('fixture-secret '+id(9));
+  },
+ }});
+ try{
+  service.start();for(let i=0;i<80&&claim<5;i++)await new Promise(r=>setTimeout(r,5));
+  assert.ok(claim>=5);
+  assert.deepEqual(events.map(({at,...fields})=>fields),[{phase:'claim',outcome:'queue-error'},{phase:'finish',outcome:'queue-error'}]);
+ }finally{service.stop()}
+});
+
 test('SQL queues a generic push for enrolled recipients even without a worksite, preserves it on normal expiry, and revokes it on sign-out',async()=>{
  const db=new PGlite();
  try{

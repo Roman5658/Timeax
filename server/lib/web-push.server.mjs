@@ -30,41 +30,54 @@ export function validatePushSubscription(v){
   const e=createECDH('prime256v1');e.generateKeys();e.computeSecret(key);return true}catch{return false}
 }
 const labels={en:'New notification in Timeax',ru:'Новое уведомление в Timeax',pl:'Nowe powiadomienie w Timeax',uk:'Нове сповіщення в Timeax'};
-export function createPushSender({publicKey,privateKey,subject='mailto:push@timeax.pl'},fetchImpl=fetch){
+const diagnostic=(report,event)=>{try{report?.({...event,at:new Date().toISOString()})}catch{}};
+export function createPushSender({publicKey,privateKey,subject='mailto:push@timeax.pl',report},fetchImpl=fetch){
  const pub=bytes(publicKey,65),key=bytes(privateKey,32);
  if(!pub||!key||!/^mailto:[A-Za-z0-9._+-]+@timeax\.pl$/.test(subject))throw Error('Invalid Web Push configuration');
  const e=createECDH('prime256v1');e.setPrivateKey(key);
  if(!timingSafeEqual(e.getPublicKey(),pub))throw Error('Invalid Web Push keys');
  return async job=>{
-  if(!validatePushSubscription(job.subscription)||!uuid(job.organizationId))return 'discard';
-  const details=webPush.generateRequestDetails(job.subscription,JSON.stringify({
-   body:labels[job.language]??labels.en,path:'/workspace/'+job.organizationId+'/messages'
-  }),{TTL:3600,urgency:'normal',topic:'timeax-bell',vapidDetails:{subject,publicKey,privateKey}});
-  const r=await fetchImpl(details.endpoint,{method:'POST',headers:details.headers,body:details.body,redirect:'error',signal:AbortSignal.timeout(8000)});
+  if(!validatePushSubscription(job.subscription)||!uuid(job.organizationId)){
+   diagnostic(report,{phase:'delivery',provider:'unknown',outcome:'invalid-job'});return 'discard';
+  }
+  const host=new URL(job.subscription.endpoint).hostname;
+  const provider=host==='fcm.googleapis.com'?'google':host==='updates.push.services.mozilla.com'?'mozilla':'apple';
+  let r;
+  try{
+   const details=webPush.generateRequestDetails(job.subscription,JSON.stringify({
+    body:labels[job.language]??labels.en,path:'/workspace/'+job.organizationId+'/messages'
+   }),{TTL:3600,urgency:'normal',topic:'timeax-bell',vapidDetails:{subject,publicKey,privateKey}});
+   r=await fetchImpl(details.endpoint,{method:'POST',headers:details.headers,body:details.body,redirect:'error',signal:AbortSignal.timeout(8000)});
+  }catch(error){diagnostic(report,{phase:'delivery',provider,outcome:'transport-error'});throw error}
+  const result=r.ok?'delivered':r.status===404||r.status===410?'expired':r.status===429||r.status>=500?'retry':'discard';
+  diagnostic(report,{phase:'delivery',provider,status:r.status,outcome:result==='delivered'?'provider-accepted':result});
   await r.body?.cancel();
-  if(r.ok)return 'delivered';
-  if(r.status===404||r.status===410)return 'expired';
-  if(r.status===429||r.status>=500)return 'retry';
-  return 'discard';
+  return result;
  };
 }
-export function createPushService({origin,lane,publicKey,send,interval=10000}){
+export function createPushService({origin,lane,publicKey,send,interval=10000,report}){
  const call=async (action,input={},s=null)=>{
   const r=await lane.query(PUSH_SQL,[s?.issuer??null,s?.subject??null,action,JSON.stringify(input)]);
   if(r.rows?.length!==1||!r.rows[0]?.value)throw Error('Push operation unavailable');
   return r.rows[0].value;
  };
  let timer,busy=false;
+ const lastQueueError={claim:0,finish:0};
+ function queueError(phase){
+  if(Date.now()-lastQueueError[phase]<60_000)return;
+  lastQueueError[phase]=Date.now();diagnostic(report,{phase,outcome:'queue-error'});
+ }
  async function tick(){
   if(busy)return;busy=true;
   try{
    const lease=randomUUID(),jobs=await call('claim',{lease});
-   if(!Array.isArray(jobs)||jobs.length>12)return;
-   await Promise.allSettled(jobs.filter(j=>uuid(j?.id)).map(async job=>{
+   if(!Array.isArray(jobs)||jobs.length>12){queueError('claim');return}
+   const results=await Promise.allSettled(jobs.filter(j=>uuid(j?.id)).map(async job=>{
     let outcome;try{outcome=await send(job)}catch{outcome='retry'}
     await call('finish',{id:job.id,lease,outcome});
    }));
-  }catch{}finally{busy=false}
+   if(results.some(result=>result.status==='rejected'))queueError('finish');
+  }catch{queueError('claim')}finally{busy=false}
  }
  const reply=(status,data)=>Response.json(data,{status,headers:{'Cache-Control':'private, no-store',Vary:'Cookie'}});
  return {
