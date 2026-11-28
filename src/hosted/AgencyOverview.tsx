@@ -10,7 +10,7 @@ import {factoryCall,parseSetupContext} from './factory-enrollment';
 import {factoryHoursCall,parseFactoryHours} from './factory-timecards';
 import {timecardCall,parseTimecards,minutesLabel} from './timecards';
 import {readWithRetry} from './retry-read';
-import {agencyOverview,overviewDays} from './agency-overview';
+import {agencyOverview,overviewDays,productionOverview} from './agency-overview';
 import {warsawEstimateMonth} from './worker-pay-estimate-form';
 import './agency-overview.css';
 
@@ -19,6 +19,12 @@ const words={
  ru:['Производства','Работники','Часы','Дни отсутствия','На проверке','Непрочитанные сообщения','Внутреннее','Подключённое','Производств пока нет.','Нет активных работников.','Часть данных не загрузилась.','Повторить','Календарь работника','Закрыть','Смена','Отсутствие','Суббота и воскресенье','Смена по графику','Часы на проверке','Нет записей','Все производства','Все работники','Показать ещё','Назначено работников','Выберите день, чтобы посмотреть записи.','Проверить часы','Открыть сообщения'],
  pl:['Zakłady','Pracownicy','Godziny','Dni nieobecności','Do sprawdzenia','Nieprzeczytane wiadomości','Wewnętrzny','Połączony','Nie ma jeszcze zakładów.','Brak aktywnych pracowników.','Nie udało się wczytać części danych.','Spróbuj ponownie','Kalendarz pracownika','Zamknij','Zmiana','Nieobecność','Weekend','Planowana zmiana','Godziny do sprawdzenia','Brak wpisów','Wszystkie zakłady','Wszyscy pracownicy','Pokaż więcej','Przypisani pracownicy','Wybierz dzień, aby zobaczyć wpisy.','Sprawdź godziny','Otwórz wiadomości'],
  uk:['Виробництва','Працівники','Години','Дні відсутності','На перевірці','Непрочитані повідомлення','Внутрішнє','Підключене','Виробництв ще немає.','Немає активних працівників.','Не вдалося завантажити частину даних.','Спробувати знову','Календар працівника','Закрити','Зміна','Відсутність','Субота й неділя','Зміна за графіком','Години на перевірці','Немає записів','Усі виробництва','Усі працівники','Показати ще','Призначено працівників','Виберіть день, щоб переглянути записи.','Перевірити години','Відкрити повідомлення'],
+};
+const productionWords={
+ en:{title:'Production overview',stats:'Hours this month',factory:'Production partner',history:'Worked here this month',empty:'No workers assigned and no hours recorded for this month.',open:'Open production settings',shifts:'Shifts'},
+ ru:{title:'Обзор производства',stats:'Часы за месяц',factory:'Производство-партнёр',history:'Работал здесь в этом месяце',empty:'Нет назначенных работников и записанных часов за этот месяц.',open:'Открыть настройки производства',shifts:'Смены'},
+ pl:{title:'Podgląd zakładu',stats:'Godziny w miesiącu',factory:'Zakład partnerski',history:'Praca w tym zakładzie w tym miesiącu',empty:'Brak przypisanych pracowników i zapisanych godzin w tym miesiącu.',open:'Otwórz ustawienia zakładu',shifts:'Zmiany'},
+ uk:{title:'Огляд виробництва',stats:'Години за місяць',factory:'Виробництво-партнер',history:'Працював тут цього місяця',empty:'Немає призначених працівників і записаних годин за цей місяць.',open:'Відкрити налаштування виробництва',shifts:'Зміни'},
 };
 type Read<T>={data?:T;error?:true};
 function useRead<T>(org:string,member:string,enabled:boolean,revision:number,read:(signal:AbortSignal)=>Promise<T>){
@@ -32,11 +38,12 @@ function useRead<T>(org:string,member:string,enabled:boolean,revision:number,rea
  },[org,member,enabled,revision]);
  return enabled?state:{};
 }
-type Props={org:string;member:string;sites:{id:string;name:string}[];productions:boolean;names:boolean;internal:boolean;factory:boolean;teamEnabled:boolean;reviews:Request[];reviewsReady:boolean;messageStates?:Readonly<Record<string,string>>};
+type Props={org:string;member:string;sites:{id:string;name:string}[];productions:boolean;names:boolean;internal:boolean;factory:boolean;teamEnabled:boolean;reviews:Request[];reviewsReady:boolean;messageStates?:Readonly<Record<string,string>>;selectedSite?:string;onSelectSite:(id?:string)=>void};
 
-export function AgencyOverview({org,member,sites,productions,names,internal,factory,teamEnabled,reviews,reviewsReady,messageStates}:Props){
+export function AgencyOverview({org,member,sites,productions,names,internal,factory,teamEnabled,reviews,reviewsReady,messageStates,selectedSite,onSelectSite}:Props){
  const {t,i18n}=useTranslation(),lang=(i18n.resolvedLanguage??'en').split('-')[0];
  const c=words[lang as keyof typeof words]??words.en;
+ const pc=productionWords[lang as keyof typeof productionWords]??productionWords.en;
  const description={
   en:'Hours include internal shifts and factory timesheets already sent to your agency.',
   ru:'В часы входят внутренние смены и табели, уже полученные от производства.',
@@ -84,6 +91,14 @@ export function AgencyOverview({org,member,sites,productions,names,internal,fact
  };
  const siteMinutes=new Map<string,number>();
  for(const s of summary.shifts)siteMinutes.set(s.site,(siteMinutes.get(s.site)??0)+s.minutes);
+ const siteHasHours=(kind:'internal'|'connected'|undefined)=>kind==='internal'?!!internalRead.data:kind==='connected'?!!factoryRead.data:hoursReady;
+ const siteHasRoster=(kind:'internal'|'connected'|undefined)=>!!setup.data&&(kind!=='connected'||!!factoryRead.data);
+ const site=summary.sites.find(row=>row.id===selectedSite);
+ const production=useMemo(()=>site?productionOverview(site.id,site.workers,summary.shifts):undefined,[site,summary.shifts]);
+ const [productionWorkerLimit,setProductionWorkerLimit]=useState(12);
+ useEffect(()=>setProductionWorkerLimit(12),[selectedSite,month]);
+ const productionWorkers=production?.workers.map(row=>({...row,label:memberNames.label(row.id)}))
+  .sort((a,b)=>Number(b.assigned)-Number(a.assigned)||a.label.localeCompare(b.label,lang));
  const sortedSites=[...summary.sites].sort((a,b)=>a.name.localeCompare(b.name,lang));
  const absencesByWorker=new Map(workers.map(w=>{
   const dates=new Set<string>();
@@ -100,9 +115,9 @@ export function AgencyOverview({org,member,sites,productions,names,internal,fact
    <section className="dashboard-panel">
     <div className="panel-heading"><h2><Building2 size={18}/> {c[0]}</h2><Link to={root+'/setup'}>{c[20]}</Link></div>
     <ul className="agency-overview__list">{sortedSites.slice(0,siteLimit).map(site=><li key={site.id}>
-     <Link to={root+'/setup?site='+site.id}><strong>{site.name}</strong>{site.kind&&<span>{site.kind==='internal'?c[6]:c[7]}</span>}
-      <div className="agency-overview__metrics"><span>{c[23]}: {setup.data&&(site.kind!=='connected'||factoryRead.data)?site.workers.size:'—'}</span><span>{c[2]}: {amount(siteMinutes.get(site.id),site.kind==='internal'?!!internalRead.data:site.kind==='connected'?!!factoryRead.data:hoursReady)}</span></div>
-     </Link>
+     <button type="button" aria-haspopup="dialog" onClick={()=>onSelectSite(site.id)}><strong>{site.name}</strong>{site.kind&&<span>{site.kind==='internal'?c[6]:c[7]}</span>}
+      <div className="agency-overview__metrics"><span>{c[23]}: {siteHasRoster(site.kind)?site.workers.size:'—'}</span><span>{c[2]}: {amount(siteMinutes.get(site.id),siteHasHours(site.kind))}</span></div>
+     </button>
     </li>)}</ul>
     {!sortedSites.length&&!loading&&!setup.error&&<p>{c[8]}</p>}
     {sortedSites.length>siteLimit&&<button type="button" className="button button--outline button--small" onClick={()=>moreSites(n=>n+8)}>{c[22]}</button>}
@@ -123,6 +138,28 @@ export function AgencyOverview({org,member,sites,productions,names,internal,fact
     {workers.length>workerLimit&&<button type="button" className="button button--outline button--small" onClick={()=>moreWorkers(n=>n+8)}>{c[22]}</button>}
    </section>
   </div>
+  {site&&production&&<AgencyBookDrawer title={site.name+' · '+pc.title} closeLabel={c[13]} centered onClose={()=>onSelectSite()}>
+   <section className="agency-book-section agency-production-overview">
+    {site.kind&&<p className="muted-copy">{site.kind==='internal'?c[6]:c[7]}{site.factoryName&&site.factoryName!==site.name?' · '+pc.factory+': '+site.factoryName:''}</p>}
+    <dl className="agency-production-overview__stats">
+     <div><dt>{c[23]}</dt><dd>{siteHasRoster(site.kind)?site.workers.size:'—'}</dd></div>
+     <div><dt>{pc.stats} · {title}</dt><dd>{amount(production.totalMinutes,siteHasHours(site.kind))}</dd></div>
+    </dl>
+    {site.kind==='connected'&&<p className="muted-copy">{description}</p>}
+    {loading&&(!siteHasRoster(site.kind)||!siteHasHours(site.kind))&&<p role="status">{t('memberNames.checking')}</p>}
+    {!loading&&error&&(!siteHasRoster(site.kind)||!siteHasHours(site.kind))&&<p role="status">{c[10]}</p>}
+    <h3>{c[1]}</h3>
+    {!!productionWorkers?.length&&<ul className="agency-production-overview__workers">
+     {productionWorkers.slice(0,productionWorkerLimit).map(row=><li key={row.id}>
+      <div><strong>{row.label}</strong>{!row.assigned&&siteHasRoster(site.kind)&&<small>{pc.history}</small>}</div>
+      <div><strong>{amount(row.minutes,siteHasHours(site.kind))}</strong>{siteHasHours(site.kind)&&<small>{pc.shifts}: {row.shifts}</small>}</div>
+     </li>)}
+    </ul>}
+    {siteHasRoster(site.kind)&&siteHasHours(site.kind)&&!productionWorkers?.length&&<p className="muted-copy">{pc.empty}</p>}
+    {(productionWorkers?.length??0)>productionWorkerLimit&&<button className="button button--outline button--small" type="button" onClick={()=>setProductionWorkerLimit(n=>n+12)}>{c[22]}</button>}
+    <p><Link to={root+'/setup?site='+site.id}>{pc.open}</Link></p>
+   </section>
+  </AgencyBookDrawer>}
   {active&&<AgencyBookDrawer title={active.label+' · '+c[12]} closeLabel={c[13]} centered onClose={()=>open(undefined)}>
    {pager}
    <div className="agency-overview__legend">{legend.map(k=><span key={k} data-kind={k}>{kinds[k]}</span>)}</div>

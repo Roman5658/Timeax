@@ -136,6 +136,8 @@ function HostedCabinet({access,section,menu,agencyProfile,canonical,retryProfile
  const {t}=useTranslation();
  const where=useLocation(),navigate=useNavigate();
  const [menuOpen,setMenuOpen]=useState(false);
+ const [overviewSite,setOverviewSite]=useState<string>();
+ useEffect(()=>{if(section!=='home')setOverviewSite(undefined)},[section]);
  const agency=access.membership.role==='agency_admin';
  const factoryAdmin=access.membership.role==='factory_admin';
  const production=hasProductionRole(access),worker=!agency&&!production;
@@ -276,11 +278,11 @@ function HostedCabinet({access,section,menu,agencyProfile,canonical,retryProfile
      {agencyWorker&&<WorkerCalendar key={org+access.membership.id} organizationId={org} membershipId={access.membership.id} personalRate={payRate}/>}
      <section className="dashboard-panel">
       <div className="panel-heading"><h2>{t('workspaceRead.worksites')}</h2></div>
-      {access.worksites.length?<ul className="factory-summary-list hosted-site-list">{access.worksites.map(site=><li className="factory-summary-row" key={site.id}><span className="factory-summary-icon"><Building2 size={16} aria-hidden="true"/></span><strong>{publicAgency?<Link to={root+'/setup?site='+site.id}>{site.name}</Link>:site.name}</strong></li>)}</ul>:<p>{t('workspaceRead.empty')}</p>}
+      {access.worksites.length?<ul className="factory-summary-list hosted-site-list">{access.worksites.map(site=><li className="factory-summary-row" key={site.id}><span className="factory-summary-icon"><Building2 size={16} aria-hidden="true"/></span><strong>{publicAgency?<button type="button" className="hosted-site-overview-button" aria-haspopup="dialog" onClick={()=>setOverviewSite(site.id)}>{site.name}</button>:site.name}</strong></li>)}</ul>:<p>{t('workspaceRead.empty')}</p>}
      </section>
      {publicAgency&&<Suspense fallback={null}><AgencyOverview key={org+access.membership.id} org={org} member={access.membership.id} sites={access.worksites}
       productions={agencyProfile?.productions===true} names={uses('names')} internal={uses('timecards')} factory={uses('factoryTimecards')}
-      teamEnabled={uses('team')} reviews={requests} reviewsReady={!!(inbox.data||backdated.feed)} messageStates={inbox.data?.states}/></Suspense>}
+      teamEnabled={uses('team')} reviews={requests} reviewsReady={!!(inbox.data||backdated.feed)} messageStates={inbox.data?.states} selectedSite={overviewSite} onSelectSite={setOverviewSite}/></Suspense>}
      <div className="form-actions agency-overview-actions">{menu.filter(x=>x.section==='timecards'||x.section==='payslips'||x.section==='workers').map(x=><Link key={x.section} className="button button--outline button--small" to={route(x.section)}>{t(x.label)}</Link>)}</div>
     </>}
     {directory&&<AgencyWorkersPanel key={org+(agencySearch.get('site')??'')} organizationId={org} siteId={agencySearch.get('site')??undefined} initialSection={agencySearch.get('tab')==='applications'?'applications':'roster'} enrollmentEnabled={uses('worker')} applicationQueue={applications} provisioningEnabled={publicAgency&&uses('workerProvisioning')} productionsEnabled={agencyProfile?.productions===true} factoryHoursEnabled={uses('factoryTimecards')} timecardsEnabled={uses('timecards')} absencesEnabled={uses('team')} estimatesEnabled={publicAgency&&uses('estimates')} namesEnabled={uses('names')} lifecycleEnabled={uses('account')}/>}

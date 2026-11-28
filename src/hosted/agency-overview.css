@@ -24,3 +24,14 @@
 .agency-book [data-kind=planned]{--day-bg:#daebff;--day-edge:#78a8da;--day-text:#173e69}
 .agency-book [data-kind=review]{--day-bg:#fff0c9;--day-edge:#d4a650;--day-text:#5e3900}
 @media(max-width:780px){.agency-overview__panels{grid-template-columns:minmax(0,1fr)}}
+
+.hosted-site-overview-button{font:inherit;color:inherit;text-align:start;overflow-wrap:anywhere;border:0;background:none;padding:.25rem 0;cursor:pointer}
+.hosted-site-overview-button:hover{text-decoration:underline}
+.agency-production-overview__stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.5rem;margin:.6rem 0}
+.agency-production-overview__stats div{padding:.65rem;border:1px solid color-mix(in srgb,currentColor 17%,transparent);border-radius:.65rem}
+.agency-production-overview__stats dt,.agency-production-overview__workers small{font-size:.82rem}
+.agency-production-overview__stats dd{margin:.2rem 0 0;font-size:1.25rem;font-weight:700}
+.agency-production-overview__workers{padding:0;list-style:none}
+.agency-production-overview__workers li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.7rem;padding:.6rem 0;border-bottom:1px solid color-mix(in srgb,currentColor 17%,transparent);overflow-wrap:anywhere}
+.agency-production-overview__workers small{display:block}
+.agency-production-overview__workers li>div:last-child{text-align:end}

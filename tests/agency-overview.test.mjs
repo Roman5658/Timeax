@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {agencyOverview,overviewDays} from '../src/hosted/agency-overview.ts';
+import {agencyOverview,overviewDays,productionOverview} from '../src/hosted/agency-overview.ts';
 
 const now=Date.parse('2026-11-28T12:00:00Z');
 const local=(day,paidMinutes)=>({localDate:day,startTime:'06:00',endTime:'14:00',paidMinutes});
@@ -37,4 +37,16 @@ test('agency overview keeps the newest authorized shift, merges overlapping abse
  assert.equal(days.filter(d=>d.absences.length).length,1);
  assert.equal(days[3].minutes,0);
  assert.equal(agencyOverview({...seed,member:'different'}).shifts.length,0);
+});
+
+test('production overview counts only its shifts and keeps transfers separate from current assignments',()=>{
+ const shifts=[
+  {site:'a',worker:'current',minutes:450},{site:'a',worker:'transferred',minutes:480},
+  {site:'a',worker:'transferred',minutes:360},{site:'b',worker:'current',minutes:250},
+  {site:'b',worker:'other',minutes:480},
+ ];
+ assert.deepEqual(productionOverview('a',new Set(['current','new']),shifts),{
+  totalMinutes:1290,
+  workers:[{id:'current',assigned:true,minutes:450,shifts:1},{id:'new',assigned:true,minutes:0,shifts:0},{id:'transferred',assigned:false,minutes:840,shifts:2}],
+ });
 });

@@ -13,12 +13,12 @@ export function agencyOverview({org,member,month,initialSites,setup,internal,fac
  factory?:FactoryHoursContext;team?:TeamContext;requests:Request[];messageStates?:Readonly<Record<string,string>>;now:number;
 }){
  const allowed=setup?.memberships.some(m=>m.organizationId===org&&m.id===member&&m.role==='agency_admin');
- const sites=new Map<string,Site&{kind?:'internal'|'connected';workers:Set<string>}>();
+ const sites=new Map<string,Site&{kind?:'internal'|'connected';factoryName?:string;workers:Set<string>}>();
  for(const site of initialSites)sites.set(site.id,{...site,workers:new Set()});
- const put=(id:string,name:string,kind:'internal'|'connected')=>sites.set(id,{id,name,kind,workers:new Set()});
+ const put=(id:string,name:string,kind:'internal'|'connected',factoryName?:string)=>sites.set(id,{id,name,kind,factoryName,workers:new Set()});
  if(allowed&&setup){
   for(const s of setup.worksites)if(s.organizationId===org&&s.ownerId===org&&s.ownerKind==='agency')put(s.id,s.name,'internal');
-  for(const c of setup.connections)if(c.agencyId===org&&c.state==='active')put(c.worksiteId,c.worksiteName,'connected');
+  for(const c of setup.connections)if(c.agencyId===org&&c.state==='active')put(c.worksiteId,c.worksiteName,'connected',c.factoryName);
   for(const a of setup.assignments)if(a.organizationId===org&&a.state==='active'&&a.role==='worker'&&Date.parse(a.startsAt)<=now&&(!a.endsAt||Date.parse(a.endsAt)>now))
    sites.get(a.worksiteId)?.workers.add(a.membershipId);
  }
@@ -70,4 +70,16 @@ export function overviewDays(month:string,activity?:Activity){
   const kind: 'absence'|'review'|'shift'|'planned'|'weekend'|'empty'=absences.length?'absence':reviews.length?'review':shifts.length?'shift':activity?.plans.has(day)?'planned':weekend?'weekend':'empty';
   return {day,shifts,absences,reviews,kind,weekend,minutes:shifts.reduce((n,s)=>n+s.minutes,0)};
  })};
+}
+
+export function productionOverview(siteId:string,assigned:ReadonlySet<string>,shifts:Shift[]){
+ const tallies=new Map<string,{minutes:number;shifts:number}>();
+ for(const s of shifts)if(s.site===siteId){
+  const prev=tallies.get(s.worker);
+  tallies.set(s.worker,{minutes:(prev?.minutes??0)+s.minutes,shifts:(prev?.shifts??0)+1});
+ }
+ return {
+  totalMinutes:[...tallies.values()].reduce((sum,x)=>sum+x.minutes,0),
+  workers:[...new Set([...assigned,...tallies.keys()])].map(id=>({id,assigned:assigned.has(id),minutes:tallies.get(id)?.minutes??0,shifts:tallies.get(id)?.shifts??0})),
+ };
 }
