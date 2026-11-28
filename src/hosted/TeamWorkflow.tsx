@@ -24,7 +24,7 @@ const workerHelp={
  uk:{noSite:'Щоб повідомити про відсутність тут, потрібно мати призначене виробництво. Поки можна написати своїй агенції.',fill:'Заповнити за шаблоном зміни'},
 };
 const localized=(language:string|undefined)=>workerHelp[(language??'en').split('-')[0] as keyof typeof workerHelp]??workerHelp.en;
-export function TeamBell({organizationId,additionalUnread=0,additional=[],inboxState}:{organizationId:string;additionalUnread?:number;additional?:BellPreview[];inboxState?:Inbox}){
+export function TeamBell({organizationId,additionalUnread=0,additional=[],inboxState,warmSection}:{organizationId:string;additionalUnread?:number;additional?:BellPreview[];inboxState?:Inbox;warmSection?:(section:string)=>void}){
  const {t,i18n}=useTranslation(),{value,error,refresh}=useTeam(organizationId),route=useLocation();
  const [expanded,setExpanded]=useState(false),wrap=useRef<HTMLDivElement>(null),trigger=useRef<HTMLButtonElement>(null),panelId=useId();
  const {label}=useMemberNames(expanded?organizationId:undefined);
@@ -42,6 +42,19 @@ export function TeamBell({organizationId,additionalUnread=0,additional=[],inboxS
   return {anchor:(e.kind==='message'?'team-message-':'team-notice-')+e.id,title,summary,at:e.createdAt,unread:!e.read};
  })].filter(p=>isVisible(p.anchor))):[];
  const currentPage=inboxPage(previews,page);
+ // Opening a populated bell should not restart requests just as the user
+ // clicks through. Polling/focus still keeps the shared lists up to date.
+ const openBell=()=>{
+  if(!expanded){
+   setPage(0);
+   if(!value)refresh();
+   if(inboxLoading)inboxState?.refresh();
+   const sections=new Set([...additional,...teamRows.map(e=>({anchor:(e.kind==='message'?'team-message-':'team-notice-')+e.id,at:e.createdAt,title:'',summary:'',unread:!e.read}))]
+    .filter(p=>isVisible(p.anchor)).map(p=>noticeDestination(p.anchor).split('?')[0]));
+   sections.forEach(s=>warmSection?.(s));
+  }
+  setExpanded(!expanded);
+ };
  useEffect(()=>setExpanded(false),[route.key,organizationId]);
  useEffect(()=>{
   if(!expanded)return;
@@ -51,12 +64,12 @@ export function TeamBell({organizationId,additionalUnread=0,additional=[],inboxS
   return()=>{document.removeEventListener('pointerdown',outside);document.removeEventListener('keydown',keyboard)};
  },[expanded]);
  return <div ref={wrap} className="team-bell-wrap"><button ref={trigger} className="button button--outline button--small team-bell" type="button"
-  aria-expanded={expanded} aria-controls={panelId} onClick={()=>{if(!expanded){setPage(0);refresh();inboxState?.refresh()}setExpanded(!expanded)}}
+  aria-expanded={expanded} aria-controls={panelId} onClick={openBell}
   aria-label={t('team.notifications',{count})}><Bell size={19} aria-hidden="true"/>{count>0&&<span aria-hidden="true">{count}</span>}</button>
  {expanded&&<section className="team-bell-popover" id={panelId} aria-label={t('workflow.notifications.title')}>
   <h2>{t('workflow.notifications.title')}</h2>
   {previews.length>0?<ul>{currentPage.rows.map(p=><li key={p.anchor}><Link className="team-bell-preview" data-unread={p.unread}
-   to={root+noticeDestination(p.anchor)+'#'+p.anchor} onClick={()=>setExpanded(false)}>
+   to={root+noticeDestination(p.anchor)+'#'+p.anchor} onPointerEnter={()=>warmSection?.(noticeDestination(p.anchor).split('?')[0])} onFocus={()=>warmSection?.(noticeDestination(p.anchor).split('?')[0])} onClick={()=>setExpanded(false)}>
    <strong>{p.title}</strong>{p.summary&&<span>{previewText(p.summary)}</span>}
    <time dateTime={p.at}>{new Date(p.at).toLocaleString(i18n.resolvedLanguage)}</time>
   </Link></li>)}</ul>:<p role="status">{t(!value&&error==='unavailable'||inboxLoading&&inboxState?.failure?'team.unavailable':!value||inboxLoading?'team.loading':'workflow.notifications.empty')}</p>}

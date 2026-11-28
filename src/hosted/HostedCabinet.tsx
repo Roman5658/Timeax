@@ -32,16 +32,26 @@ import {useWorkerConnections} from './use-worker-connections';
 import {shouldOfferAgencyJoin} from './worker-account-navigation';
 import '../styles/hosted-cabinet.css';
 
-const AgencyProductions=lazy(()=>import('./AgencyProductions').then(m=>({default:m.AgencyProductions})));
-const AgencyTimecardsPanel=lazy(()=>import('./AgencyTimecardsPanel').then(m=>({default:m.AgencyTimecardsPanel})));
-const AgencyWorkersPanel=lazy(()=>import('./AgencyWorkersPanel').then(m=>({default:m.AgencyWorkersPanel})));
-const TimecardsPanel=lazy(()=>import('./TimecardsPage').then(m=>({default:m.TimecardsPanel})));
-const FactoryTimecardsPanel=lazy(()=>import('./FactoryTimecardsPage').then(m=>({default:m.FactoryTimecardsPanel})));
-const FactorySetupPanel=lazy(()=>import('./FactoryEnrollmentPage').then(m=>({default:m.FactorySetupPanel})));
-const PayslipsPanel=lazy(()=>import('./PayslipsPage').then(m=>({default:m.PayslipsPanel})));
-const WorkerShiftHistory=lazy(()=>import('./WorkerShiftHistory').then(m=>({default:m.WorkerShiftHistory})));
-const WorkerCalendar=lazy(()=>import('./WorkerCalendar').then(m=>({default:m.WorkerCalendar})));
-const FactoryRolePanel=lazy(()=>import('./FactoryRolePanel').then(m=>({default:m.FactoryRolePanel})));
+const loadProductions=()=>import('./AgencyProductions');
+const loadAgencyTimecards=()=>import('./AgencyTimecardsPanel');
+const loadWorkers=()=>import('./AgencyWorkersPanel');
+const loadTimecards=()=>import('./TimecardsPage');
+const loadFactoryTimecards=()=>import('./FactoryTimecardsPage');
+const loadFactorySetup=()=>import('./FactoryEnrollmentPage');
+const loadPayslips=()=>import('./PayslipsPage');
+const loadWorkerHistory=()=>import('./WorkerShiftHistory');
+const loadWorkerCalendar=()=>import('./WorkerCalendar');
+const loadFactoryRole=()=>import('./FactoryRolePanel');
+const AgencyProductions=lazy(()=>loadProductions().then(m=>({default:m.AgencyProductions})));
+const AgencyTimecardsPanel=lazy(()=>loadAgencyTimecards().then(m=>({default:m.AgencyTimecardsPanel})));
+const AgencyWorkersPanel=lazy(()=>loadWorkers().then(m=>({default:m.AgencyWorkersPanel})));
+const TimecardsPanel=lazy(()=>loadTimecards().then(m=>({default:m.TimecardsPanel})));
+const FactoryTimecardsPanel=lazy(()=>loadFactoryTimecards().then(m=>({default:m.FactoryTimecardsPanel})));
+const FactorySetupPanel=lazy(()=>loadFactorySetup().then(m=>({default:m.FactorySetupPanel})));
+const PayslipsPanel=lazy(()=>loadPayslips().then(m=>({default:m.PayslipsPanel})));
+const WorkerShiftHistory=lazy(()=>loadWorkerHistory().then(m=>({default:m.WorkerShiftHistory})));
+const WorkerCalendar=lazy(()=>loadWorkerCalendar().then(m=>({default:m.WorkerCalendar})));
+const FactoryRolePanel=lazy(()=>loadFactoryRole().then(m=>({default:m.FactoryRolePanel})));
 
 const sectionLane:Record<string,string>={settings:'profile',workers:'worker',timecards:'timecards','factory-timecards':'factoryTimecards',payslips:'payroll',messages:'team',schedule:'team',accountants:'team'};
 type Section = TeamSection | FactoryRoleSection | 'timecards' | 'payslips';
@@ -188,6 +198,18 @@ function HostedCabinet({access,section,menu,agencyProfile,canonical,retryProfile
   ...shiftEntries.map(e=>({anchor:'backdated-'+e.source+'-'+e.id,at:e.submittedAt,card:()=>shiftCards.card(e)})),
   ...pay.rows.map(n=>({anchor:'payslip-'+n.id,at:n.at,card:()=> <><h3>{pc.title}</h3><p>{pc.summary}</p>
     <Link to={route('payslips')+'#payslip-'+n.id}>{pc.open}</Link></>}))]:[];
+ const warmSection=(sectionId:string)=>{
+  // Download only route code on intent; all protected reads still happen
+  // inside the appropriate workspace and pass the normal authorization.
+  const load=sectionId==='payslips'?loadPayslips:
+   sectionId==='workers'?(publicAgency?loadWorkers:production?loadFactoryRole:undefined):
+   sectionId==='setup'?(publicAgency?loadProductions:production?loadFactoryRole:loadFactorySetup):
+   sectionId==='timecards'?(publicAgency?loadAgencyTimecards:worker?loadWorkerHistory:loadTimecards):
+   sectionId==='factory-timecards'?(publicAgency?loadAgencyTimecards:factoryAdmin?loadFactoryTimecards:production?loadFactoryRole:loadFactoryTimecards):
+   sectionId==='home'?(agencyWorker?loadWorkerCalendar:production?loadFactoryRole:undefined):
+   production&&['teams','settings','timesheets'].includes(sectionId)?(factoryAdmin&&sectionId==='timesheets'?loadFactoryTimecards:loadFactoryRole):undefined;
+  if(load)void load().catch(()=>{});
+ };
  const [agencySearch]=useSearchParams();
  const unifiedHours=publicAgency&&(section==='timecards'||section==='factory-timecards');
  const directory=publicAgency&&section==='workers';
@@ -208,7 +230,7 @@ function HostedCabinet({access,section,menu,agencyProfile,canonical,retryProfile
    <nav className="portal-nav" aria-label={home}>
     {visibleMenu.map(({section:id,label,group,Icon},index)=><Fragment key={id}>
      {group!==visibleMenu[index-1]?.group&&<div className="portal-nav-group-label">{t('nav.groups.'+group)}</div>}
-     <Link className={'portal-nav-link'+(id===section||unifiedHours&&id==='timecards'?' is-active':'')} aria-current={id===section||unifiedHours&&id==='timecards'?'page':undefined} to={route(id)} onClick={()=>setMenuOpen(false)}><Icon size={17} aria-hidden="true"/><span>{t(label)}</span>{publicAgency&&id==='timecards'&&needsReview>0&&<span className="timeax-review-count" aria-label={t('team.notifications',{count:needsReview})}>{needsReview}</span>}{publicAgency&&id==='workers'&&applicationBell.length>0&&<span className="timeax-review-count" aria-label={t('workerEnrollment.queue')}>{applicationBell.length}</span>}</Link>
+     <Link className={'portal-nav-link'+(id===section||unifiedHours&&id==='timecards'?' is-active':'')} aria-current={id===section||unifiedHours&&id==='timecards'?'page':undefined} to={route(id)} onPointerEnter={()=>warmSection(id)} onFocus={()=>warmSection(id)} onClick={()=>setMenuOpen(false)}><Icon size={17} aria-hidden="true"/><span>{t(label)}</span>{publicAgency&&id==='timecards'&&needsReview>0&&<span className="timeax-review-count" aria-label={t('team.notifications',{count:needsReview})}>{needsReview}</span>}{publicAgency&&id==='workers'&&applicationBell.length>0&&<span className="timeax-review-count" aria-label={t('workerEnrollment.queue')}>{applicationBell.length}</span>}</Link>
     </Fragment>)}
     {worker&&<><div className="portal-nav-group-label">{t('nav.groups.account')}</div><Link className="portal-nav-link" to="/account" state={{workspaceReturn:root}}><Settings2 size={17} aria-hidden="true"/><span>{t('nav.profile')}</span></Link>{canJoinAgency&&<Link className="portal-nav-link" to="/register/worker" state={{workspaceReturn:root}}><Building2 size={17} aria-hidden="true"/><span>{t('workerEnrollment.join')}</span></Link>}</>}
    </nav>
@@ -222,7 +244,7 @@ function HostedCabinet({access,section,menu,agencyProfile,canonical,retryProfile
      <button className="portal-mobile-menu" type="button" aria-controls="hosted-cabinet-menu" aria-label={t('common.openMenu')} aria-expanded={menuOpen} onClick={()=>setMenuOpen(true)}><Menu size={19}/></button>
      <div className="portal-breadcrumb"><span className="breadcrumb-dot"/>{agencyName||home}</div>
     </div>
-    <div className="portal-top-actions">{uses('team')&&<div className='hosted-notification-controls'><TeamBell organizationId={org} inboxState={inbox} additionalUnread={extraUnread} additional={[...applicationBell,...payBell,...bellEntries]}/>{section==='home'&&<PhonePushSettings key={org+access.membership.id}/>}</div>}
+    <div className="portal-top-actions">{uses('team')&&<div className='hosted-notification-controls'><TeamBell organizationId={org} inboxState={inbox} warmSection={warmSection} additionalUnread={extraUnread} additional={[...applicationBell,...payBell,...bellEntries]}/>{section==='home'&&<PhonePushSettings key={org+access.membership.id}/>}</div>}
     {!showAgencyProfile&&<><LanguageSwitcher compact/><ThemeToggle/></>}</div>
    </header>
    <main className="portal-content">

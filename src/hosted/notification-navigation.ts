@@ -24,13 +24,17 @@ export function useBellAnchor(enabled:boolean){
    frame=requestAnimationFrame(()=>{
     if(!visible.isConnected||highlighted!==visible)return;
     visible.focus({preventScroll:true});
-    visible.scrollIntoView({block:'center',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+    visible.scrollIntoView({block:'center',behavior:'instant'});
    });
   };
-  const observer=new MutationObserver(focus);
+  let check=0;
+  const observer=new MutationObserver(()=>{
+   if(check)return;
+   check=requestAnimationFrame(()=>{check=0;focus()});
+  });
   observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden','open']});
   focus();
-  return()=>{observer.disconnect();cancelAnimationFrame(frame);clear()};
+  return()=>{observer.disconnect();cancelAnimationFrame(check);cancelAnimationFrame(frame);clear()};
  },[enabled,target,key]);
 }
 export const noticeDestination=(anchor:string)=>anchor.startsWith('agency-application-')?'workers?tab=applications':anchor.startsWith('earlier-shift-')?'timecards':anchor.startsWith('payslip-')?'payslips':'messages';

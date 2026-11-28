@@ -89,6 +89,12 @@ SELECT n.nspname||'.'||p.proname||'('||replace(oidvectortypes(p.proargtypes),' '
 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
 WHERE n.nspname||'.'||p.proname||'('||replace(oidvectortypes(p.proargtypes),' ','')||')'=ANY($1::text[])`;
 
+// Keep both catalog checks on every operation, but perform them in one
+// network round trip and in one database snapshot. Domain SQL remains separate.
+export const PREFLIGHT_SQL='WITH gate AS MATERIALIZED ('+ROLE_CHECK_SQL+
+ '), rpc AS MATERIALIZED ('+FUNCTION_CHECK_SQL.replace('$1::text[]','$3::text[]')+
+ ') SELECT gate.ok, COALESCE((SELECT pg_catalog.json_agg(rpc) FROM rpc),\'[]\'::json) AS functions FROM gate';
+
 const ENROLLMENT_FUNCTIONS=new Set([...ENROLLMENT_SIGNATURES.web,...ENROLLMENT_SIGNATURES.hook]);
 const WORKSPACE_READ_FUNCTIONS=new Set(WORKSPACE_FUNCTIONS.map(f=>f.signature));
 const PENDING_FUNCTIONS=new Set(['timeax_api.self_service_agency(text,text,text,text)','timeax_api.request_agency_registration(text,text,text,text)','timeax_api.my_agency_registration(text,text)']);
@@ -134,12 +140,12 @@ export function createScopedPgLane({host,role,password,ca,namespace,functions,st
      const error=checkServerIdentity(host,peer);if(!error)markVerified();return error;
     }}});
  async function guardedOperation(client,operation){
-   const gate=await client.query(ROLE_CHECK_SQL,[role,namespace,signatures]);
+   const gate=await client.query(PREFLIGHT_SQL,[role,namespace,signatures]);
    if(gate.rows?.length!==1||gate.rows[0]?.ok!==true)throw Error('DB role preflight denied');
-   const result=await client.query(FUNCTION_CHECK_SQL,[signatures]);
-   if(result.rows?.length!==functions.length)throw Error('RPC definition missing');
+   const rows=gate.rows[0].functions;
+   if(!Array.isArray(rows)||rows.length!==functions.length)throw Error('RPC definition missing');
    for(const expected of functions){
-    const row=result.rows.find(x=>x.signature===expected.signature);
+    const row=rows.find(x=>x.signature===expected.signature);
     if(!row||row.owner!==expected.owner||row.prosecdef!==true||row.allowed!==true||row.grantable!==false
      ||JSON.stringify(row.proconfig)!==JSON.stringify(['search_path=pg_catalog, pg_temp'])
      ||!rpcFingerprintMatches(expected,row.definition))throw Error('RPC fingerprint preflight denied');

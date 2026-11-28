@@ -10,7 +10,7 @@ import {timecardCall,parseTimecards,parseSnapshot,minutesLabel,type TimecardCont
 import {factoryHoursCall,parseFactoryHours,parseFactorySnapshot,type FactoryHoursContext} from './factory-timecards';
 import {liveTimekeepingReport,type AgencyTimecardSnapshot,type TimecardReport} from './timecard-document';
 import {timecardWorkbookCopy} from './timecard-workbook-copy';
-import {teamCall,type TeamContext} from './team-workflow';
+import {useTeam} from './team-workflow';
 import {scopedReportedAbsences} from './live-timecard-absences';
 import {agencyPayEstimates,payEstimateScopeIsFullMonth} from './agency-pay-estimate';
 import {loadPayEstimateSettings,type PayEstimateSetting} from './pay-estimate-settings';
@@ -42,7 +42,7 @@ export function AgencyTimecardsPanel({organizationId,internalEnabled,factoryEnab
 
 function AgencySource({organizationId,source,c,reviewPanel,estimatesEnabled}:{organizationId:string;source:Source;c:Copy;reviewPanel?:ReactNode;estimatesEnabled:boolean}){
   const {t,i18n}=useTranslation(),tt=(k:string)=>t('timecards.'+k);
-  const [team,setTeam]=useState<TeamContext>();
+  const {value:team}=useTeam(organizationId);
   const [paySettings,setPaySettings]=useState<PayEstimateSetting[]>(),[payUnavailable,setPayUnavailable]=useState(false),[exportWages,setExportWages]=useState(false);
   const wageCopy=payEstimateCopy(i18n.resolvedLanguage||i18n.language||'pl');
   const [data,setData]=useState<TimecardContext|FactoryHoursContext>(),[status,setStatus]=useState('checking'),[revision,setRevision]=useState(0);
@@ -66,14 +66,6 @@ function AgencySource({organizationId,source,c,reviewPanel,estimatesEnabled}:{or
       if(!controller.signal.aborted){setData(undefined);setSnapshot(undefined);setStatus(['login','denied'].includes(error.message)?error.message:'unavailable')}
     });
     return ()=>controller.abort();
-  },[organizationId,source,revision]);
-  useEffect(()=>{
-    if(source!=='internal')return;
-    const ctl=new AbortController();
-    async function load(){try{const value=await teamCall(organizationId,'context',undefined,ctl.signal);if(!ctl.signal.aborted)setTeam(value)}catch{if(!ctl.signal.aborted)setTeam(undefined)}}
-    void load();
-    window.addEventListener('timeax-team-changed',load);
-    return()=>{ctl.abort();window.removeEventListener('timeax-team-changed',load)};
   },[organizationId,source,revision]);
   useEffect(()=>()=>pending.current?.abort(),[]);
 
