@@ -1,5 +1,21 @@
 -- Run after the canonical factory registration migration. No organizations or access grants are created here.
 BEGIN;
+SET LOCAL lock_timeout='5s';
+-- Managed postgres has ADMIN without inherited object-owner privileges.
+-- Lease only this role, then verify that the original membership rows were restored.
+CREATE TEMP TABLE timeax_factory_connect_lease(prior jsonb NOT NULL) ON COMMIT DROP;
+DO $lease$
+DECLARE owner_oid constant oid:='timeax_factory_registration_owner'::regrole;
+ operator_oid constant oid:=current_user::regrole;
+BEGIN
+ IF NOT pg_has_role(operator_oid,owner_oid,'USAGE') THEN
+  INSERT INTO pg_temp.timeax_factory_connect_lease
+   SELECT COALESCE(jsonb_object_agg(grantor::text,jsonb_build_array(admin_option,inherit_option,set_option)),'{}'::jsonb)
+   FROM pg_auth_members WHERE roleid=owner_oid AND member=operator_oid;
+  EXECUTE format('GRANT %I TO %I WITH INHERIT TRUE',pg_get_userbyid(owner_oid),current_user);
+ END IF;
+END
+$lease$;
 ALTER TABLE timeax_core.agency_factory_connection_invitations
  ADD COLUMN proposed_name text CHECK(length(proposed_name) BETWEEN 1 AND 120),
  ADD COLUMN proposed_address text CHECK(length(proposed_address) BETWEEN 1 AND 200),
@@ -112,4 +128,23 @@ BEGIN
  EXECUTE ddl;
 END
 $patch$;
+DO $restore$
+DECLARE owner_oid constant oid:='timeax_factory_registration_owner'::regrole;
+ operator_oid constant oid:=current_user::regrole;
+ before_rows jsonb; after_rows jsonb; membership record;
+BEGIN
+ SELECT prior INTO before_rows FROM pg_temp.timeax_factory_connect_lease;
+ IF NOT FOUND THEN RETURN;END IF;
+ FOR membership IN SELECT grantor,inherit_option FROM pg_auth_members WHERE roleid=owner_oid AND member=operator_oid LOOP
+  IF NOT before_rows?(membership.grantor::text) THEN
+   EXECUTE format('REVOKE %I FROM %I GRANTED BY %I RESTRICT',pg_get_userbyid(owner_oid),current_user,pg_get_userbyid(membership.grantor));
+  ELSIF membership.inherit_option AND NOT (before_rows->membership.grantor::text->>1)::boolean THEN
+   EXECUTE format('REVOKE INHERIT OPTION FOR %I FROM %I GRANTED BY %I RESTRICT',pg_get_userbyid(owner_oid),current_user,pg_get_userbyid(membership.grantor));
+  END IF;
+ END LOOP;
+ SELECT COALESCE(jsonb_object_agg(grantor::text,jsonb_build_array(admin_option,inherit_option,set_option)),'{}'::jsonb)
+ INTO after_rows FROM pg_auth_members WHERE roleid=owner_oid AND member=operator_oid;
+ IF after_rows IS DISTINCT FROM before_rows THEN RAISE EXCEPTION 'Factory registration authority not restored';END IF;
+END
+$restore$;
 COMMIT;
