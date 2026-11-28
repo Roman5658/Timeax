@@ -9,15 +9,21 @@ import "./account-admin.css";
 
 type WorkerTermsReceipt={version:string;acceptedAt:string;documentSha256:string;method:'worker-terms-checkbox'};
 type Account = { id: string; email: string | null; createdAt: string; verified: boolean; termsReceipt?: {version: string; acceptedAt: string} | null; workerTermsReceipts?: WorkerTermsReceipt[] };
-type ResetImpact = Record<"workerAccountsKept" | "payslipsKept" | "worksitesRemoved" | "shiftsRemoved",number>;
-type Preview = { id: string; email: string; scope: string; canDelete: boolean; token: string | null; reset?: {organizationName:string;impact:ResetImpact} };
+type ResetImpact = Partial<Record<"workerAccountsKept" | "payslipsKept" | "worksitesRemoved" | "shiftsRemoved" | "membershipsRemoved" | "payslipsRemoved",number>>;
+type Preview = { id: string; email: string; scope: string; canDelete: boolean; token: string | null; reset?: {organizationName?:string;impact:ResetImpact} };
 const resetCopy = {
-  ru: {note:"Будут удалены тестовое агентство и вход его владельца. Работники будут отвязаны, но сохранят свои аккаунты и выданные расчётки.", workerAccountsKept:"Аккаунты работников останутся",payslipsKept:"Выданные расчётки сохранятся",worksitesRemoved:"Площадки будут удалены",shiftsRemoved:"Смены будут удалены",submit:"Удалить агентство и аккаунт"},
-  pl: {note:"Agencja testowa i konto jej właściciela zostaną usunięte. Konta pracowników i otrzymane rozliczenia pozostaną.",workerAccountsKept:"Zachowane konta pracowników",payslipsKept:"Zachowane wydane rozliczenia",worksitesRemoved:"Usuwane miejsca pracy",shiftsRemoved:"Usuwane zmiany",submit:"Usuń agencję i konto"},
-  uk: {note:"Тестове агентство й обліковий запис його власника буде видалено. Працівники збережуть свої акаунти й отримані розрахункові листки.",workerAccountsKept:"Акаунти працівників залишаться",payslipsKept:"Видані розрахунки залишаться",worksitesRemoved:"Майданчики буде видалено",shiftsRemoved:"Зміни буде видалено",submit:"Видалити агентство й акаунт"},
-  en: {note:"The test agency and its owner’s login will be deleted. Workers will be detached, but will keep their accounts and issued payslips.",workerAccountsKept:"Worker accounts kept",payslipsKept:"Issued payslips kept",worksitesRemoved:"Worksites removed",shiftsRemoved:"Shifts removed",submit:"Delete agency and account"},
+  ru: {note:"Будут удалены агентство и вход его владельца. Работники будут отвязаны, но сохранят свои аккаунты и выданные расчётки.", workerAccountsKept:"Аккаунты работников останутся",payslipsKept:"Выданные расчётки сохранятся",worksitesRemoved:"Площадки будут удалены",shiftsRemoved:"Смены будут удалены",submit:"Удалить агентство и аккаунт"},
+  pl: {note:"Agencja i konto jej właściciela zostaną usunięte. Konta pracowników i otrzymane rozliczenia pozostaną.",workerAccountsKept:"Zachowane konta pracowników",payslipsKept:"Zachowane wydane rozliczenia",worksitesRemoved:"Usuwane miejsca pracy",shiftsRemoved:"Usuwane zmiany",submit:"Usuń agencję i konto"},
+  uk: {note:"Агентство й обліковий запис його власника буде видалено. Працівники збережуть свої акаунти й отримані розрахункові листки.",workerAccountsKept:"Акаунти працівників залишаться",payslipsKept:"Видані розрахунки залишаться",worksitesRemoved:"Майданчики буде видалено",shiftsRemoved:"Зміни буде видалено",submit:"Видалити агентство й акаунт"},
+  en: {note:"The agency and its owner’s login will be deleted. Workers will be detached, but will keep their accounts and issued payslips.",workerAccountsKept:"Worker accounts kept",payslipsKept:"Issued payslips kept",worksitesRemoved:"Worksites removed",shiftsRemoved:"Shifts removed",submit:"Delete agency and account"},
 };
-const impactKeys = ["workerAccountsKept","payslipsKept","worksitesRemoved","shiftsRemoved"] as const;
+const impactKeys = ["membershipsRemoved","payslipsRemoved","workerAccountsKept","payslipsKept","worksitesRemoved","shiftsRemoved"] as const;
+const accountResetCopy = {
+  ru:{worker:"Аккаунт, прежние связи, смены и личные расчётки этого работника будут удалены.",factory:"Завод и вход владельца будут удалены. Входы других пользователей останутся.",membershipsRemoved:"Связи будут удалены",payslipsRemoved:"Личные расчётки будут удалены",submit:"Удалить полностью"},
+  pl:{worker:"Konto, powiązania, zmiany i osobiste rozliczenia pracownika zostaną usunięte.",factory:"Zakład i konto właściciela zostaną usunięte. Konta pozostałych użytkowników pozostaną.",membershipsRemoved:"Usuwane powiązania",payslipsRemoved:"Usuwane rozliczenia",submit:"Usuń na stałe"},
+  uk:{worker:"Акаунт, зв’язки, зміни й особисті розрахунки працівника буде видалено.",factory:"Завод і вхід власника буде видалено. Акаунти інших користувачів залишаться.",membershipsRemoved:"Зв’язки буде видалено",payslipsRemoved:"Особисті розрахунки буде видалено",submit:"Видалити повністю"},
+  en:{worker:"This worker’s account, memberships, shifts and personal payslips will be deleted.",factory:"The factory and its owner’s login will be deleted. Other user accounts will remain.",membershipsRemoved:"Memberships removed",payslipsRemoved:"Personal payslips removed",submit:"Delete permanently"},
+};
 type Organization = { id: string; name: string; kind: "agency" | "factory"; state: string; activeMembers: number };
 type Summary = { accounts: number; verifiedAccounts: number; agencies: number; factories: number; newAgencies30d: number };
 type OrganizationKindFilter = "all" | Organization["kind"];
@@ -40,6 +46,7 @@ export function AccountAdminPage() {
   const lang = (i18n.resolvedLanguage ?? "en").split("-")[0] as keyof typeof accountAdminCopy;
   const strings: Record<string, string> = accountAdminCopy[lang] ?? accountAdminCopy.en;
   const resetText = resetCopy[lang] ?? resetCopy.en;
+  const accountResetText=accountResetCopy[lang]??accountResetCopy.en;
   const tx = (k: string) => strings[k] ?? strings.unavailable;
   const location = useLocation();
   const section = location.pathname.replace(/\/$/, "") === "/super-admin/accounts" ? "users"
@@ -61,7 +68,6 @@ export function AccountAdminPage() {
   const [search, setSearch] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [supportId,setSupportId]=useState<string>();
-  const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [listBusy, setListBusy] = useState(false);
   const [status, setStatus] = useState("");
@@ -88,13 +94,13 @@ export function AccountAdminPage() {
   function lock() {
     setDraftKey(""); setKey(""); setSummary(null); setAccounts(null); setOrganizations(null);
     setCursor(null); setNext(null); setDraftSearch(""); setSearch(null);
-    setPreview(null); setConfirm(""); setListBusy(false); setListError(""); setStatus("");
+    setPreview(null); setListBusy(false); setListError(""); setStatus("");
     clearOrganizationFilters();
     setSupportId(undefined);
   }
 
   useEffect(() => {
-    setPreview(null); setConfirm(""); setStatus("");
+    setPreview(null); setStatus("");
     setCursor(null); setSearch(null); setDraftSearch("");
     setSupportId(undefined);
   }, [section]);
@@ -154,25 +160,23 @@ export function AccountAdminPage() {
 
   async function review(id: string) {
     setSupportId(undefined);
-    setPreview(null); setConfirm("");
+    setPreview(null);
     const result = await ownerCall<Preview>(key, { action: "preview", id });
     if (sectionRef.current === "users") setPreview(result);
   }
 
   async function remove(item: Preview) {
-    if (!item.token || (!item.reset && confirm !== item.email)) return;
-    const result = await ownerCall<{ state: string; id: string }>(key, item.reset
-      ? { action: "delete-test-agency", token: item.token, confirmed:true }
-      : { action: "delete", token: item.token, email: confirm });
+    if (!item.token) return;
+    const result = await ownerCall<{ state: string; id: string }>(key, { action: "delete-test-account", token: item.token, confirmed:true });
     if (result.state !== "deleted" || result.id !== item.id) throw Error("unavailable");
     setAccounts(items => items?.filter(a => a.id !== result.id) ?? null);
-    setPreview(null); setConfirm(""); setStatus("deleted");
+    setPreview(null); setStatus("deleted");
     refresh(n => n + 1);
   }
 
   function goTo(after: string | null) {
     setSupportId(undefined);
-    setPreview(null); setConfirm(""); setStatus("");
+    setPreview(null); setStatus("");
     setCursor(after ? { section, after } : null);
   }
 
@@ -272,7 +276,7 @@ export function AccountAdminPage() {
                 </details>)}
               </div>
               <div className="form-actions">
-                <button type="button" className="button button--outline" disabled={controlsDisabled} aria-pressed={supportId===a.id} onClick={()=>{setPreview(null);setConfirm("");setSupportId(a.id)}}>
+                <button type="button" className="button button--outline" disabled={controlsDisabled} aria-pressed={supportId===a.id} onClick={()=>{setPreview(null);setSupportId(a.id)}}>
                   {(ownerSupportCopy[lang]??ownerSupportCopy.en).open}
                 </button>
                 <button type="button" className="button button--outline" disabled={controlsDisabled} onClick={() => void run(() => review(a.id))}>{tx("review")}</button>
@@ -294,18 +298,13 @@ export function AccountAdminPage() {
           <h2 tabIndex={-1} ref={previewHeading} id="owner-preview-title">{tx("confirmTitle")}</h2>
           <p>{preview.email}</p>
           {preview.reset ? <>
-            <p><strong>{preview.reset.organizationName}</strong></p>
-            <p>{resetText.note}</p>
-            <ul>{impactKeys.map(k=><li key={k}>{resetText[k]}: {number.format(preview.reset!.impact[k])}</li>)}</ul>
-            {preview.canDelete && preview.token && <button type="button" className="button button--primary" disabled={controlsDisabled} onClick={() => void run(() => remove(preview))}>{resetText.submit}</button>}
+            {preview.reset.organizationName&&<p><strong>{preview.reset.organizationName}</strong></p>}
+            <p>{preview.scope==="test-worker"?accountResetText.worker:preview.scope==="test-factory"?accountResetText.factory:resetText.note}</p>
+            <ul>{impactKeys.map(k=>{const count=preview.reset?.impact[k];return count===undefined?null:<li key={k}>{k==="membershipsRemoved"||k==="payslipsRemoved"?accountResetText[k]:resetText[k]}: {number.format(count)}</li>})}</ul>
+            {preview.canDelete && preview.token && <button type="button" className="button button--primary" disabled={controlsDisabled} onClick={() => void run(() => remove(preview))}>{accountResetText.submit}</button>}
           </> : <p>{tx(preview.scope)}</p>}
-          {!preview.reset && preview.canDelete && preview.token && <form className="auth-form" onSubmit={e => { e.preventDefault(); void run(() => remove(preview)); }}>
-            <label className="field-label">{tx("confirmEmail")}
-              <input type="email" autoComplete="off" value={confirm} onChange={e => setConfirm(e.target.value)} required />
-            </label>
-            <button className="button button--primary" disabled={controlsDisabled || confirm !== preview.email}>{tx("delete")}</button>
-          </form>}
-          <button type="button" className="button button--outline" disabled={busy} onClick={() => { setPreview(null); setConfirm(""); }}>{t("common.close")}</button>
+          {!preview.reset && preview.canDelete && preview.token && <button type="button" className="button button--primary" disabled={controlsDisabled} onClick={() => void run(() => remove(preview))}>{accountResetText.submit}</button>}
+          <button type="button" className="button button--outline" disabled={busy} onClick={() => { setPreview(null); }}>{t("common.close")}</button>
         </section>}
         {status && <p role={status === "deleted" ? "status" : "alert"}>{tx(status)}</p>}
       </div>

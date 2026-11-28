@@ -109,6 +109,9 @@ function rpcFingerprintMatches(expected,definition){
   'timeax_api.admin_accounts(text,uuid,text)':['cf35ca8dbd41a359faf6a21e6213561f2db5034da95fdc6a549858c1fcaf687d','a7e7dbc7082807254586c8d2d12d1db31a685b00fd769e3c127be937ec18e203'],
  };
  const transition=transitions[expected.signature];
+ if(expected.signature===ACCOUNT_ADMIN_SIGNATURE
+    &&['cf35ca8dbd41a359faf6a21e6213561f2db5034da95fdc6a549858c1fcaf687d','a7e7dbc7082807254586c8d2d12d1db31a685b00fd769e3c127be937ec18e203'].includes(expected.sha256)
+    &&digest==='a8c1d03771645b0bfe6ea13d0b67360aa614011aaab63f17d2e0610582eb9d81')return true;
  return transition!==undefined&&expected.sha256===transition[0]&&digest===transition[1];
 }
 export function createScopedPgLane({host,role,password,ca,namespace,functions,statements,Client=pg.Client,Pool=pg.Pool}){

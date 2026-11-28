@@ -102,3 +102,28 @@ test('test agency reset exposes impact and confirms only the exact server-bound 
  assert.equal((await send({...reset,token:next.token})).status,200);
  assert.deepEqual(revoked,[id]);
 });
+
+
+test('shared admin confirmation never takes the target role or account details from the browser',async()=>{
+ const revision='f'.repeat(64),org='33333333-3333-4333-8333-333333333333',calls=[];
+ let scope='test-worker';
+ const h=createAccountAdminHandler({origin,keySha,revoked:()=>{},lane:{async query(_,args){
+  calls.push(args);
+  const reset=scope==='test-worker'
+   ?{revision,impact:{membershipsRemoved:1,payslipsRemoved:2,shiftsRemoved:3}}
+   :{revision,organizationId:org,organizationName:'Factory',impact:{workerAccountsKept:2,payslipsKept:0,worksitesRemoved:1,shiftsRemoved:3}};
+  return {rows:[{result:args[0]==='preview'?{state:'preview',id,email,scope,canDelete:true,reset}:{state:'deleted',id}}]};
+ }}});
+ const send=v=>h(new Request(origin+'/api/timeax/account-admin',{method:'POST',headers:{Origin:origin,Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(v)}));
+ const worker=await (await send({action:'preview',id})).json();
+ assert.deepEqual(worker.reset,{impact:{membershipsRemoved:1,payslipsRemoved:2,shiftsRemoved:3}});
+ assert.equal((await send({action:'delete-test-agency',token:worker.token,confirmed:true})).status,409);
+ assert.equal((await send({action:'delete-test-account',token:worker.token,confirmed:true,scope:'test-factory'})).status,400);
+ assert.equal((await send({action:'delete-test-account',token:worker.token,confirmed:true})).status,200);
+ assert.deepEqual(calls.at(-1),['delete-test-worker',id,JSON.stringify({email,revision})]);
+ scope='test-factory';
+ const factory=await (await send({action:'preview',id})).json();
+ assert.equal(factory.reset.organizationName,'Factory');
+ assert.equal((await send({action:'delete-test-account',token:factory.token,confirmed:true})).status,200);
+ assert.deepEqual(calls.at(-1),['delete-test-factory',id,JSON.stringify({email,organizationId:org,revision})]);
+});
