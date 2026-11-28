@@ -75,7 +75,7 @@ export function PublicWorkerEntry(){
 }
 
 function WorkerAgencyConnection({initialInvite,onSessionExpired,provisioning,autoConnect}:{initialInvite:string;onSessionExpired:()=>void;provisioning:boolean;autoConnect:boolean}){
- const {i18n}=useTranslation(),copy=workerRegistrationCopy(i18n.resolvedLanguage),inviteCopy=workerProvisionCopy(i18n.resolvedLanguage),navigate=useNavigate();
+ const {t,i18n}=useTranslation(),copy=workerRegistrationCopy(i18n.resolvedLanguage),inviteCopy=workerProvisionCopy(i18n.resolvedLanguage),navigate=useNavigate();
  const [invitations,Inv]=useState<EmailInvitation[]>([]),[invitationError,InviteError]=useState(false);
  const [method,M]=useState<'nip'|'invite'>(initialInvite?'invite':'nip'),[nip,N]=useState(''),[code,I]=useState(initialInvite);
  const [value,V]=useState<EnrollmentContext>(),[agency,A]=useState<FoundAgency|null>(),[notice,T]=useState(''),[err,E]=useState('');
@@ -137,6 +137,7 @@ function WorkerAgencyConnection({initialInvite,onSessionExpired,provisioning,aut
  if(value?.memberships.some(m=>m.role==='agency_admin')&&!workers.length&&!invitations.length)return <p role="status" className="notice-box">{copy.agencySignedIn}</p>;
  return <section aria-label={copy.connect} aria-busy={busy}>
   <p role="status">{copy.verified}</p>
+  {value&&!workers.length&&<p><Link className="button button--outline" to="/account">{t('workerAccount.title')}</Link></p>}
   {invitations.length>0&&<section aria-label={inviteCopy.invitations}><h2>{inviteCopy.invitations}</h2>
    {invitations.map(invite=><article className="notice-box" key={invite.id}><strong>{invite.name}</strong>
     <p><button type="button" className="button button--primary" disabled={busy} onClick={()=>void acceptInvite(invite)}>{inviteCopy.accept}</button></p>

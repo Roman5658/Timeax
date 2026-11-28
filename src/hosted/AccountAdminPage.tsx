@@ -9,7 +9,15 @@ import "./account-admin.css";
 
 type WorkerTermsReceipt={version:string;acceptedAt:string;documentSha256:string;method:'worker-terms-checkbox'};
 type Account = { id: string; email: string | null; createdAt: string; verified: boolean; termsReceipt?: {version: string; acceptedAt: string} | null; workerTermsReceipts?: WorkerTermsReceipt[] };
-type Preview = { id: string; email: string; scope: string; canDelete: boolean; token: string | null };
+type ResetImpact = Record<"workerAccountsKept" | "payslipsKept" | "worksitesRemoved" | "shiftsRemoved",number>;
+type Preview = { id: string; email: string; scope: string; canDelete: boolean; token: string | null; reset?: {organizationName:string;impact:ResetImpact} };
+const resetCopy = {
+  ru: {note:"Будут удалены тестовое агентство и вход его владельца. Работники будут отвязаны, но сохранят свои аккаунты и выданные расчётки.", workerAccountsKept:"Аккаунты работников останутся",payslipsKept:"Выданные расчётки сохранятся",worksitesRemoved:"Площадки будут удалены",shiftsRemoved:"Смены будут удалены",submit:"Удалить агентство и аккаунт"},
+  pl: {note:"Agencja testowa i konto jej właściciela zostaną usunięte. Konta pracowników i otrzymane rozliczenia pozostaną.",workerAccountsKept:"Zachowane konta pracowników",payslipsKept:"Zachowane wydane rozliczenia",worksitesRemoved:"Usuwane miejsca pracy",shiftsRemoved:"Usuwane zmiany",submit:"Usuń agencję i konto"},
+  uk: {note:"Тестове агентство й обліковий запис його власника буде видалено. Працівники збережуть свої акаунти й отримані розрахункові листки.",workerAccountsKept:"Акаунти працівників залишаться",payslipsKept:"Видані розрахунки залишаться",worksitesRemoved:"Майданчики буде видалено",shiftsRemoved:"Зміни буде видалено",submit:"Видалити агентство й акаунт"},
+  en: {note:"The test agency and its owner’s login will be deleted. Workers will be detached, but will keep their accounts and issued payslips.",workerAccountsKept:"Worker accounts kept",payslipsKept:"Issued payslips kept",worksitesRemoved:"Worksites removed",shiftsRemoved:"Shifts removed",submit:"Delete agency and account"},
+};
+const impactKeys = ["workerAccountsKept","payslipsKept","worksitesRemoved","shiftsRemoved"] as const;
 type Organization = { id: string; name: string; kind: "agency" | "factory"; state: string; activeMembers: number };
 type Summary = { accounts: number; verifiedAccounts: number; agencies: number; factories: number; newAgencies30d: number };
 type OrganizationKindFilter = "all" | Organization["kind"];
@@ -31,6 +39,7 @@ export function AccountAdminPage() {
   const { t, i18n } = useTranslation();
   const lang = (i18n.resolvedLanguage ?? "en").split("-")[0] as keyof typeof accountAdminCopy;
   const strings: Record<string, string> = accountAdminCopy[lang] ?? accountAdminCopy.en;
+  const resetText = resetCopy[lang] ?? resetCopy.en;
   const tx = (k: string) => strings[k] ?? strings.unavailable;
   const location = useLocation();
   const section = location.pathname.replace(/\/$/, "") === "/super-admin/accounts" ? "users"
@@ -151,8 +160,10 @@ export function AccountAdminPage() {
   }
 
   async function remove(item: Preview) {
-    if (!item.token || confirm !== item.email) return;
-    const result = await ownerCall<{ state: string; id: string }>(key, { action: "delete", token: item.token, email: confirm });
+    if (!item.token || (!item.reset && confirm !== item.email)) return;
+    const result = await ownerCall<{ state: string; id: string }>(key, item.reset
+      ? { action: "delete-test-agency", token: item.token, confirmed:true }
+      : { action: "delete", token: item.token, email: confirm });
     if (result.state !== "deleted" || result.id !== item.id) throw Error("unavailable");
     setAccounts(items => items?.filter(a => a.id !== result.id) ?? null);
     setPreview(null); setConfirm(""); setStatus("deleted");
@@ -281,8 +292,14 @@ export function AccountAdminPage() {
         }} onClose={()=>setSupportId(undefined)}/>}
         {section === "users" && preview && <section className="notice-box owner-panel__leaf" aria-labelledby="owner-preview-title">
           <h2 tabIndex={-1} ref={previewHeading} id="owner-preview-title">{tx("confirmTitle")}</h2>
-          <p>{preview.email}</p><p>{tx(preview.scope)}</p>
-          {preview.canDelete && preview.token && <form className="auth-form" onSubmit={e => { e.preventDefault(); void run(() => remove(preview)); }}>
+          <p>{preview.email}</p>
+          {preview.reset ? <>
+            <p><strong>{preview.reset.organizationName}</strong></p>
+            <p>{resetText.note}</p>
+            <ul>{impactKeys.map(k=><li key={k}>{resetText[k]}: {number.format(preview.reset!.impact[k])}</li>)}</ul>
+            {preview.canDelete && preview.token && <button type="button" className="button button--primary" disabled={controlsDisabled} onClick={() => void run(() => remove(preview))}>{resetText.submit}</button>}
+          </> : <p>{tx(preview.scope)}</p>}
+          {!preview.reset && preview.canDelete && preview.token && <form className="auth-form" onSubmit={e => { e.preventDefault(); void run(() => remove(preview)); }}>
             <label className="field-label">{tx("confirmEmail")}
               <input type="email" autoComplete="off" value={confirm} onChange={e => setConfirm(e.target.value)} required />
             </label>

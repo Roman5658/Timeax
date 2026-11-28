@@ -12,6 +12,13 @@ export const ACCOUNT_SUPPORT_SQL='SELECT timeax_api.admin_support($1::text,$2::u
 const uuid=v=>typeof v==='string'&&/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/.test(v);
 const exact=(v,k)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length===k.length&&k.every(x=>Object.hasOwn(v,x));
 const validCount=v=>Number.isSafeInteger(v)&&v>=0;
+const testAgencyCounts=['workerAccountsKept','payslipsKept','worksitesRemoved','shiftsRemoved'];
+function testAgencyPreview(value){
+ if(!value||!uuid(value.organizationId)||typeof value.organizationName!=='string'||!value.organizationName.length||value.organizationName.length>200||
+    typeof value.revision!=='string'||!/^[0-9a-f]{64}$/.test(value.revision)||
+    !exact(value.impact,testAgencyCounts)||!testAgencyCounts.every(k=>validCount(value.impact[k])))throw Error('Invalid test-agency preview');
+ return {organizationId:value.organizationId,organizationName:value.organizationName,revision:value.revision,impact:value.impact};
+}
 const validSearch=v=>v===null||typeof v==='string'&&v.length>=1&&v.length<=254&&v.trim()===v&&!/[\x00-\x1f\x7f-\x9f]/.test(v);
 const supportAction=/^support-(account|shifts|correct-shift|revoke-sessions|audit)$/;
 const time=x=>typeof x==='string'&&/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/.test(x);
@@ -129,15 +136,29 @@ export function createAccountAdminHandler({origin,keySha,lane,supportLane=null,r
     const p=await sql('preview',v.id);
     if(p?.state!=='preview'||p.id!==v.id)return reply(404,{error:'missing'});
     for(const [key,item] of previews)if(item.expires<=current)previews.delete(key);
-    if(!p.canDelete||typeof p.email!=='string')return reply(200,{...p,token:null});
+    const preview={id:p.id,email:p.email,scope:p.scope,createdAt:p.createdAt,canDelete:p.canDelete===true};
+    const reset=p.scope==='test-agency'&&preview.canDelete?testAgencyPreview(p.reset):null;
+    if(!preview.canDelete||typeof p.email!=='string')return reply(200,{...preview,token:null});
     if(previews.size>=64)return reply(429,{error:'wait'});
     const token=randomBytes(32).toString('base64url');
-    previews.set(token,{id:p.id,email:p.email,expires:current+120_000});
-    return reply(200,{...p,token});
+    previews.set(token,{id:p.id,email:p.email,reset,expires:current+120_000});
+    return reply(200,{...preview,token,...(reset?{reset:{organizationName:reset.organizationName,impact:reset.impact}}:{})});
+   }
+   if(exact(v,['action','token','confirmed'])&&v.action==='delete-test-agency'&&typeof v.token==='string'&&v.confirmed===true){
+    const p=previews.get(v.token);
+    if(!p?.reset||p.expires<=current)return reply(409,{error:'changed'});
+    previews.delete(v.token);
+    const r=await sql('delete-test-agency',p.id,JSON.stringify({
+     email:p.email,organizationId:p.reset.organizationId,revision:p.reset.revision,
+    }));
+    if(r?.state==='changed')return reply(409,{error:'changed'});
+    if(r?.state!=='deleted'||r.id!==p.id)return reply(409,{error:'blocked'});
+    revoked(p.id);
+    return reply(200,{state:'deleted',id:p.id});
    }
    if(exact(v,['action','token','email'])&&v.action==='delete'&&typeof v.token==='string'){
     const p=previews.get(v.token);
-    if(!p||p.expires<=current||v.email!==p.email)return reply(409,{error:'changed'});
+    if(!p||p.reset||p.expires<=current||v.email!==p.email)return reply(409,{error:'changed'});
     previews.delete(v.token);
     const result=await sql('delete',p.id,p.email);
     if(result?.state!=='deleted'||result.id!==p.id)return reply(409,{error:'blocked'});

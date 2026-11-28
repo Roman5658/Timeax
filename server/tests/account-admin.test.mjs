@@ -73,3 +73,32 @@ test('owner summary fails closed for impossible metrics',async()=>{
  assert.equal(res.status,503);
  assert.equal(res.headers.get('Cache-Control'),'private, no-store');
 });
+
+
+test('test agency reset exposes impact and confirms only the exact server-bound preview',async()=>{
+ const org='33333333-3333-4333-8333-333333333333',revision='a'.repeat(64),calls=[],revoked=[];
+ let changed=false;
+ const impact={workerAccountsKept:2,payslipsKept:1,worksitesRemoved:1,shiftsRemoved:3};
+ const handler=createAccountAdminHandler({origin,keySha,revoked:x=>revoked.push(x),lane:{async query(_,args){
+  calls.push(args);
+  return {rows:[{result:args[0]==='preview'?{state:'preview',id,email,scope:'test-agency',canDelete:true,reset:{organizationId:org,organizationName:'Fixture',revision,impact,privateNote:'hidden'}}:changed?{state:'changed'}:{state:'deleted',id}}]};
+ }}});
+ const send=(v,key=token)=>handler(new Request(origin+'/api/timeax/account-admin',{method:'POST',headers:{Origin:origin,Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify(v)}));
+ const preview=await (await send({action:'preview',id})).json();
+ assert.deepEqual(preview.reset,{organizationName:'Fixture',impact});
+ const reset={action:'delete-test-agency',token:preview.token,confirmed:true};
+ assert.equal((await send(reset,'wrong')).status,401);
+ assert.equal((await send({...reset,confirmed:false})).status,400);
+ assert.equal((await send({...reset,organizationId:'another'})).status,400);
+ assert.equal((await send({action:'delete',token:preview.token,email})).status,409);
+ assert.equal(calls.length,1);
+ changed=true;
+ assert.equal((await send(reset)).status,409);
+ assert.deepEqual(calls.at(-1),['delete-test-agency',id,JSON.stringify({email,organizationId:org,revision})]);
+ assert.equal(revoked.length,0);
+ assert.equal((await send(reset)).status,409);
+ changed=false;
+ const next=await (await send({action:'preview',id})).json();
+ assert.equal((await send({...reset,token:next.token})).status,200);
+ assert.deepEqual(revoked,[id]);
+});

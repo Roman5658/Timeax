@@ -102,9 +102,14 @@ export function isApprovedRpcOwner(signature,owner){
 function rpcFingerprintMatches(expected,definition){
  if(typeof definition!=='string')return false;
  const digest=createHash('sha256').update(definition).digest('hex');
- return digest===expected.sha256||expected.signature==='timeax_api.team_workflow(text,text,text,jsonb,jsonb)'
-  &&expected.sha256==='bc946a1d445103b82b39512e08afaf73545fe3d29b7b30ad671bc418a54f9fa2'
-  &&digest==='c8d09a03067adccecffc7bfd1ff41eb10d1a80553ec2a637ca831664b053d721';
+ if(digest===expected.sha256)return true;
+ const transitions={
+  'timeax_api.team_workflow(text,text,text,jsonb,jsonb)':['bc946a1d445103b82b39512e08afaf73545fe3d29b7b30ad671bc418a54f9fa2','c8d09a03067adccecffc7bfd1ff41eb10d1a80553ec2a637ca831664b053d721'],
+  'timeax_api.account_lifecycle(text,text,text,jsonb)':['185ca20355303ae01801381d4e5a41e255991120625bf92debf17050e293326f','32b4f1d0453723efc0da00786e95447317e22ee4099b8a0716fad85834d0f065'],
+  'timeax_api.admin_accounts(text,uuid,text)':['cf35ca8dbd41a359faf6a21e6213561f2db5034da95fdc6a549858c1fcaf687d','a7e7dbc7082807254586c8d2d12d1db31a685b00fd769e3c127be937ec18e203'],
+ };
+ const transition=transitions[expected.signature];
+ return transition!==undefined&&expected.sha256===transition[0]&&digest===transition[1];
 }
 export function createScopedPgLane({host,role,password,ca,namespace,functions,statements,Client=pg.Client,Pool=pg.Pool}){
  if(!HOST.test(host)||!/^timeax_[a-z0-9_]+_login$/.test(role)||typeof password!=='string'||password.length<24
