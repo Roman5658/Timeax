@@ -93,6 +93,7 @@ export const productionCopy={
 const settingsCopy = {
  "ru": {
   "agencyDetails": "Данные агентства",
+  "editAgencyDetails": "Редактировать данные",
   "agencyAddress": "Адрес агентства",
   "invoiceEmail": "Почта для фактур за подписку",
   "invoiceEmailHint": "Укажи рабочий адрес, например почту бухгалтерии. Когда оплата подписки будет доступна, на этот адрес будут приходить фактуры за подписку Timeax. Для входа он не используется.",
@@ -104,6 +105,7 @@ const settingsCopy = {
  },
  "pl": {
   "agencyDetails": "Dane agencji",
+  "editAgencyDetails": "Edytuj dane",
   "agencyAddress": "Adres agencji",
   "invoiceEmail": "E-mail do faktur za subskrypcję",
   "invoiceEmailHint": "Podaj adres firmowy, np. e-mail księgowości. Gdy płatności za subskrypcję będą dostępne, na ten adres będą trafiać faktury za subskrypcję Timeax. Ten adres nie służy do logowania.",
@@ -115,6 +117,7 @@ const settingsCopy = {
  },
  "uk": {
   "agencyDetails": "Дані агентства",
+  "editAgencyDetails": "Редагувати дані",
   "agencyAddress": "Адреса агентства",
   "invoiceEmail": "Пошта для рахунків за підписку",
   "invoiceEmailHint": "Вкажи робочу адресу, наприклад пошту бухгалтерії. Коли оплата підписки стане доступною, на цю адресу надходитимуть рахунки за підписку Timeax. Ця адреса не використовується для входу.",
@@ -126,6 +129,7 @@ const settingsCopy = {
  },
  "en": {
   "agencyDetails": "Agency details",
+  "editAgencyDetails": "Edit details",
   "agencyAddress": "Agency address",
   "invoiceEmail": "Subscription invoice email",
   "invoiceEmailHint": "Enter a work address, such as your accounting inbox. When subscription payments become available, Timeax subscription invoices will be sent here. This is not your sign-in email.",

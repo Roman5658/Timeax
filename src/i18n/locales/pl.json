@@ -52,6 +52,8 @@
     "signOut": "Wyloguj"
   },
   "publicSignup": {
+    "invalidEmailCode": "Kod jest nieprawidłowy lub wygasł. Wpisz kod z ostatniego e-maila albo poproś o nowy.",
+    "verifyEmailUnavailable": "Nie udało się teraz sprawdzić kodu. Spróbuj ponownie.",
     "agencyNameAfterCode": "Po potwierdzeniu adresu e-mail podasz nazwę agencji.",
     "unfinishedAgency": "Adres e-mail jest potwierdzony, ale panel agencji nie został jeszcze utworzony. Możesz kontynuować lub zacząć od potwierdzenia adresu.",
     "continueAgency": "Kontynuuj rejestrację",

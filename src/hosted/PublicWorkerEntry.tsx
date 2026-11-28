@@ -35,7 +35,6 @@ export function PublicWorkerEntry(){
  const client=useMemo(()=>createWorkingRegistrationClient(location.origin,fetch.bind(window),'enrollment'),[]);
  const [purpose,setPurpose]=useState<'enrollment'|'existing'>('enrollment');
  const [scope,S]=useState<AccessContext>(),[checking,C]=useState(true),[revision,R]=useState(0);
- const [switching,Switch]=useState(false),[switchFailed,Failed]=useState(false),signout=useRef<AbortController|null>(null);
  useEffect(()=>{
   const c=new AbortController();C(true);
   void client.context(c.signal).then(next=>{if(!c.signal.aborted)S(next)}).finally(()=>{if(!c.signal.aborted)C(false)});
@@ -45,25 +44,14 @@ export function PublicWorkerEntry(){
   const url=new URL(location.href);const q=url.searchParams;
   const secret=new URLSearchParams(url.hash.slice(1)).has('invite')||q.has('invite')||q.has('invitation');
   if(secret){q.delete('invite');q.delete('invitation');history.replaceState(history.state,'',url.pathname+url.search)}
-  return()=>signout.current?.abort();
  },[]);
- async function switchAccount(){
-  if(signout.current)return;
-  const c=new AbortController();signout.current=c;Switch(true);Failed(false);
-  try{
-   if(!await client.logout(c.signal)){if(!c.signal.aborted)Failed(true);return}
-   S(await client.context(c.signal));setPurpose('enrollment');R(n=>n+1);
-  }finally{if(!c.signal.aborted){signout.current=null;Switch(false)}}
- }
  const confirmed=scope?.state==='verified',ready=scope?.workerSelfService===true;
  return <RegistrationFrame title={copy.title} lead={copy.lead}>
   <ol className="enrollment-progress"><li aria-current={!confirmed?'step':undefined} className={confirmed?'complete':undefined}>{copy.account}</li><li aria-current={confirmed?'step':undefined}>{copy.connect}</li></ol>
   {!scope&&checking?<p role="status">{t('closedHosted.checking')}</p>:!ready?
    <div role="status" className="notice-box"><p>{copy.unavailable}</p><button className="button button--outline" type="button" onClick={()=>R(n=>n+1)}>{copy.retry}</button></div>:
-   confirmed?<><WorkerTermsGate onSessionExpired={()=>R(n=>n+1)}><WorkerAgencyConnection provisioning={scope?.workerProvisioning===true} initialInvite={initialInvite} autoConnect={fromLogin&&!initialInvite} onSessionExpired={()=>R(n=>n+1)}/></WorkerTermsGate>
-    <p><button className="button button--outline" type="button" disabled={switching} onClick={()=>void switchAccount()}>{copy.switchAccount}</button></p>
-    {switchFailed&&<p role="alert">{copy.unavailable}</p>}
-   </>:<>
+   confirmed?<WorkerTermsGate onSessionExpired={()=>R(n=>n+1)}><WorkerAgencyConnection provisioning={scope?.workerProvisioning===true} initialInvite={initialInvite} autoConnect={fromLogin&&!initialInvite} onSessionExpired={()=>R(n=>n+1)}/></WorkerTermsGate>
+   :<>
     <div className="form-actions">
      <button className={'button '+(purpose==='enrollment'?'button--primary':'button--outline')} type="button" aria-pressed={purpose==='enrollment'} onClick={()=>setPurpose('enrollment')}>{copy.newAccount}</button>
      <button className={'button '+(purpose==='existing'?'button--primary':'button--outline')} type="button" aria-pressed={purpose==='existing'} onClick={()=>setPurpose('existing')}>{copy.existingAccount}</button>

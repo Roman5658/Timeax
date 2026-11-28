@@ -97,8 +97,8 @@ export function createWorkingRegistrationClient(origin:string,transport:typeof f
   async function verifyCode(email:string,code:string,signal:AbortSignal):Promise<ActionState>{
     if(!emailIdentity&&!validEmail(email)||!(validOtp(code,6)||validOtp(code,8)))return "invalid";
     const scope=await context(signal);
-    if(signal.aborted||!scope||scope.state==="verified"||!scope.capabilities.verify||
-      emailIdentity&&scope.emailChallengeFlow!==undefined&&scope.emailChallengeFlow!==(purpose==='existing'?'login':'registration'))return "unavailable";
+    if(signal.aborted||!scope||scope.state==="verified")return "unavailable";
+    if(!scope.capabilities.verify||emailIdentity&&scope.emailChallengeFlow!==undefined&&scope.emailChallengeFlow!==(purpose==='existing'?'login':'registration'))return "invalid";
     if(!validOtp(code,scope.otpLength??6))return "invalid";
     try{
       const res=await request(verifyPath,signal,emailIdentity?{code}:{email,code});

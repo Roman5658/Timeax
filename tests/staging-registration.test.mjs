@@ -20,3 +20,20 @@ test('staging client respects closed and anonymous server contexts without a POS
   assert.deepEqual(calls,['GET']);
  }
 });
+
+test('registration distinguishes a rejected or expired email code from a service failure',async()=>{
+ const {createWorkingRegistrationClient}=await import('../src/modules/auth/registration/contract/registration-client.ts');
+ const make=(contextStatus,hasChallenge,verifyStatus)=>{
+  let submissions=0;
+  const c=createWorkingRegistrationClient('https://timeax.pl',async(url,init)=>{
+   const post=init.method==='POST';if(post)submissions++;
+   const value=post?{error:'verification-failed'}:{version:1,state:hasChallenge?'verification-required':'anonymous',otpLength:8,emailChallengeFlow:hasChallenge?'registration':undefined,capabilities:{login:true,verify:hasChallenge,agencyRegistration:false,logout:false}};
+   const response=Response.json(value,{status:post?verifyStatus:contextStatus,headers:{'Cache-Control':'no-store, private'}});
+   Object.defineProperty(response,'url',{value:url});return response;
+  });
+  return {check:()=>c.verifyCode('person@example.test','11111111',new AbortController().signal),sent:()=>submissions};
+ };
+ for(const [context,live,verify,expected,posts] of [[200,true,401,'invalid',1],[200,false,401,'invalid',0],[503,false,401,'unavailable',0],[200,true,503,'unavailable',1]]){
+  const client=make(context,live,verify);assert.equal(await client.check(),expected);assert.equal(client.sent(),posts);
+ }
+});

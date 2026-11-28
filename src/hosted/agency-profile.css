@@ -1,0 +1,16 @@
+.agency-profile-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .5rem 1rem;
+}
+.agency-profile-heading h2 { margin: 0; }
+.agency-profile-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(min(100%,13rem),1fr));
+  gap: .75rem 1.25rem;
+  margin-block: .8rem .15rem;
+}
+.agency-profile-fields dt { font-size: .85em; }
+.agency-profile-fields dd { margin: .15rem 0 0; font-weight: 600; overflow-wrap: anywhere; }

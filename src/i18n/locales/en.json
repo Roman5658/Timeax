@@ -52,6 +52,8 @@
     "signOut": "Sign out"
   },
   "publicSignup": {
+    "invalidEmailCode": "The code is incorrect or has expired. Enter the latest code from your email, or request a new one.",
+    "verifyEmailUnavailable": "We couldn't verify the code right now. Try again.",
     "agencyNameAfterCode": "You’ll enter your agency name after confirming your email.",
     "unfinishedAgency": "Your email is verified, but your agency workspace hasn’t been created yet. You can continue or start over with email verification.",
     "continueAgency": "Continue registration",

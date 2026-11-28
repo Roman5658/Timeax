@@ -3,6 +3,8 @@ import { LegalLink } from "../../../components/PublicExperience";
 import { useTranslation } from "react-i18next";
 import { createWorkingRegistrationClient, isEmailIdentityOrigin, validEmail, validOtp, type AccessContext } from "../registration/contract/registration-client";
 
+const codeErrorNotice=(notice:string)=>notice==="invalid"||notice==="verifyUnavailable";
+
 export function StagingSessionPanel({ onChanged, purpose = "enrollment", audience = "agency", guided = false, signup = false, simple = signup, termsHref }: { termsHref?: string; simple?: boolean; signup?: boolean; guided?: boolean; onChanged: () => void; purpose?: "enrollment" | "existing"; audience?: "agency" | "worker" | "workspace" }) {
   const { t } = useTranslation();
   const emailIdentity=isEmailIdentityOrigin(window.location.origin);
@@ -38,14 +40,15 @@ export function StagingSessionPanel({ onChanged, purpose = "enrollment", audienc
       if (action === "send") message = await client.sendCode(email.trim(), request.signal) === "accepted" ? "accepted" : "closed";
       if (action === "verify") {
         const result = await client.verifyCode(email.trim(), code, request.signal);
-        message = result === "verified" ? "verified" : result === "invalid" ? "invalid" : "closed";
+        message = result === "verified" ? "verified" : result === "invalid" ? "invalid" : "verifyUnavailable";
       }
       if (action === "logout") await client.logout(request.signal);
       const result = await client.context(request.signal);
       if (!mounted.current || request.signal.aborted) return;
-      setScope(result);
+      if (result || !codeErrorNotice(message)) setScope(result);
       if (action === "check" || action === "logout") message = result?.state === "verified" ? "verified" : pendingForPurpose(result) ? "enterCode" : result?.capabilities.login ? "ready" : "closed";
-      setNotice(message); onChanged();
+      setNotice(message);
+      if (!codeErrorNotice(message)) onChanged();
       if (action === "verify" || action === "logout") setCode("");
     } finally {
       if (operation.current === request) operation.current = null;
@@ -59,6 +62,8 @@ export function StagingSessionPanel({ onChanged, purpose = "enrollment", audienc
     return () => window.clearTimeout(timer);
   }, [scope]);
   const verified = scope?.state === "verified";
+  const invalidCode = notice === "invalid";
+  const codeError = codeErrorNotice(notice);
   const otpLength = scope?.otpLength ?? 6;
   const awaitingCode=pendingForPurpose(scope);
   const awaitingAgencyCode=Boolean(termsHref&&awaitingCode);
@@ -76,7 +81,7 @@ export function StagingSessionPanel({ onChanged, purpose = "enrollment", audienc
   if (simple && verified) return null;
   return <section aria-label={sessionText("title")} className="registration-session">
     {!simple && <h2>{sessionText("title")}</h2>}
-    {(!simple || !["checking", "ready"].includes(notice)) && <p className="notice-box" role="status" data-testid="session-status">{sessionText(!simple && busy ? "checking" : notice)}</p>}
+    {!codeError && (!simple || !["checking", "ready"].includes(notice)) && <p className="notice-box" role="status" data-testid="session-status">{sessionText(!simple && busy ? "checking" : notice)}</p>}
     {!guided&&<p className="muted-copy">{sessionText("scope")}</p>}
     {!verified && <form className="auth-form" onSubmit={submit} aria-busy={busy}>
       {!guided&&<p className="muted-copy">{t("publicExperience.codePurpose")}</p>}
@@ -90,8 +95,9 @@ export function StagingSessionPanel({ onChanged, purpose = "enrollment", audienc
         <input id="enrollment-email" aria-describedby={termsHref?"agency-email-use":"enrollment-privacy"} type="email" autoComplete="email" maxLength={254} value={email} disabled={busy} onChange={e => setEmail(e.target.value)} required={!emailIdentity || !awaitingCode} />
       </label>
       {awaitingCode && <label className="field-label" htmlFor="enrollment-code"><span>{sessionText("code")}</span>
-        <input id="enrollment-code" inputMode="numeric" autoComplete="one-time-code" pattern={"[0-9]{" + otpLength + "}"} minLength={otpLength} maxLength={otpLength} value={code} disabled={busy} onChange={e => setCode(e.target.value)} required={!emailIdentity || !awaitingCode} />
+        <input id="enrollment-code" inputMode="numeric" autoComplete="one-time-code" aria-invalid={invalidCode||undefined} aria-describedby={codeError?"enrollment-code-error":undefined} pattern={"[0-9]{" + otpLength + "}"} minLength={otpLength} maxLength={otpLength} value={code} disabled={busy} onChange={e => setCode(e.target.value)} required={!emailIdentity || !awaitingCode} />
       </label>}
+      {codeError&&<p className="notice-box" id="enrollment-code-error" role="alert" data-testid="session-status">{t(invalidCode?"publicSignup.invalidEmailCode":"publicSignup.verifyEmailUnavailable")}</p>}
       <button className="button button--primary button--full" type="submit"
         disabled={busy || (awaitingCode ? !validOtp(code, otpLength) || !emailIdentity && !validEmail(email.trim()) : !scope?.capabilities.login || !validEmail(email.trim()))}>
         {sessionText(awaitingCode ? "verifyAction" : "sendAction")}
