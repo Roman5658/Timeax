@@ -16,6 +16,22 @@ const preparationCopy={
  pl:['Przygotowujemy powiadomienia na telefon…','Nie udało się przygotować powiadomień na tym urządzeniu. Spróbuj ponownie.','Sesja wygasła. Zaloguj się ponownie, aby ustawić powiadomienia.','Powiadomienia na telefon są teraz niedostępne. Spróbuj później.','Zaloguj się'],
  uk:['Готуємо сповіщення на телефон…','Не вдалося підготувати сповіщення на цьому пристрої. Спробуй ще раз.','Сеанс завершився. Увійди знову, щоб налаштувати сповіщення.','Сповіщення на телефон зараз недоступні. Спробуй пізніше.','Увійти'],
 };
+const activationCopy={
+ en:["Waiting for this device to enable notifications…", "Saving notification settings…", "The phone did not respond in time. If it asks for permission, tap Allow, then try again.", "Timeax did not confirm the change in time. Check the current setting and try again."],
+ ru:["Ждём разрешения от телефона…", "Сохраняем настройки уведомлений…", "Телефон не ответил вовремя. Если он запрашивает разрешение, нажми «Разрешить», затем попробуй ещё раз.", "Timeax не успел подтвердить изменение. Проверь текущую настройку и попробуй ещё раз."],
+ pl:["Czekamy na zgodę na telefonie…", "Zapisujemy ustawienia powiadomień…", "Telefon nie odpowiedział na czas. Jeśli prosi o zgodę, wybierz „Zezwól”, a potem spróbuj ponownie.", "Timeax nie potwierdził zmiany na czas. Sprawdź ustawienie i spróbuj ponownie."],
+ uk:["Чекаємо дозволу від телефона…", "Зберігаємо налаштування сповіщень…", "Телефон не відповів вчасно. Якщо він запитує дозвіл, натисни «Дозволити», а потім спробуй ще раз.", "Timeax не встиг підтвердити зміну. Перевір поточне налаштування й спробуй ще раз."],
+};
+async function timed<T>(promise:Promise<T>,timeout:number,error:string){
+ let timer:number|undefined;
+ try{return await Promise.race([promise,new Promise<never>((_,reject)=>{timer=window.setTimeout(()=>reject(Error(error)),timeout)})])}
+ finally{window.clearTimeout(timer)}
+}
+async function changeRemote(body:unknown){
+ const c=new AbortController();
+ try{return await timed(call(body,c.signal),7000,'save-timeout')}
+ finally{c.abort()}
+}
 type Preparation='loading'|'ready'|'device'|'login'|'unavailable';
 async function call(body?:unknown,signal?:AbortSignal){
  const r=await fetch('/api/web-push',{method:body===undefined?'GET':'POST',credentials:'same-origin',cache:'no-store',
@@ -37,7 +53,10 @@ async function preparePush(signal:AbortSignal){
 // installed WebKit apps may have an active worker but no page controller yet.
 async function activePushRegistration(signal:AbortSignal){
  const root=new URL('/',location.href).href,script=new URL('/timeax-push-sw.js',root).href;
- const reg=await navigator.serviceWorker.register(script,{scope:'/',updateViaCache:'none'});
+ const current=await navigator.serviceWorker.getRegistration(root);
+ if(signal.aborted)throw Error('device');
+ const reg=current?.scope===root&&current.active?.scriptURL===script&&current.active.state==='activated'?current:
+  await navigator.serviceWorker.register(script,{scope:'/',updateViaCache:'none'});
  if(signal.aborted||reg.scope!==root||!reg.pushManager)throw Error('device');
  return new Promise<ServiceWorkerRegistration>((resolve,reject)=>{
   const finish=(ok:boolean)=>{window.clearInterval(poll);signal.removeEventListener('abort',cancel);ok?resolve(reg):reject(Error('device'))};
@@ -50,14 +69,24 @@ async function activePushRegistration(signal:AbortSignal){
 }
 export function PhonePushSettings(){
  const {i18n,t}=useTranslation(),locale=(i18n.resolvedLanguage??'en').split('-')[0] as keyof typeof words,c=words[locale]??words.en;
- const prep=preparationCopy[locale]??preparationCopy.en;
+ const prep=preparationCopy[locale]??preparationCopy.en,activation=activationCopy[locale]??activationCopy.en;
  const [key,K]=useState(''),[enabled,E]=useState(false),[busy,B]=useState(false),[notice,N]=useState(0);
  const [open,setOpen]=useState(false),[phase,setPhase]=useState<Preparation>('loading'),[revision,setRevision]=useState(0);
+ const [step,setStep]=useState<'device'|'saving'>();
+ const [activationError,setActivationError]=useState<'device'|'saving'>();
+ const nativeEnrollment=useRef<Promise<PushSubscription>>(undefined),updating=useRef(false);
  const registration=useRef<ServiceWorkerRegistration>(undefined),currentSubscription=useRef<PushSubscription|null>(null);
  const ios=/iP(?:hone|ad|od)/.test(navigator.userAgent)||navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1;
  const installed=window.matchMedia('(display-mode: standalone)').matches||(navigator as Navigator&{standalone?:boolean}).standalone===true;
  const supported=window.isSecureContext&&'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
  const usable=supported&&(!ios||installed);
+ const [permission,setPermission]=useState<NotificationPermission>(()=>supported?Notification.permission:'default');
+ useEffect(()=>{
+  if(!usable)return;
+  const observe=()=>{if(!document.hidden)setPermission(Notification.permission)};
+  window.addEventListener('focus',observe);document.addEventListener('visibilitychange',observe);
+  return()=>{window.removeEventListener('focus',observe);document.removeEventListener('visibilitychange',observe)};
+ },[usable]);
  useEffect(()=>{
   if(!usable)return;
   const ctrl=new AbortController();
@@ -82,27 +111,49 @@ export function PhonePushSettings(){
   })().catch(e=>{if(!ctrl.signal.aborted){setPhase(e?.message==='login'?'login':failed);ctrl.abort()}}).finally(()=>window.clearTimeout(timeout));
   return()=>{window.clearTimeout(timeout);ctrl.abort()};
  },[usable,revision]);
- function retry(){N(0);setPhase('loading');setRevision(v=>v+1)}
+ function retry(){N(0);setActivationError(undefined);setPhase('loading');setRevision(v=>v+1)}
  async function toggle(){
-  const reg=registration.current;if(phase!=='ready'||!reg||busy)return;
-  B(true);N(0);let created:PushSubscription|undefined;
+  const reg=registration.current;if(phase!=='ready'||!reg||updating.current)return;
+  updating.current=true;B(true);N(0);setActivationError(undefined);
   try{
    if(!enabled&&Notification.permission==='denied'){N(4);return}
    const current=currentSubscription.current;
    if(enabled){
+    setStep('saving');
     if(current){
-     const r=await call({action:'disable',endpoint:current.endpoint});
+     const r=await changeRemote({action:'disable',endpoint:current.endpoint});
      if(r?.enabled!==false)throw Error();
-     await current.unsubscribe().catch(()=>false);
-    }
-    currentSubscription.current=null;E(false);return;
+     currentSubscription.current=null;E(false);
+     await timed(current.unsubscribe(),3000,'device-timeout').catch(()=>false);
+    }else E(false);
+    return;
    }
    const appKey=Uint8Array.from(atob(key.replace(/-/g,'+').replace(/_/g,'/')+'='),ch=>ch.charCodeAt(0));
-   const subscription=current??(created=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:appKey}));
+   let subscription=current;
+   if(!subscription){
+    setStep('device');
+    if(!nativeEnrollment.current){
+     // Call directly from the click so Safari can display the permission prompt.
+     const subscribing=reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:appKey});
+     nativeEnrollment.current=subscribing;
+     void subscribing.then(value=>{currentSubscription.current=value},()=>{}).finally(()=>{
+      if(nativeEnrollment.current===subscribing)nativeEnrollment.current=undefined;
+     });
+    }
+    subscription=await timed(nativeEnrollment.current,20000,'device-timeout');
+   }
    const data=subscription.toJSON();
-   const r=await call({action:'enable',language:words[locale]?locale:'en',subscription:{endpoint:data.endpoint,keys:data.keys}});
-   if(r?.enabled!==true)throw Error();currentSubscription.current=subscription;E(true);
-  }catch{await created?.unsubscribe().catch(()=>false);N(Notification.permission==='denied'?4:6)}finally{B(false)}
+   setStep('saving');
+   const r=await changeRemote({action:'enable',language:words[locale]?locale:'en',subscription:{endpoint:data.endpoint,keys:data.keys}});
+   if(r?.enabled!==true)throw Error();
+   currentSubscription.current=subscription;E(true);
+  }catch(error){
+   const reason=error instanceof Error?error.message:'';
+   if(reason==='device-timeout')setActivationError('device');
+   else if(reason==='save-timeout')setActivationError('saving');
+   else if(reason==='login')setPhase('login');
+   else N(Notification.permission==='denied'?4:6);
+  }finally{setPermission(Notification.permission);updating.current=false;B(false);setStep(undefined)}
  }
  const detail={
   en:"Get work alerts on this device even when Timeax is closed. Turning them off does not affect the bell or in-app notifications.",
@@ -110,7 +161,7 @@ export function PhonePushSettings(){
   pl:"Otrzymuj powiadomienia służbowe na tym urządzeniu nawet po zamknięciu Timeax. Wyłączenie nie wpływa na dzwonek ani powiadomienia w aplikacji.",
   uk:"Отримуйте робочі сповіщення на цьому пристрої, навіть коли Timeax закрито. Вимкнення не впливає на дзвіночок і сповіщення в застосунку.",
  }[locale]??"The bell still shows work notifications when push is off.";
- const on=enabled&&supported&&Notification.permission==='granted';
+ const on=enabled&&supported&&permission==='granted';
  const indicator=usable&&phase!=='ready'?'-':on?'ON':'OFF';
  return <>
   <button type="button" className="button button--outline button--small phone-push-trigger" data-state={on?'on':'off'}
@@ -129,6 +180,8 @@ export function PhonePushSettings(){
      {phase==='login'&&<a className="button button--outline" href="/login">{prep[4]}</a>}
      {(phase==='device'||phase==='unavailable')&&<button type="button" className="button button--outline" onClick={retry}>{t('auth.tryAgain')}</button>}
     </>}
+    {step&&<p role="status">{activation[step==='device'?0:1]}</p>}
+    {activationError&&<p role="alert">{activation[activationError==='device'?2:3]}</p>}
     {notice>0&&<p role="alert">{c[notice]}</p>}
    </div>
   </AgencyBookDrawer>}
