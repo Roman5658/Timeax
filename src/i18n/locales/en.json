@@ -2950,6 +2950,7 @@
     "newAccount": "Create personal account"
   },
   "memberNames": {
+    "edit": "Edit name in roster",
     "title": "Worker names",
     "lead": "Use the name checked against this organization’s personnel records. A name does not verify identity or grant access.",
     "worker": "Worker in this organization",

@@ -37,14 +37,15 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,application
  useBellAnchor(section==='applications');
  const [setup,S]=useState<SetupContext>(),[factory,F]=useState<FactoryHoursContext>();
  const [members,M]=useState<WorkersResponse>();
- const [failed,RF]=useState(false);
+ const [rosterFailures,setRosterFailures]=useState<string[]>([]);
+ const [approvedWorkers,setApprovedWorkers]=useState<Record<string,string>>({});
  const [filter,G]=useState(siteId??''),[query,Search]=useState('');
  const [drawer,open]=useState<UiDrawer>(),[invite,I]=useState<{code:string;link:string}>();
  const [workerCards,WC]=useState<WorkerCards>(),[cardsError,WE]=useState(false),[cardsRevision,WR]=useState(0);
  const [target,T]=useState(''),[source,From]=useState(''),[day,D]=useState(localDay);
- const [name,N]=useState(''),[confirmedName,CN]=useState(false),[confirmedEnd,CE]=useState(false);
+ const [name,N]=useState(''),[confirmedEnd,CE]=useState(false);
  const [busy,B]=useState(false),[estimateBusy,setEstimateBusy]=useState(false),[notice,U]=useState<CopyKey|'nameSaved'|'approved'>(),[error,E]=useState(false);
- const pending=useRef(false),panel=useRef<HTMLElement>(null);
+ const pending=useRef(false),panel=useRef<HTMLElement>(null),lastWake=useRef(0);
  const {context:names,state:nameState,label}=useMemberNames(namesEnabled?organizationId:undefined,revision);
  const scopedNames=names?.organizationId===organizationId?names:undefined;
  const scopedSetup=setup?.memberships.some(row=>row.organizationId===organizationId&&row.role==='agency_admin')?setup:undefined;
@@ -58,25 +59,45 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,application
  },[queuePath,cardsRevision,provisioningEnabled,siteId]);
 
  useEffect(()=>{
-  const c=new AbortController();RF(false);
+  const c=new AbortController();setRosterFailures([]);
+  const waiting=new Set([...(productionsEnabled?['setup']:[]),...(lifecycleEnabled?['roster']:[]),...(factoryHoursEnabled?['factory']:[])]);
+  const fail=(key:string)=>{if(!c.signal.aborted)setRosterFailures(v=>v.includes(key)?v:[...v,key])};
+  const timer=window.setTimeout(()=>{
+   setRosterFailures(v=>[...new Set([...v,...waiting])]);c.abort();
+  },8000);
   if(productionsEnabled)void factoryCall('context',undefined,c.signal).then(parseSetupContext).then(v=>{
    if(!v.memberships.some(m=>m.organizationId===organizationId&&m.role==='agency_admin'))throw Error('denied');
    if(!c.signal.aborted)S(v);
-  }).catch(()=>{if(!c.signal.aborted)RF(true)});
+  }).catch(()=>fail('setup')).finally(()=>waiting.delete('setup'));
   if(lifecycleEnabled)void accountCall('agency-context',{organizationId},c.signal).then(result=>{
    const v=result as WorkersResponse;
    if(v?.organizationId!==organizationId||!Array.isArray(v.workers)||v.workers.some(w=>!uuid(w.membershipId)||typeof w.state!=='string'))throw Error('unavailable');
    if(!c.signal.aborted)M(v);
-  }).catch(()=>{if(!c.signal.aborted)RF(true)});
+  }).catch(()=>fail('roster')).finally(()=>waiting.delete('roster'));
   if(factoryHoursEnabled)void factoryHoursCall(organizationId,'context',undefined,c.signal).then(result=>parseFactoryHours(result,organizationId)).then(v=>{
    if(v.role!=='agency_admin')throw Error('denied');
    if(!c.signal.aborted)F(v);
-  }).catch(()=>{if(!c.signal.aborted)RF(true)});
-  return()=>c.abort();
+  }).catch(()=>fail('factory')).finally(()=>waiting.delete('factory'));
+  return()=>{window.clearTimeout(timer);c.abort()};
  },[organizationId,productionsEnabled,lifecycleEnabled,factoryHoursEnabled,revision]);
+ useEffect(()=>{
+  if(section!=='roster')return;
+  const wake=()=>{const at=Date.now();if(!document.hidden&&!pending.current&&at-lastWake.current>=5000){lastWake.current=at;R(n=>n+1)}};
+  window.addEventListener('focus',wake);document.addEventListener('visibilitychange',wake);
+  return()=>{window.removeEventListener('focus',wake);document.removeEventListener('visibilitychange',wake)};
+ },[section,organizationId,siteId]);
  useEffect(()=>{
   setSection(initialSection);G(siteId??'');Search('');open(undefined);U(undefined);E(false);
  },[organizationId,siteId,initialSection]);
+ useEffect(()=>setApprovedWorkers({}),[organizationId]);
+ useEffect(()=>{
+  if(!scopedMembers||!scopedNames)return;
+  setApprovedWorkers(previous=>{
+   const ids=Object.keys(previous).filter(id=>scopedMembers.workers.some(w=>w.membershipId===id)&&scopedNames.workers.some(w=>w.membershipId===id&&w.organizationId===organizationId&&w.name));
+   if(!ids.length)return previous;
+   const next={...previous};for(const id of ids)delete next[id];return next;
+  });
+ },[scopedMembers,scopedNames,organizationId]);
 
  const internalSites=scopedSetup?.worksites.filter(w=>w.ownerId===organizationId&&w.organizationId===organizationId&&w.ownerKind==='agency')??[];
  const connectedSites=scopedFactory?.sites.filter(site=>scopedSetup?.connections.some(c=>c.agencyId===organizationId&&c.worksiteId===site.id&&c.state==='active'))??[];
@@ -90,14 +111,15 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,application
   const external=scopedFactory?.placements.filter(a=>a.agencyId===organizationId&&a.membershipId===id&&a.state==='approved'&&connectedSites.some(s=>s.id===a.worksiteId))??[];
   return [...own,...external];
  }
- const active=new Set(scopedMembers?.workers.filter(w=>w.state==='active'&&!w.endedAt).map(w=>w.membershipId)
-  ??scopedSetup?.workers.filter(w=>w.organizationId===organizationId).map(w=>w.id)
-  ??scopedNames?.workers.filter(w=>w.organizationId===organizationId&&w.state==='active').map(w=>w.membershipId)??[]);
+ const active=new Set([...(scopedMembers?.workers.filter(w=>w.state==='active'&&!w.endedAt).map(w=>w.membershipId)
+  ??[...(scopedSetup?.workers.filter(w=>w.organizationId===organizationId).map(w=>w.id)??[]),
+     ...(scopedNames?.workers.filter(w=>w.organizationId===organizationId&&w.state==='active').map(w=>w.membershipId)??[])]),
+  ...Object.keys(approvedWorkers).filter(id=>!scopedMembers?.workers.some(w=>w.membershipId===id&&(w.state!=='active'||w.endedAt)))]);
  const effectiveFilter=siteId??filter;
  const roster=[...active].map(id=>{
   const assignments=workAssignments(id).filter(a=>currentAt(a,dateNow));
   const entry=scopedNames?.workers.find(w=>w.membershipId===id&&w.organizationId===organizationId);
-  return {id,display:entry?label(id):id.slice(0,8),assignments,group:(effectiveFilter&&effectiveFilter!=='none'&&assignments.some(a=>a.worksiteId===effectiveFilter)?sites.find(s=>s.id===effectiveFilter):sites.find(s=>assignments.some(a=>a.worksiteId===s.id)))?.name??''};
+  return {id,display:entry?.name?label(id):approvedWorkers[id]||(entry?label(id):t('memberNames.checking')),assignments,group:(effectiveFilter&&effectiveFilter!=='none'&&assignments.some(a=>a.worksiteId===effectiveFilter)?sites.find(s=>s.id===effectiveFilter):sites.find(s=>assignments.some(a=>a.worksiteId===s.id)))?.name??''};
  }).filter(w=>{
   const q=query.trim().toLocaleLowerCase(lang);
   return (!q||w.display.toLocaleLowerCase(lang).includes(q))&&(!effectiveFilter||(effectiveFilter==='none'?!w.assignments.length:w.assignments.some(a=>a.worksiteId===effectiveFilter)));
@@ -110,10 +132,12 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,application
  const originAssignment=moves.find(a=>a.worksiteId===source)??(moves.length===1?moves[0]:undefined);
  const targetSite=sites.find(s=>s.id===target);
  const duplicate=id&&workAssignments(id).some(a=>a.worksiteId===target&&(!a.endsAt||Date.parse(a.endsAt)>startInstant));
- const rosterReady=Boolean(scopedMembers||scopedSetup||scopedNames);
+ const rosterReady=Boolean(active.size||scopedMembers||
+  ((!lifecycleEnabled||rosterFailures.includes('roster'))&&(scopedSetup||scopedNames)));
+ const filterUnavailable=Boolean(effectiveFilter&&(rosterFailures.includes('setup')||rosterFailures.includes('factory')));
  const rosterEnabled=productionsEnabled||lifecycleEnabled||namesEnabled;
- const loadFailed=failed||namesEnabled&&nameState==='unavailable';
- const reset=()=>{I(undefined);T(siteId??'');From('');D(localDay());N('');CN(false);CE(false);U(undefined);E(false)};
+ const loadFailed=!rosterReady&&(rosterFailures.some(k=>k==='roster'||k==='setup')||namesEnabled&&nameState==='unavailable');
+ const reset=()=>{I(undefined);T(siteId??'');From('');D(localDay());N('');CE(false);U(undefined);E(false)};
  const dismiss=()=>{const id=drawer?.type==='worker'?drawer.id:'';open(undefined);reset();if(id)requestAnimationFrame(()=>{(panel.current?.querySelector<HTMLElement>('[data-worker-settings='+CSS.escape(id)+']')??panel.current?.querySelector<HTMLElement>('.agency-worker-tabs button'))?.focus()})};
  function selectWorker(id:string){
   if(busy)return;reset();N(scopedNames?.workers.find(w=>w.membershipId===id)?.name??'');open({type:'worker',id});
@@ -165,7 +189,9 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,application
    {loadFailed&&<div className="agency-worker-status" role="alert"><p>{copy('rosterUnavailable')}</p><button type="button" className="button button--outline button--small" onClick={()=>R(n=>n+1)}>{copy('retry')}</button></div>}
    {!rosterEnabled&&<p>{copy('noPermission')}</p>}
    {rosterEnabled&&!rosterReady&&!loadFailed&&<p role="status">{copy('load')}</p>}
-   {rosterReady&&!loadFailed&&!roster.length&&<p>{copy(active.size?'noMatches':'emptyRoster')}</p>}
+   {rosterReady&&namesEnabled&&nameState==='unavailable'&&<p role="status">{t('memberNames.unavailable')} <button type="button" className="button button--outline button--small" onClick={()=>R(n=>n+1)}>{copy('retry')}</button></p>}
+   {filterUnavailable&&<p role="status">{copy('rosterUnavailable')} <button type="button" className="button button--outline button--small" onClick={()=>R(n=>n+1)}>{copy('retry')}</button></p>}
+   {rosterReady&&!loadFailed&&!filterUnavailable&&!roster.length&&<p>{copy(active.size?'noMatches':'emptyRoster')}</p>}
    {groups.map(group=><section className="agency-worker-group" key={group||'unassigned'}>
     <h3>{group||copy('unassigned')}</h3><ul>{roster.filter(w=>w.group===group).map(w=><li key={w.id}>
      <button type="button" className="agency-worker-activity-link" aria-haspopup="dialog" disabled={busy} onClick={()=>open({type:'activity',id:w.id})}><strong>{w.display}</strong><span className="muted-copy">{sites.filter(s=>w.assignments.some(a=>a.worksiteId===s.id)).map(s=>s.name).join(' · ')||copy('unassigned')}</span></button>
@@ -182,7 +208,11 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,application
     {a.firstName&&a.lastName?<><strong>{a.firstName} {a.lastName}</strong>{a.email&&<p>{a.email}</p>}</>:<strong>{t('workerEnrollment.applicantMissing')}</strong>}
     <small>{t('workerEnrollment.reference')}: <code>{a.application_id}</code></small><p>{dates.format(new Date(a.claimed_at))}</p></div>
     <button type="button" className="button button--primary button--small" disabled={busy} onClick={()=>void run(async()=>{
-     await workerCall(queuePath+'/approve',{applicationId:a.application_id});removeApplication(a.application_id);R(n=>n+1);
+     const result=await workerCall(queuePath+'/approve',{applicationId:a.application_id}) as {application?:{application_id:string;status:string;worker_membership_id:string}};
+     const receipt=result?.application;
+     if(receipt?.application_id!==a.application_id||receipt.status!=='approved'||!uuid(receipt.worker_membership_id))throw Error('unavailable');
+     const declaredName=[a.firstName,a.lastName].filter(Boolean).join(' ');
+     setApprovedWorkers(v=>({...v,[receipt.worker_membership_id]:declaredName}));removeApplication(a.application_id);R(n=>n+1);
     },'approved')}>{t('workerEnrollment.approve')}</button></li>)}</ul>}
    </>}
   </section>}
@@ -206,7 +236,7 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,application
       <a className="button button--primary" href={'mailto:?subject='+encodeURIComponent(copy('emailSubject'))+'&body='+encodeURIComponent(copy('emailBody')+'\n\n'+invite.link+'\n\n'+t('workerEnrollment.inviteCode')+': '+invite.code)}>{copy('emailInvite')}</a>
      {navigator.clipboard&&<button type="button" className="button button--outline" disabled={busy} onClick={()=>void run(()=>navigator.clipboard.writeText(invite.link),'copied')}>{copy('copy')}</button>}</div><p className="muted-copy">{copy('emailDraft')}</p></div>}
    </>:id&&<>
-    <p className="agency-worker-person">{current?label(id):id.slice(0,8)}</p>
+    <p className="agency-worker-person">{roster.find(w=>w.id===id)?.display??label(id)}</p>
     {id&&workAssignments(id).length>0&&<ul className="agency-worker-placement-list">{workAssignments(id).map(a=>{
      const site=sites.find(s=>s.id===a.worksiteId);return site?<li key={a.worksiteId}>{site.name}{Date.parse(a.startsAt)>dateNow?' · '+copy('planned').replace('{{date}}',dates.format(new Date(a.startsAt))):''}</li>:null;
     })}</ul>}
@@ -224,14 +254,13 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,application
        <button className="button button--primary" disabled={busy||!targetSite||!validDay(day)||Boolean(duplicate)||targetSite.kind!=='factory'&&moves.length>1&&!originAssignment}>{targetSite?.kind==='factory'?copy('sendFactory'):originAssignment?copy('move'):copy('assign')}</button>
       </form>}
      </section>}
-     {namesEnabled&&current&&scopedNames?.canEdit&&<section className="agency-book-section"><h3>{copy('name')}</h3><form className="auth-form" onSubmit={e=>{
-      e.preventDefault();if(!confirmedName||name.trim().length<2)return;
-      void run(async()=>{await memberNamesCall(organizationId,{membershipId:id,name:name.trim(),revision:current.revision,confirmed:true,operationId:crypto.randomUUID()});CN(false);R(n=>n+1)},'nameSaved');
+     {namesEnabled&&current&&scopedNames?.canEdit&&<details className="agency-book-section" onToggle={e=>{if(e.currentTarget.open)N(current.name??'')}}><summary>{t('memberNames.edit')}</summary><form className="auth-form" onSubmit={e=>{
+      e.preventDefault();if(name.trim().length<2||name.trim()===current.name)return;
+      void run(async()=>{await memberNamesCall(organizationId,{membershipId:id,name:name.trim(),revision:current.revision,confirmed:true,operationId:crypto.randomUUID()});R(n=>n+1)},'nameSaved');
      }}>
-      <label className="field-label">{t('memberNames.name')}<input autoComplete="off" value={name} required minLength={2} maxLength={120} disabled={busy} onChange={e=>{N(e.target.value);CN(false)}}/></label>
-      <label className="timecards-check"><input type="checkbox" checked={confirmedName} disabled={busy} onChange={e=>CN(e.target.checked)}/>{t('memberNames.confirm')}</label>
-      <button className="button button--outline" disabled={busy||!confirmedName||name.trim().length<2||name.trim()===current.name}>{t('memberNames.save')}</button>
-     </form></section>}
+      <label className="field-label">{t('memberNames.name')}<input autoComplete="off" value={name} required minLength={2} maxLength={120} disabled={busy} onChange={e=>N(e.target.value)}/></label>
+      <button className="button button--outline" disabled={busy||name.trim().length<2||name.trim()===current.name}>{t('memberNames.save')}</button>
+     </form></details>}
      {lifecycleEnabled&&scopedMembers?.workers.some(w=>w.membershipId===id&&w.state==='active'&&!w.endedAt)&&<section className="agency-book-section"><h3>{copy('danger')}</h3>
       <p>{t('workerAccount.endLead')}</p>
       <label className="personal-confirm"><input type="checkbox" disabled={busy} checked={confirmedEnd} onChange={e=>CE(e.target.checked)}/>{t('workerAccount.confirmEnd')}</label>

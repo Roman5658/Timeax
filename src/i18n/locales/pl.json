@@ -2950,6 +2950,7 @@
     "newAccount": "Utwórz konto osobiste"
   },
   "memberNames": {
+    "edit": "Zmień imię i nazwisko na liście",
     "title": "Imiona i nazwiska pracowników",
     "lead": "Użyj danych sprawdzonych w dokumentacji pracowniczej tej organizacji. Imię i nazwisko nie potwierdza tożsamości ani nie nadaje dostępu.",
     "worker": "Pracownik tej organizacji",

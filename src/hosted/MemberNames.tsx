@@ -11,8 +11,32 @@ export function parseMemberNames(v:unknown,org:string):Context{
  const c=v as Context;if(!c||c.organizationId!==org||typeof c.canEdit!=='boolean'||!Array.isArray(c.workers)||c.workers.some(w=>!uuid(w.membershipId)||!uuid(w.organizationId)||!/^[1-9][0-9]*$/.test(w.reference)||w.name!==null&&(typeof w.name!=='string'||[...w.name].length>120)||!Number.isSafeInteger(w.revision)))throw Error('unavailable');return c;
 }
 export function useMemberNames(org:string|undefined,revision=0){
- const {t}=useTranslation(),[context,C]=useState<Context>(),[state,S]=useState('checking');
- useEffect(()=>{C(undefined);S('checking');if(!org)return;const c=new AbortController();void memberNamesCall(org,undefined,c.signal).then(v=>parseMemberNames(v,org)).then(v=>{if(!c.signal.aborted){C(v);S('ready')}}).catch(()=>{if(!c.signal.aborted)S('unavailable')});return()=>c.abort()},[org,revision]);
+ const {t}=useTranslation();
+ const [snapshot,C]=useState<{org:string;context:Context}>();
+ const [status,S]=useState<{org:string;state:string}>();
+ const context=org&&snapshot?.org===org?snapshot.context:undefined;
+ const state=org&&status?.org===org?status.state:'checking';
+ useEffect(()=>{
+  if(!org){C(undefined);S(undefined);return}
+  const c=new AbortController();
+  const deadline=window.setTimeout(()=>{c.abort();S({org,state:'unavailable'})},8000);
+  S({org,state:'checking'});
+  void (async()=>{
+   for(let attempt=0;attempt<2;attempt++){
+    try{
+     const next=parseMemberNames(await memberNamesCall(org,undefined,c.signal),org);
+     if(!c.signal.aborted){C({org,context:next});S({org,state:'ready'})}
+     return;
+    }catch(e){
+     if(c.signal.aborted)return;
+     if(attempt===0&&e instanceof Error&&e.message==='unavailable'){
+      await new Promise(resolve=>setTimeout(resolve,300));if(c.signal.aborted)return;
+     }else{S({org,state:'unavailable'});return}
+    }
+   }
+  })().finally(()=>window.clearTimeout(deadline));
+  return()=>{window.clearTimeout(deadline);c.abort()};
+ },[org,revision]);
  const label=(id:string)=>{const w=context?.workers.find(w=>w.membershipId===id);return workerLabelText(w?{...w,source:'current'}:undefined,t('memberNames.missing'),t('memberNames.reference'))};
  const organizationLabel=(id:string)=>context?.workers.find(w=>w.membershipId===id)?.organizationName??'';
  return {context,state,label,organizationLabel};
