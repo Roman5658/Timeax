@@ -59,6 +59,7 @@ test('SQL queues a generic push for enrolled recipients, preserves time on norma
    CREATE TABLE timeax_core.memberships(id uuid PRIMARY KEY,organization_id uuid,identity_id uuid,role text,state text);
    CREATE TABLE timeax_core.web_sessions(token_digest text PRIMARY KEY,subject uuid,expires_at timestamptz);
    CREATE TABLE timeax_core.agency_worker_join_events(agency_id uuid);
+   CREATE TABLE timeax_core.agency_worker_applications(agency_id uuid,approved_at timestamptz);
    CREATE TABLE timeax_core.backdated_shift_notices(agency_id uuid);
    CREATE TABLE timeax_core.earlier_shift_requests(agency_id uuid);
    CREATE TABLE timeax_team.deliveries(recipient uuid,read_at timestamptz);
@@ -76,6 +77,7 @@ test('SQL queues a generic push for enrolled recipients, preserves time on norma
   // PGlite does not restore session_user after a SET LOCAL SESSION AUTHORIZATION.
   // Run the RPC as owner in this fixture only and independently assert its grants.
   await db.exec(migration.replace(guard,"session_user<>'postgres'"));
+  await db.exec(await readFile(new URL('../operator/web-push-worker-application.sql',import.meta.url),'utf8'));
   const acl=(await db.query("SELECT has_function_privilege('anon','timeax_api.web_push(text,text,text,jsonb)','execute') anon, has_function_privilege('timeax_web_push_login','timeax_api.web_push(text,text,text,jsonb)','execute') lane")).rows[0];
   assert.deepEqual(acl,{anon:false,lane:true});
   const run=async(action,input,subj=null)=>{
@@ -93,8 +95,10 @@ test('SQL queues a generic push for enrolled recipients, preserves time on norma
   assert.equal((await db.query('SELECT count(*)::int n FROM timeax_push.jobs')).rows[0].n,0);
   const agencySub={...sub,endpoint:'https://fcm.googleapis.com/fcm/send/fixture-agency-registration-token'};
   await run('enable',{session:'b'.repeat(64),language:'pl',...agencySub},id(6));
-  for(const [i,source] of ['agency_worker_join_events','backdated_shift_notices','earlier_shift_requests'].entries()){
-   await db.exec(`INSERT INTO timeax_core.${source} VALUES('${id(2)}')`);
+  await db.exec(`INSERT INTO timeax_core.agency_worker_applications VALUES('${id(2)}',now()),('${id(1)}',NULL)`);
+  assert.deepEqual(await run('claim',{lease:id(19)}),[]);
+  for(const [i,source] of ['agency_worker_join_events','backdated_shift_notices','earlier_shift_requests','agency_worker_applications'].entries()){
+   await db.exec(`INSERT INTO timeax_core.${source}(agency_id) VALUES('${id(2)}')`);
    const lease=id(20+i),hits=await run('claim',{lease});
    assert.equal(hits.length,1,source);
    assert.equal(hits[0].organizationId,id(2),source);
