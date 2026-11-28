@@ -5,6 +5,7 @@ import {AlertCircle,CalendarDays,ChevronDown,ChevronUp,Clock3,MessageCircleWarni
 import {timecardCall,parseTimecards,minutesLabel,type TimecardContext} from './timecards';
 import {factoryHoursCall,parseFactoryHours,type FactoryHoursContext} from './factory-timecards';
 import {useTeam} from './team-workflow';
+import {personalPayCents,type PersonalHourlyRate} from './personal-hourly-rate.ts';
 import {workerCalendarCopy} from './worker-calendar-copy';
 import {calendarDayRecords,workerCalendarRecords} from './worker-calendar-data';
 import {resolveWorkerShiftAssignment} from './worker-shift-assignment';
@@ -20,7 +21,7 @@ const weekdays=['mon','tue','wed','thu','fri','sat','sun'];
 const wardate=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Warsaw',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const monthOf=(s:string)=>new Date(s.slice(0,7)+'-01T12:00:00Z');
 function dateKey(d:Date){return d.toISOString().slice(0,10)}
-export function WorkerCalendar({organizationId,membershipId,enableInternal=true,enableFactory=true,enableTeam=true}:{organizationId:string;membershipId:string;enableInternal?:boolean;enableFactory?:boolean;enableTeam?:boolean}){
+export function WorkerCalendar({organizationId,membershipId,enableInternal=true,enableFactory=true,enableTeam=true,personalRate}:{organizationId:string;membershipId:string;enableInternal?:boolean;enableFactory?:boolean;enableTeam?:boolean;personalRate?:PersonalHourlyRate}){
  const {t,i18n}=useTranslation(),c=workerCalendarCopy(i18n.language),shiftCopy=workerShiftCopy(i18n.language);
  const lang=(i18n.resolvedLanguage??'en').split('-')[0];
  const planLabel=lang==='ru'?'Смена по графику':lang==='pl'?'Zmiana w grafiku':lang==='uk'?'Запланована зміна':'Scheduled shift';
@@ -64,6 +65,8 @@ export function WorkerCalendar({organizationId,membershipId,enableInternal=true,
  }
  const monthly=records.shifts.filter(s=>s.data.localDate.startsWith(dateKey(month).slice(0,7)));
  const paid=monthly.filter(s=>s.source==='internal'||['ready','sent'].includes(s.status)).reduce((sum,s)=>sum+s.data.paidMinutes,0);
+ const estimate=personalRate&&!loading&&!partial?personalPayCents(personalRate,paid):undefined;
+ const estimatedLabel=personalRate?.basis==='net'?t('personalPay.monthNet'):t('personalPay.monthGross');
  const cards=[
   {title:t('dashboard.statHours'),value:minutesLabel(paid),icon:Clock3,color:'mint'},
   {title:t('dashboard.statShifts'),value:monthly.length,icon:CalendarDays,color:'blue'},
@@ -74,7 +77,9 @@ export function WorkerCalendar({organizationId,membershipId,enableInternal=true,
  const root='/workspace/'+organizationId;
  return <>
  <div className="workflow-stat-grid workflow-stat-grid--four" aria-busy={loading}>
-  {cards.map(({title,value,icon:Icon,color})=><div className="workflow-stat-card" key={title}><span className={'stat-icon stat-icon--'+color}><Icon size={18} aria-hidden="true"/></span><span>{title}</span><strong>{loading||partial?'—':value}</strong></div>)}
+  {cards.map(({title,value,icon:Icon,color},index)=><div className="workflow-stat-card" key={title}><span className={'stat-icon stat-icon--'+color}><Icon size={18} aria-hidden="true"/></span><span>{title}</span><strong>{loading||partial?'—':value}</strong>
+   {index===0&&estimate!==undefined&&<small className="worker-personal-earnings">{estimatedLabel}: <b>{new Intl.NumberFormat(i18n.resolvedLanguage||i18n.language,{style:'currency',currency:'PLN'}).format(estimate/100)}</b></small>}
+  </div>)}
  </div>
  {enableTeam&&<div className="form-actions worker-home-absence"><button className="button button--outline button--small" type="button" onClick={()=>setAbsenceDay(selected)}><MessageCircleWarning size={16} aria-hidden="true"/>{t('workflow.absence.reportButton')}</button></div>}
  <section className="dashboard-panel worker-calendar-panel worker-hosted-calendar" aria-labelledby={heading} aria-busy={loading}>

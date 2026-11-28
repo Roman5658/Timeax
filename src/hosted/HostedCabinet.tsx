@@ -4,6 +4,8 @@ import {WorkerTermsGate} from './WorkerTermsGate';
 import {WorkerPasswordPanel} from './WorkerPasswordPanel';
 import {AgencyProfile} from './AgencyProfile';
 import {AgencyNipVisibility} from './AgencyWorkerCards';
+import {PersonalPayDrawer} from './PersonalPayDrawer';
+import {personalHourlyRateKey,readPersonalHourlyRate,type PersonalHourlyRate} from './personal-hourly-rate.ts';
 import {PhonePushSettings} from './PhonePushSettings';
 import {payNoticeCopy,usePayNotices} from './pay-notices';
 import {useInbox} from './inbox';
@@ -16,7 +18,7 @@ import {TeamBell,TeamPanel,type TeamSection} from './TeamWorkflow';
 import {TeamContextProvider} from './team-workflow';
 import {readWithRetry,TemporaryReadError} from './retry-read.ts';
 
-import { Building2, CalendarDays, ClipboardList, LayoutDashboard, Menu, MessageCircle, Settings2, UsersRound, X } from 'lucide-react';
+import { Building2, Calculator, CalendarDays, ClipboardList, LayoutDashboard, Menu, MessageCircle, Settings2, UsersRound, X } from 'lucide-react';
 import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -137,6 +139,13 @@ function HostedCabinet({access,section,menu,agencyProfile,canonical,retryProfile
  const factoryAdmin=access.membership.role==='factory_admin';
  const production=hasProductionRole(access),worker=!agency&&!production;
  const agencyWorker=worker&&access.organization.kind==='agency';
+ const payRateKey=agencyWorker?personalHourlyRateKey(access.organization.id,access.membership.id):undefined;
+ const [payRate,setPayRate]=useState(()=>{try{return payRateKey?readPersonalHourlyRate(localStorage.getItem(payRateKey)):undefined}catch{return undefined}});
+ const [payDrawer,setPayDrawer]=useState(false);
+ function savePersonalRate(rate:PersonalHourlyRate){
+  if(!payRateKey)return false;
+  try{localStorage.setItem(payRateKey,JSON.stringify(rate));setPayRate(rate);return true}catch{return false}
+ }
  useEffect(()=>{
   if(!worker)return;
   const c=new AbortController();void persistApprovedWorkerSession(c.signal);
@@ -232,7 +241,7 @@ function HostedCabinet({access,section,menu,agencyProfile,canonical,retryProfile
      {group!==visibleMenu[index-1]?.group&&<div className="portal-nav-group-label">{t('nav.groups.'+group)}</div>}
      <Link className={'portal-nav-link'+(id===section||unifiedHours&&id==='timecards'?' is-active':'')} aria-current={id===section||unifiedHours&&id==='timecards'?'page':undefined} to={route(id)} onPointerEnter={()=>warmSection(id)} onFocus={()=>warmSection(id)} onClick={()=>setMenuOpen(false)}><Icon size={17} aria-hidden="true"/><span>{t(label)}</span>{publicAgency&&id==='timecards'&&needsReview>0&&<span className="timeax-review-count" aria-label={t('team.notifications',{count:needsReview})}>{needsReview}</span>}{publicAgency&&id==='workers'&&applicationBell.length>0&&<span className="timeax-review-count" aria-label={t('workerEnrollment.queue')}>{applicationBell.length}</span>}</Link>
     </Fragment>)}
-    {worker&&<><div className="portal-nav-group-label">{t('nav.groups.account')}</div><Link className="portal-nav-link" to="/account" state={{workspaceReturn:root}}><Settings2 size={17} aria-hidden="true"/><span>{t('nav.profile')}</span></Link>{canJoinAgency&&<Link className="portal-nav-link" to="/register/worker" state={{workspaceReturn:root}}><Building2 size={17} aria-hidden="true"/><span>{t('workerEnrollment.join')}</span></Link>}</>}
+    {worker&&<><div className="portal-nav-group-label">{t('nav.groups.account')}</div><Link className="portal-nav-link" to="/account" state={{workspaceReturn:root}}><Settings2 size={17} aria-hidden="true"/><span>{t('nav.profile')}</span></Link>{agencyWorker&&<button type="button" className="portal-nav-link hosted-personal-pay-link" aria-haspopup="dialog" onClick={()=>{setMenuOpen(false);setPayDrawer(true)}}><Calculator size={17} aria-hidden="true"/><span>{t('personalPay.action')}</span></button>}{canJoinAgency&&<Link className="portal-nav-link" to="/register/worker" state={{workspaceReturn:root}}><Building2 size={17} aria-hidden="true"/><span>{t('workerEnrollment.join')}</span></Link>}</>}
    </nav>
    <div className="sidebar-spacer"/>
    <div className="hosted-cabinet-sign-out"><CabinetSignOut allowedByCabinet={canonical?agencyProfile?.logout??false:undefined}/></div>
@@ -263,7 +272,7 @@ function HostedCabinet({access,section,menu,agencyProfile,canonical,retryProfile
     {section==='settings'&&publicAgency&&uses('workerProvisioning')&&<AgencyNipVisibility key={'directory:'+org} organizationId={org}/>}
     {!production&&section==='home'&&<>
      {worker&&where.state?.offerWorkerPassword===true&&<WorkerPasswordPanel onDismiss={()=>navigate(where.pathname+where.search,{replace:true,state:null})}/>}
-     {agencyWorker&&<WorkerCalendar key={org+access.membership.id} organizationId={org} membershipId={access.membership.id}/>}
+     {agencyWorker&&<WorkerCalendar key={org+access.membership.id} organizationId={org} membershipId={access.membership.id} personalRate={payRate}/>}
      <section className="dashboard-panel">
       <div className="panel-heading"><h2>{t('workspaceRead.worksites')}</h2></div>
       {access.worksites.length?<ul className="factory-summary-list hosted-site-list">{access.worksites.map(site=><li className="factory-summary-row" key={site.id}><span className="factory-summary-icon"><Building2 size={16} aria-hidden="true"/></span><strong>{publicAgency?<Link to={root+'/setup?site='+site.id}>{site.name}</Link>:site.name}</strong></li>)}</ul>:<p>{t('workspaceRead.empty')}</p>}
@@ -283,6 +292,7 @@ function HostedCabinet({access,section,menu,agencyProfile,canonical,retryProfile
    </main>
   </div>
 
+  {agencyWorker&&payDrawer&&<PersonalPayDrawer rate={payRate} onSave={savePersonalRate} onClose={()=>setPayDrawer(false)}/>}
  </div></TeamContextProvider>;
 }
 

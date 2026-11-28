@@ -3035,6 +3035,19 @@
     "storageTitle": "Dane w przeglądarce",
     "storageBody": "Serwis używa mechanizmów sesji do obsługi i ochrony logowania. Wybrany przez Ciebie język lub motyw może zostać zapamiętany w tej przeglądarce."
   },
+  "personalPay": {
+    "action": "Oblicz wynagrodzenie",
+    "type": "Rodzaj stawki",
+    "grossHourly": "Brutto za godzinę",
+    "netHourly": "Netto za godzinę",
+    "amount": "Stawka godzinowa (PLN)",
+    "local": "Szacunek na podstawie płatnych godzin. Stawka jest zapisana na tym urządzeniu i nie zmienia odcinka wypłaty.",
+    "invalid": "Podaj dodatnią stawkę z maksymalnie dwoma miejscami po przecinku.",
+    "notSaved": "Nie udało się zapisać stawki na tym urządzeniu.",
+    "save": "Zapisz stawkę",
+    "monthGross": "Szacunkowo brutto",
+    "monthNet": "Szacunkowo netto"
+  },
   "team": {
     "unavailable": "Nie udało się wczytać tej sekcji. Spróbuj odświeżyć.",
     "refreshUnavailable": "Nie udało się odświeżyć. Pokazujemy ostatnio wczytane dane.",

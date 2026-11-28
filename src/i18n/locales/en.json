@@ -3035,6 +3035,19 @@
     "storageTitle": "Browser data",
     "storageBody": "The service uses session mechanisms to operate and secure sign-in. Your chosen language or theme may be remembered in this browser."
   },
+  "personalPay": {
+    "action": "Calculate pay",
+    "type": "Rate type",
+    "grossHourly": "Gross per hour",
+    "netHourly": "Net per hour",
+    "amount": "Hourly rate (PLN)",
+    "local": "This estimate uses paid hours. The rate is saved on this device and does not change your payslip.",
+    "invalid": "Enter a positive rate with up to two decimal places.",
+    "notSaved": "Could not save the rate on this device.",
+    "save": "Save rate",
+    "monthGross": "Estimated gross pay",
+    "monthNet": "Estimated net pay"
+  },
   "team": {
     "unavailable": "Could not load this section. Try refreshing.",
     "refreshUnavailable": "Could not refresh. Showing the last loaded data.",

@@ -10,3 +10,6 @@
 .worker-hosted-calendar__mark--planned{border:1.5px solid currentColor;background:transparent}
 
 .worker-home-absence{margin-block:.75rem;flex-wrap:wrap}
+
+.worker-personal-earnings { grid-column: 2; margin-top: 6px; line-height: 1.4; }
+.worker-personal-earnings b { white-space: nowrap; }

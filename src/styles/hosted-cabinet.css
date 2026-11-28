@@ -86,3 +86,5 @@
 @media (max-width:650px){
  .hosted-cabinet .portal-top-actions .hosted-notification-controls { margin-inline-end:auto; }
 }
+
+.hosted-personal-pay-link { border: 0; background: transparent; width: 100%; text-align: start; cursor: pointer; }
