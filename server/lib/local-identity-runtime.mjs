@@ -9,7 +9,8 @@ import {createAgencyPendingHandler} from './agency-pending.server.mjs';
 import {createScopedPgLane} from './scoped-pg.mjs';
 import {createPendingStore,pendingStatements} from './pending-store.server.mjs';
 import {ISSUER} from './provider-adapters.mjs';
-const endpoint='/v1/session/timeax-email',logout='/api/timeax/auth/public/logout';
+import {readBody} from './session-router.mjs';
+const endpoint='/v1/session/timeax-email',logout='/api/timeax/auth/public/logout',workerSession='/api/timeax/auth/public/worker-session';
 const ttl=900,workerPasswordProofMs=5*60_000;
 const loopback=/^http:\/\/127\.0\.0\.1:[1-9][0-9]{3,4}$/;
 const reply=(status,body,headers={})=>new Response(body===undefined?null:JSON.stringify(body),{status,headers:{
@@ -30,7 +31,7 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
   throw Error('HTTPS Timeax signup must use the verified provider hook');
  const name=localLoopback?'timeax-loopback-email-identity':'__Host-timeax-email-identity';
  const cookieEnd='=; Max-Age=0; Path=/; '+(localLoopback?'':'Secure; ')+'HttpOnly; SameSite=Strict';
- const sessions=new Map(),removedSubjects=new Map(),workerProofs=new Map();
+ const sessions=new Map(),removedSubjects=new Map(),workerProofs=new Map(),sessionUpgrades=new Map();
  function purge(){
   const current=now();
   for(const [id,proof] of workerProofs)if(proof.expiresAt<=current)workerProofs.delete(id);
@@ -40,7 +41,7 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
  const resolve=async request=>{
   purge();const id=idFrom(request,name),local=sessions.get(id),s=local??await sessionStore?.get(id);
   return id&&s&&s.expiresAt>now()&&!removedSubjects.has(s.subject)?{issuer:s.issuer,subject:s.subject,email:s.email,emailConfirmed:true,isAnonymous:false,expiresAt:s.expiresAt,
-   state:'verified',...(!local?{pushSessionKey:createHash('sha256').update(id).digest('hex')}:{}),sessionKey:createHash('sha256').update('timeax-hosted-session:nfc:v1:').update(id).digest('hex'),registrationAllowed:true,isActive:async()=>s.expiresAt>now()&&!removedSubjects.has(s.subject)&&(local?sessions.get(id)===s:(await sessionStore.get(id))?.subject===s.subject)}
+   state:'verified',...(!local?{pushSessionKey:createHash('sha256').update(id).digest('hex')}:local.flow==='registration'&&sessionStore&&ops?.workerSession?{workerSessionCanUpgrade:true}:{}),sessionKey:createHash('sha256').update('timeax-hosted-session:nfc:v1:').update(id).digest('hex'),registrationAllowed:true,isActive:async()=>s.expiresAt>now()&&!removedSubjects.has(s.subject)&&(local?sessions.get(id)===s:(await sessionStore.get(id))?.subject===s.subject)}
    :{state:'anonymous'};
  };
  async function issueIdentitySession(identity,credential=null,prior=null){
@@ -105,6 +106,41 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
   for(const [id,s] of sessions)if(s.issuer===ISSUER&&s.subject===subject)sessions.delete(id);
  });
  const push=pushService?.routes(resolve);
+ async function promoteWorkerSession(request){
+  if(request.method!=='POST')return reply(405,{error:'not-allowed'});
+  if(request.headers.get('content-type')?.split(';')[0]!=='application/json'||request.headers.has('content-encoding'))return reply(400,{error:'invalid-request'});
+  if(!sessionStore||!ops?.workerSession)return reply(503,{error:'service-unavailable'});
+  const id=idFrom(request,name);
+  if(!id)return reply(401,{error:'login'});
+  try{
+   let body;try{body=JSON.parse(await readBody(request,128))}catch{return reply(400,{error:'invalid-request'})}
+   if(!body||Array.isArray(body)||typeof body!=='object'||Object.keys(body).length!==0||request.signal.aborted)return reply(400,{error:'invalid-request'});
+   purge();const local=sessions.get(id);
+   if(!local)return (await resolve(request)).state==='verified'?reply(204):reply(401,{error:'login'});
+   if(local.flow!=='registration')return reply(403,{error:'worker-session-unavailable'});
+   let upgrade=sessionUpgrades.get(id);
+   if(!upgrade){
+    upgrade=(async()=>{
+     const actor=await resolve(request);
+     if(actor.state!=='verified'||actor.workerSessionCanUpgrade!==true)return 401;
+     if(await ops.workerSession(actor)!==true)return 403;
+     if(!await actor.isActive())return 401;
+     // This token is already random, first issued only after OTP verification.
+     // Keep the same token and proof across upgrades and in-flight browser tabs.
+     await sessionStore.put(id,{issuer:actor.issuer,subject:actor.subject,email:actor.email});
+     if(sessions.get(id)!==local||local.expiresAt<=now()||removedSubjects.has(local.subject)){await sessionStore.delete(id);return 401}
+     sessions.delete(id);
+     return 204;
+    })();
+    sessionUpgrades.set(id,upgrade);
+   }
+   try{
+    const status=await upgrade;
+    return status===204?reply(204,undefined,{'Set-Cookie':name+'='+id+'; Max-Age='+SESSION_TTL_SECONDS+'; Path=/; '+(localLoopback?'':'Secure; ')+'HttpOnly; SameSite=Strict'}):
+     reply(status,{error:status===401?'login':'worker-session-unavailable'});
+   }finally{if(sessionUpgrades.get(id)===upgrade)sessionUpgrades.delete(id)}
+  }catch{return reply(503,{error:'service-unavailable'})}
+ }
  const agency=createAgencyPendingHandler({origin,issuer:ISSUER,sessionResolver:resolve,store:pendingStore,now,localLoopback,publicOrigin:!localLoopback});
  return {state:localLoopback?'local-email-auth':'public-email-auth',publicRegistrationEnabled:!!(onboarding&&workspace),startPush:()=>pushService?.start(),stopPush:()=>pushService?.stop(),async handler(request){
   const url=new URL(request.url),site=request.headers.get('sec-fetch-site'),from=request.headers.get('origin');
@@ -128,6 +164,7 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
    sessions.delete(id);workerProofs.delete(id);
    return reply(204,undefined,{'Set-Cookie':name+cookieEnd});
   }
+  if(url.pathname===workerSession)return promoteWorkerSession(request);
   if(url.pathname==='/api/web-push')return push?push(request):reply(503,{error:'push-not-enabled'});
   if(workerPassword&&url.pathname===WORKER_PASSWORD_PATH)return workerPassword(request);
   if(onboarding&&onboarding.matches(url.pathname))return onboarding.handler(request);

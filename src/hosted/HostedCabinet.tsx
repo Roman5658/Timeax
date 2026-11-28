@@ -1,3 +1,4 @@
+import {persistApprovedWorkerSession} from './worker-session';
 import {HostedLoading} from "./HostedLoading";
 import {WorkerTermsGate} from './WorkerTermsGate';
 import {WorkerPasswordPanel} from './WorkerPasswordPanel';
@@ -101,6 +102,11 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
  const factoryAdmin=access.membership.role==='factory_admin';
  const production=hasProductionRole(access),worker=!agency&&!production;
  const agencyWorker=worker&&access.organization.kind==='agency';
+ useEffect(()=>{
+  if(!worker)return;
+  const c=new AbortController();void persistApprovedWorkerSession(c.signal);
+  return()=>c.abort();
+ },[worker,access.membership.id]);
  const otherWorkerConnections=useWorkerConnections(worker&&!agencyWorker);
  const canJoinAgency=worker&&!agencyWorker&&shouldOfferAgencyJoin(otherWorkerConnections);
  const [agencyProfile,setAgencyProfile]=useState<{public:boolean;productions:boolean;ops:string[]}>();

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createEmailIdentityRuntime} from '../lib/local-identity-runtime.mjs';
 import {ISSUER} from '../lib/provider-adapters.mjs';
 import {hasWorkerPasswordScope} from '../lib/worker-password.server.mjs';
+import {createPushService} from '../lib/web-push.server.mjs';
 
 const origin='https://timeax.pl',path='/api/timeax/auth/public/',password='fixture-worker-password',email='worker@example.test',owner='owner@example.test';
 const U='91ab2f65-cee9-47c9-918b-a121efa2df4d',A='91ab2f65-cee9-47c9-918b-a121efa2df4e',
@@ -11,11 +12,11 @@ const request=(suffix,body,cookie,from=origin)=>new Request(origin+path+suffix,{
  headers:{origin:from,...(cookie?{cookie}:{}),...(body?{'content-type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
 const cookie=r=>r.headers.getSetCookie()[0].split(';')[0];
 function fixture({pending=false}={}){
- let now=500_000,workerAllowed=true,ownerCalls=0;
+ let now=500_000,workerAllowed=true,ownerCalls=0,approved=!pending,puts=0,putGate=async()=>{};
  const credentials=new WeakSet(),sessions=new Map(),writes=[];
  const identity=email=>({issuer:ISSUER,subject:email===owner?A:U,email,emailConfirmed:true,isAnonymous:false});
  const sessionStore={
-  async put(id,actor){sessions.set(id,{...actor,expiresAt:now+43_200_000})},async get(id){return sessions.get(id)??null},
+  async put(id,actor){puts++;await putGate();sessions.set(id,{...actor,expiresAt:now+43_200_000})},async get(id){return sessions.get(id)??null},
   async delete(id){sessions.delete(id)}
  };
  const provider={requestCode:async()=>true,
@@ -30,16 +31,20 @@ function fixture({pending=false}={}){
   async passwordLogin(e,p){return e===email&&writes.some(([,password])=>p===password)?identity(e):null}
  };
  function start(){
+  const pushService=createPushService({origin,publicKey:'A'.repeat(87),lane:{query:async()=>({rows:[{value:{enabled:true}}]})},send:async()=>{}});
   return createEmailIdentityRuntime({origin,otpLength:8,provider,now:()=>now,admitSend:()=>true,sessionStore,
+   pushService,
    pendingStore:{get:async()=>null,submit:async()=>null},signupHook:{handler:async()=>new Response(null,{status:204})},
    onboardingStore:{get:async actor=>actor.subject===A?O:null,create:async()=>{ownerCalls++;return O}},
    agencyOperationsFactory:()=>({enabled:['worker','workerTerms'],workerSelfService:true,find:()=>null,
+    workerSession:async actor=>actor.subject===U&&workerAllowed&&approved,
     workerPassword:async actor=>actor.subject===U&&workerAllowed&&hasWorkerPasswordScope({
      memberships:pending?[]:[{role:'worker'}],
      applications:pending?[{id:U,organizationId:O,status:'pending',source:'nip'}]:[],
     })})}).handler;
  }
- return {start,writes,sessions,advance:ms=>now+=ms,allow:value=>{workerAllowed=value},ownerCalls:()=>ownerCalls};
+ return {start,writes,sessions,advance:ms=>now+=ms,allow:value=>{workerAllowed=value},approve:()=>{approved=true},
+  onPut:fn=>{putGate=fn},puts:()=>puts,ownerCalls:()=>ownerCalls};
 }
 async function login(handler,email,flow='login'){
  const ch=await handler(request('start',{email,flow}));
@@ -119,4 +124,39 @@ test('fresh password code is bound to the current worker session and does not lo
  assert.equal((await (await h(request('worker-password',null,session))).json()).state,'saved');
  assert.equal((await h(request('logout',{},session))).status,204);
  assert.equal((await h(request('password',{email,password}))).status,200);
+});
+
+const promote=(session,from=origin)=>new Request(origin+path+'worker-session',{method:'POST',headers:{origin:from,cookie:session,'Content-Type':'application/json'},body:'{}'});
+const push=(session)=>new Request(origin+'/api/web-push',{headers:{'sec-fetch-site':'same-origin',cookie:session}});
+test('approval upgrades the original worker signup session for push without another OTP or losing password proof',async()=>{
+ const f=fixture({pending:true}),h=f.start(),s=await login(h,email,'registration');
+ assert.equal((await h(push(s))).status,409);
+ assert.equal((await h(promote(s))).status,403);
+ assert.equal((await h(promote(s,'https://elsewhere.test'))).status,403);
+ const ownerSession=await login(h,owner,'registration');assert.equal((await h(promote(ownerSession))).status,403);
+ f.approve();f.allow(false);assert.equal((await h(promote(s))).status,403);
+ f.allow(true);
+ const results=await Promise.all([h(promote(s)),h(promote(s))]);
+ assert.deepEqual(results.map(result=>result.status),[204,204]);
+ assert.equal(f.puts(),1);assert.equal(cookie(results[0]),s);assert.match(results[0].headers.getSetCookie()[0],/Max-Age=43200; Path=\/; Secure; HttpOnly; SameSite=Strict/);
+ assert.equal((await h(push(s))).status,200);
+ assert.equal((await h(request('worker-password',{password},s))).status,200);
+ f.advance(901_000);
+ assert.equal((await f.start()(push(s))).status,200);
+ assert.equal((await h(request('logout',{},s))).status,204);
+ assert.equal((await h(push(s))).status,401);
+});
+
+test('sign-out during promotion and actual expiry cannot leave a revived durable worker session',async()=>{
+ const f=fixture(),h=f.start(),s=await login(h,email,'registration');
+ let allow,entered;const waiting=new Promise(resolve=>{entered=resolve});
+ f.onPut(()=>new Promise(resolve=>{allow=resolve;entered()}));
+ const upgrading=h(promote(s));await waiting;
+ assert.equal((await h(request('logout',{},s))).status,204);
+ allow();assert.equal((await upgrading).status,401);
+ assert.equal(f.sessions.size,0);assert.equal((await h(push(s))).status,401);
+ f.advance(61_000);
+ const again=await login(h,email,'registration');
+ f.advance(901_000);assert.equal((await h(promote(again))).status,401);
+ assert.equal(f.sessions.size,0);
 });

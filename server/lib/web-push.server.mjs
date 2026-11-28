@@ -77,7 +77,8 @@ export function createPushService({origin,lane,publicKey,send,interval=10000}){
     request.headers.has('sec-fetch-site')&&request.headers.get('sec-fetch-site')!=='same-origin')return reply(403,{error:'denied'});
    try{
     const s=await resolve(request);
-    if(s?.state!=='verified'||s.issuer!==ISSUER||!/^[a-f0-9]{64}$/.test(s.pushSessionKey??'')||!await s.isActive())return reply(401,{error:'login'});
+    if(s?.state!=='verified'||s.issuer!==ISSUER||!await s.isActive())return reply(401,{error:'login'});
+    if(!/^[a-f0-9]{64}$/.test(s.pushSessionKey??''))return s.workerSessionCanUpgrade===true?reply(409,{error:'registration-session'}):reply(403,{error:'unavailable'});
     if(!write)return reply(200,{publicKey});
     if(request.headers.get('content-type')?.split(';')[0]!=='application/json'||!request.body||request.headers.has('content-encoding'))return reply(400,{error:'invalid'});
     const reader=request.body.getReader();let parts=[],size=0,alarm;

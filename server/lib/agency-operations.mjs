@@ -123,6 +123,10 @@ export async function assembleAgencyOperations(config,lane,{now=Date.now,sharedW
   }catch{}
  }
  const workerStore=ready.find(([id])=>id==='worker')?.[1];
+ const workerSession=workerStore&&workerTerms?async actor=>{
+  const rows=await workerStore.call('context',actor),memberships=rows.length===1?rows[0].value?.memberships:null;
+  return Array.isArray(memberships)&&memberships.length>0&&memberships.every(m=>m?.role==='worker')&&await workerTerms.accepted(actor)===true;
+ }:undefined;
  const workerPassword=workerStore&&workerTerms?async actor=>{
   const rows=await workerStore.call('context',actor);
   // The provider's credential belongs to the person, so a worker-only route
@@ -173,6 +177,6 @@ export async function assembleAgencyOperations(config,lane,{now=Date.now,sharedW
      return {state:'anonymous'};
     }})];
   });
-  return {enabled:[...ready.map(([name])=>name),...(provisioning?['workerProvisioning']:[]),...(workerTerms?['workerTerms']:[])],provisioning,workerPassword,workerSelfService:ready.some(([name])=>name==='worker'),find:path=>handlers.find(([match])=>match.test(path))?.[1]};
+  return {enabled:[...ready.map(([name])=>name),...(provisioning?['workerProvisioning']:[]),...(workerTerms?['workerTerms']:[])],provisioning,workerSession,workerPassword,workerSelfService:ready.some(([name])=>name==='worker'),find:path=>handlers.find(([match])=>match.test(path))?.[1]};
  };
 }

@@ -10,6 +10,7 @@ import {workerCall} from './worker-enrollment';
 import {PASSWORD_RESET_PATH,passwordResetHeading} from './PasswordResetForm';
 import {hasCurrentWorkerWorkspace,shouldOfferAgencyJoin,workerWorkspaceHint,workerWorkspaceReturn} from './worker-account-navigation';
 import {useWorkerEnrollmentStatus} from './use-worker-connections';
+import {persistApprovedWorkerSession} from './worker-session';
 import {workerRegistrationCopy} from './worker-registration-copy';
 import {loadWorkspaceAccess} from './workspace-access';
 import {StagingSessionPanel} from '../modules/auth/pages/StagingSessionPanel';
@@ -41,9 +42,13 @@ export function WorkerAccountPage(){
    if(application.status==='pending')observedPending.current.add(application.id);
    if(application.status==='approved'&&(observedPending.current.has(application.id)||submittedApplication===application.id)&&
     enrollment.memberships.some(m=>m.role==='worker'&&m.organizationId===application.organizationId)){
-    observedPending.current.clear();
-    navigate('/workspace/'+application.organizationId,{replace:true,state:null});
-    return;
+    const c=new AbortController();
+    void persistApprovedWorkerSession(c.signal).then(()=>{
+     if(c.signal.aborted)return;
+     observedPending.current.clear();
+     navigate('/workspace/'+application.organizationId,{replace:true,state:null});
+    });
+    return()=>c.abort();
    }
   }
  },[enrollment,loc.pathname,navigate,submittedApplication]);
