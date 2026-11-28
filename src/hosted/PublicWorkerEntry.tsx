@@ -7,6 +7,7 @@ import {createWorkingRegistrationClient,type AccessContext} from '../modules/aut
 import {emailInvitations,enrollmentContext,workerCall,type EmailInvitation,type EnrollmentContext} from './worker-enrollment';
 import {workerProvisionCopy} from './worker-provisioning-copy';
 import {WorkerTermsGate} from './WorkerTermsGate';
+import {ApplicationNameFields} from './ApplicationNameFields';
 import {workerRegistrationCopy} from './worker-registration-copy';
 
 const membershipId=(v:unknown)=>typeof v==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(v);
@@ -80,6 +81,8 @@ function WorkerAgencyConnection({initialInvite,onSessionExpired,provisioning,aut
  const [method,M]=useState<'nip'|'invite'>(initialInvite?'invite':'nip'),[nip,N]=useState(''),[code,I]=useState(initialInvite);
  const [value,V]=useState<EnrollmentContext>(),[agency,A]=useState<FoundAgency|null>(),[notice,T]=useState(''),[err,E]=useState('');
  const [busy,B]=useState(false),[revision,R]=useState(0),pending=useRef(false),autoAttempted=useRef(false);
+ const [firstName,setFirstName]=useState(''),[lastName,setLastName]=useState('');
+ const names=<ApplicationNameFields first={firstName} last={lastName} onFirst={setFirstName} onLast={setLastName} disabled={busy}/>;
  const expired=useRef(onSessionExpired);expired.current=onSessionExpired;
  useEffect(()=>{
   const c=new AbortController();
@@ -128,7 +131,7 @@ function WorkerAgencyConnection({initialInvite,onSessionExpired,provisioning,aut
   const body=kind==='request'&&agency?.nip===normalized?{agencyId:agency.agency_id,nip:normalized}:kind==='claim'&&invitation(code)?{code:invitation(code)}:null;
   if(!body){E(kind==='request'?copy.invalidNip:copy.invalidInvite);return}
   void run(async()=>{
-   const result=await workerCall(kind,body) as {application?:{application_id?:string;status?:string}};
+   const result=await workerCall(kind,{...body,firstName:firstName.trim(),lastName:lastName.trim()}) as {application?:{application_id?:string;status?:string}};
    if(!membershipId(result?.application?.application_id))throw Error('unavailable');
    if(result.application?.status==='pending'){
     navigate('/account',{replace:true,state:{offerWorkerPassword:true}});return;
@@ -167,11 +170,13 @@ function WorkerAgencyConnection({initialInvite,onSessionExpired,provisioning,aut
     </form>
     {agency===null&&<p role="status">{copy.notFound}</p>}
     {agency&&<article className="notice-box"><strong>{agency.name}</strong><p>NIP: {agency.nip}</p>{agency.verified===false&&<p>{inviteCopy.unverified}</p>}
-      <button type="button" className="button button--primary" disabled={busy||!value} onClick={()=>apply('request')}>{copy.apply}</button></article>}
+      <form className="auth-form" onSubmit={e=>{e.preventDefault();apply('request')}}>{names}
+       <button type="submit" className="button button--primary" disabled={busy||!value||!firstName.trim()||!lastName.trim()}>{copy.apply}</button></form></article>}
    </>:<><p id="worker-invite-help" className="muted-copy">{copy.inviteHelp}</p>
     <form className="auth-form" onSubmit={e=>{e.preventDefault();apply('claim')}}>
      <label className="field-label" htmlFor="worker-invite-connection"><span>{copy.inviteLabel}</span><input id="worker-invite-connection" aria-describedby="worker-invite-help" autoComplete="off" spellCheck={false} required maxLength={300} value={code} disabled={busy} onChange={e=>{I(e.target.value);E('');T('')}}/></label>
-     <button className="button button--primary" disabled={busy||!value}>{copy.inviteAction}</button>
+     {names}
+     <button className="button button--primary" disabled={busy||!value||!firstName.trim()||!lastName.trim()}>{copy.inviteAction}</button>
     </form>
    </>}
   </div>

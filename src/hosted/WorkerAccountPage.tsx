@@ -5,6 +5,8 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import {Link,useLocation,useNavigate} from 'react-router-dom';import {useTranslation} from 'react-i18next';
 import {RegistrationFrame} from '../components/PublicExperience';import {PrivateAccess} from './PrivateAccess';
 import {WorkerPasswordPanel} from './WorkerPasswordPanel';
+import {ApplicationNameFields} from './ApplicationNameFields';
+import {workerCall} from './worker-enrollment';
 import {PASSWORD_RESET_PATH,passwordResetHeading} from './PasswordResetForm';
 import {hasCurrentWorkerWorkspace,shouldOfferAgencyJoin,workerWorkspaceHint,workerWorkspaceReturn} from './worker-account-navigation';
 import {useWorkerEnrollmentStatus} from './use-worker-connections';
@@ -81,7 +83,7 @@ export function WorkerAccountPage(){
  <div className="personal-account" aria-busy={busy}>
  {pending.length>0&&<section className="notice-box" aria-labelledby="pending-agency-title">
   <h2 id="pending-agency-title">{workerCopy.pending}</h2>
-  <ul>{pending.map(application=><li key={application.id}>{application.name}</li>)}</ul>
+  <ul>{pending.map(application=><li key={application.id}><strong>{application.name}</strong><PendingApplicationDetails applicationId={application.id}/></li>)}</ul>
   {waiting&&<p>{workerCopy.pendingHours}</p>}
   <button className="button button--outline" type="button" disabled={busy} onClick={reload}>{workerCopy.checkApplication}</button>
  </section>}
@@ -111,6 +113,31 @@ export function WorkerAccountPage(){
  {!recovery&&!reauth&&!value&&!closed&&!waiting&&<button className="button button--outline button--full" disabled={busy} onClick={reload}>{tx('refresh')}</button>}
  {!recovery&&!reauth&&status==='login'&&!value&&!closed&&<div className="form-actions"><Link className="button button--primary" to="/login">{tx('loginAction')}</Link><Link to="/account/recovery" state={returnState}>{tx('recoveryTitle')}</Link></div>}
  </div></RegistrationFrame>
+}
+function PendingApplicationDetails({applicationId}:{applicationId:string}){
+ const {t}=useTranslation();
+ const [first,setFirst]=useState(''),[last,setLast]=useState(''),[status,setStatus]=useState<'busy'|'saved'|'error'>();
+ const operation=useRef<AbortController|null>(null);
+ useEffect(()=>()=>operation.current?.abort(),[]);
+ async function save(){
+  if(operation.current||!first.trim()||!last.trim())return;
+  const c=new AbortController();operation.current=c;setStatus('busy');
+  try{
+   const result=await workerCall('application-details',{applicationId,firstName:first.trim(),lastName:last.trim()},c.signal) as {state?:string};
+   if(result?.state!=='saved')throw Error();
+   if(!c.signal.aborted){setStatus('saved');setFirst('');setLast('')}
+  }catch{if(!c.signal.aborted)setStatus('error')}
+  finally{if(operation.current===c)operation.current=null}
+ }
+ return <details>
+  <summary>{t('workerEnrollment.applicantEdit')}</summary>
+  <form className="auth-form" onSubmit={e=>{e.preventDefault();void save()}}>
+   <ApplicationNameFields first={first} last={last} onFirst={setFirst} onLast={setLast} disabled={status==='busy'}/>
+   <button type="submit" className="button button--primary" disabled={status==='busy'||!first.trim()||!last.trim()}>{t('workerEnrollment.applicantSave')}</button>
+   {status==='saved'&&<p role="status">{t('workerEnrollment.applicantSaved')}</p>}
+   {status==='error'&&<p role="alert">{t('workerEnrollment.applicantError')}</p>}
+  </form>
+ </details>;
 }
 export function AgencyLifecyclePanel({organizationId,refreshKey=0}:{organizationId:string;refreshKey?:number}){
  const {t}=useTranslation(),tx=(k:string)=>t('workerAccount.'+k),[workers,setWorkers]=useState<{membershipId:string;state:string;endedAt:string|null}[]>(),[selected,setSelected]=useState(''),[confirmed,setConfirmed]=useState(false),[busy,setBusy]=useState(false),[status,setStatus]=useState(''),[revision,setRevision]=useState(0);

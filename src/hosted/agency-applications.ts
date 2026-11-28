@@ -1,7 +1,7 @@
 import {useCallback,useEffect,useState} from 'react';
 import {workerCall} from './worker-enrollment';
 
-export type PendingApplication={application_id:string;claimed_at:string};
+export type PendingApplication={application_id:string;claimed_at:string;firstName?:string|null;lastName?:string|null;email?:string|null};
 export function useAgencyApplications(organizationId:string|undefined){
  const [data,setData]=useState<{org:string;rows:PendingApplication[]}>(),[error,setError]=useState<string>(),[revision,R]=useState(0);
  const refresh=useCallback(()=>R(n=>n+1),[]);

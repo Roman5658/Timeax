@@ -108,3 +108,30 @@ test('worker join notifications expose only the organization scoped by the authe
  const principal={issuer:ISSUER,subject};
  assert.deepEqual(calls,[['join-events',principal,{agencyId:org}],['read-join-event',principal,{agencyId:org,id:invitation}]]);
 });
+
+test('worker submits names with verified identity, cannot supply an email, and can complete a pending request',async()=>{
+ const calls=[], names={firstName:'Ołena',lastName:'Петренко'};
+ let accepted=false;
+ const handle=createWorkerEnrollmentHandler({origin,store:{},resolveSession,now:()=>1,workerTerms:{accepted:async()=>accepted},
+  provisioning:{async call(action,actor,body){calls.push([action,actor,body]);
+   if(action==='application-submit')return {application:{application_id:invitation,status:'pending'}};
+   if(action==='application-complete')return {state:'saved'};
+   if(action==='application-queue')return {applications:[{application_id:invitation,...names,email}]};
+   throw Error('unexpected');
+  }}});
+ const data={agencyId:org,nip,...names},existing={applicationId:invitation,...names};
+ assert.equal((await handle(req('application-details',existing,false))).status,401);
+ assert.equal((await handle(req('request',data))).status,409);
+ assert.equal((await handle(req('application-details',existing))).status,409);
+ accepted=true;
+ assert.equal((await handle(req('request',{...data,email}))).status,400);
+ assert.equal((await handle(req('claim',{code,...names,lastName:''}))).status,400);
+ assert.equal((await handle(req('request',data))).status,200);
+ assert.equal((await handle(req('claim',{code,...names}))).status,200);
+ assert.equal((await handle(req('application-details',existing))).status,200);
+ assert.equal((await (await handle(req('agency/'+org))).json()).applications[0].email,email);
+ assert.deepEqual(calls.map(([k,,payload])=>[k,payload]),[
+  ['application-submit',data],['application-submit',{code,...names}],['application-complete',existing],['application-queue',{agencyId:org}],
+ ]);
+ assert.ok(calls.every(([,actor])=>actor.issuer===ISSUER&&actor.subject===subject));
+});

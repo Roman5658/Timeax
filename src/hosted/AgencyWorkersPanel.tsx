@@ -178,7 +178,9 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,application
    <p>{t('workerEnrollment.reviewHint')}</p>
    {queueFailed?<div className="agency-worker-status" role="alert"><p>{copy('applicationsUnavailable')}</p><button type="button" className="button button--outline button--small" onClick={refreshQueue}>{copy('retry')}</button></div>
    :!applications?<p role="status">{copy('load')}</p>:!applications.length?<p>{t('workerEnrollment.emptyQueue')}</p>:
-   <ul className="agency-worker-applications">{applications.map(a=><li key={a.application_id} id={'agency-application-'+a.application_id} tabIndex={-1}><div><strong>{t('workerEnrollment.reference')}</strong><br/><code>{a.application_id}</code><p>{dates.format(new Date(a.claimed_at))}</p></div>
+   <ul className="agency-worker-applications">{applications.map(a=><li key={a.application_id} id={'agency-application-'+a.application_id} tabIndex={-1}><div>
+    {a.firstName&&a.lastName?<><strong>{a.firstName} {a.lastName}</strong>{a.email&&<p>{a.email}</p>}</>:<strong>{t('workerEnrollment.applicantMissing')}</strong>}
+    <small>{t('workerEnrollment.reference')}: <code>{a.application_id}</code></small><p>{dates.format(new Date(a.claimed_at))}</p></div>
     <button type="button" className="button button--primary button--small" disabled={busy} onClick={()=>void run(async()=>{
      await workerCall(queuePath+'/approve',{applicationId:a.application_id});removeApplication(a.application_id);R(n=>n+1);
     },'approved')}>{t('workerEnrollment.approve')}</button></li>)}</ul>}

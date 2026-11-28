@@ -5,6 +5,7 @@ const uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}
 export const validNip=v=>typeof v==='string'&&/^[0-9]{10}$/.test(v)&&[6,5,7,2,3,4,5,6,7].reduce((n,w,i)=>n+w*Number(v[i]),0)%11===Number(v[9]);
 const exact=(o,keys)=>o&&typeof o==='object'&&!Array.isArray(o)&&Object.keys(o).length===keys.length&&keys.every(k=>Object.hasOwn(o,k));
 const validName=(value,max)=>typeof value==='string'&&[...value.trim()].length>=1&&[...value.trim()].length<=max&&!/[\p{Cc}\p{Cf}@]/u.test(value);
+const applicantNames=body=>validName(body?.firstName,80)&&validName(body?.lastName,80);
 const reply=(status,body)=>Response.json(body,{status,headers:{'Cache-Control':'no-store, private',Vary:'Cookie','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});
 export const WORKER_SQL=Object.freeze({
  context:'SELECT timeax_api.worker_enrollment_context($1::text,$2::text) AS value',
@@ -52,7 +53,7 @@ export function createWorkerEnrollmentHandler({origin,store=null,provisioning,in
    if(path==='/api/worker-enrollment/terms'){
     return workerTerms?workerTerms.handle(actor,mutate,body,active):reply(503,{error:'worker-terms-unavailable'});
    }
-   if(mutate&&['/api/worker-enrollment/request','/api/worker-enrollment/claim','/api/worker-enrollment/accept-email-invitation'].includes(path)
+   if(mutate&&['/api/worker-enrollment/request','/api/worker-enrollment/claim','/api/worker-enrollment/application-details','/api/worker-enrollment/accept-email-invitation'].includes(path)
     &&(workerTerms||requireWorkerTerms)&&!await workerTerms?.accepted(actor)){
     return reply(409,{error:'worker-terms-required'});
    }
@@ -71,19 +72,33 @@ export function createWorkerEnrollmentHandler({origin,store=null,provisioning,in
     if(!exact(body,['nip'])||!validNip(body.nip))return reply(400,{error:'invalid-nip'});
     if(provisioning)result=await provisioning.call('directory-lookup',actor,body);
     else return reply(503,{error:'worker-directory-unavailable'});
-   }else if(path==='/api/worker-enrollment/request'&&mutate){
-    if(!exact(body,['agencyId','nip'])||!uuid(body.agencyId)||!validNip(body.nip))return reply(400,{error:'invalid-request'});
+   }else if(path==='/api/worker-enrollment/application-details'&&mutate){
+    if(!exact(body,['applicationId','firstName','lastName'])||!uuid(body.applicationId)||!applicantNames(body))return reply(400,{error:'invalid-request'});
     if(!provisioning)return reply(503,{error:'worker-directory-unavailable'});
-    const rows=[(await provisioning.call('directory-request',actor,body)).application];
+    result=await provisioning.call('application-complete',actor,body);
+    if(result?.state!=='saved')throw Error();
+   }else if(path==='/api/worker-enrollment/request'&&mutate){
+    const named=exact(body,['agencyId','nip','firstName','lastName'])&&applicantNames(body);
+    if((!named&&!exact(body,['agencyId','nip']))||!uuid(body.agencyId)||!validNip(body.nip))return reply(400,{error:'invalid-request'});
+    if(!provisioning)return reply(503,{error:'worker-directory-unavailable'});
+    const rows=[(await provisioning.call(named?'application-submit':'directory-request',actor,body)).application];
     if(rows.length!==1||!uuid(rows[0]?.application_id))throw Error();result={application:rows[0]};
    }else if(path==='/api/worker-enrollment/claim'&&mutate){
-    if(!exact(body,['code'])||typeof body.code!=='string'||!/^[0-9a-f]{64}$/.test(body.code))return reply(400,{error:'invalid-invitation'});
+    const named=exact(body,['code','firstName','lastName'])&&applicantNames(body);
+    if((!named&&!exact(body,['code']))||typeof body.code!=='string'||!/^[0-9a-f]{64}$/.test(body.code))return reply(400,{error:'invalid-invitation'});
+    if(named&&!provisioning)return reply(503,{error:'worker-directory-unavailable'});
     const rows=provisioning
-     ?[(await provisioning.call('claim-code',actor,body)).application]
+     ?[(await provisioning.call(named?'application-submit':'claim-code',actor,body)).application]
      :await store.call('claim',actor,body.code);
     if(rows.length!==1||!uuid(rows[0]?.application_id))throw Error();result={application:rows[0]};
    }else if(agency&&uuid(agency[1])){
-    if(!agency[2]&&!mutate){result={applications:await store.call('queue',actor,agency[1])};}
+    if(!agency[2]&&!mutate){
+     if(provisioning){
+      try{result=await provisioning.call('application-queue',actor,{agencyId:agency[1]});}
+      catch(e){if(e?.code!=='22023')throw e;}
+     }
+     result??={applications:await store.call('queue',actor,agency[1])};
+    }
     else if(agency[2]==='joins'&&provisioning){
      if(mutate&&(!exact(body,['id'])||!uuid(body.id)))return reply(400,{error:'invalid-request'});
      result=await provisioning.call(mutate?'read-join-event':'join-events',actor,{agencyId:agency[1],...(mutate?{id:body.id}:{})});
