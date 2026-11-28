@@ -36,6 +36,7 @@ import '../styles/hosted-cabinet.css';
 
 const loadProductions=()=>import('./AgencyProductions');
 const loadAgencyTimecards=()=>import('./AgencyTimecardsPanel');
+const AgencyOverview=lazy(()=>import('./AgencyOverview').then(m=>({default:m.AgencyOverview})));
 const loadWorkers=()=>import('./AgencyWorkersPanel');
 const loadTimecards=()=>import('./TimecardsPage');
 const loadFactoryTimecards=()=>import('./FactoryTimecardsPage');
@@ -277,6 +278,9 @@ function HostedCabinet({access,section,menu,agencyProfile,canonical,retryProfile
       <div className="panel-heading"><h2>{t('workspaceRead.worksites')}</h2></div>
       {access.worksites.length?<ul className="factory-summary-list hosted-site-list">{access.worksites.map(site=><li className="factory-summary-row" key={site.id}><span className="factory-summary-icon"><Building2 size={16} aria-hidden="true"/></span><strong>{publicAgency?<Link to={root+'/setup?site='+site.id}>{site.name}</Link>:site.name}</strong></li>)}</ul>:<p>{t('workspaceRead.empty')}</p>}
      </section>
+     {publicAgency&&<Suspense fallback={null}><AgencyOverview key={org+access.membership.id} org={org} member={access.membership.id} sites={access.worksites}
+      productions={agencyProfile?.productions===true} names={uses('names')} internal={uses('timecards')} factory={uses('factoryTimecards')}
+      teamEnabled={uses('team')} reviews={requests} reviewsReady={!!(inbox.data||backdated.feed)} messageStates={inbox.data?.states}/></Suspense>}
      <div className="form-actions agency-overview-actions">{menu.filter(x=>x.section==='timecards'||x.section==='payslips'||x.section==='workers').map(x=><Link key={x.section} className="button button--outline button--small" to={route(x.section)}>{t(x.label)}</Link>)}</div>
     </>}
     {directory&&<AgencyWorkersPanel key={org+(agencySearch.get('site')??'')} organizationId={org} siteId={agencySearch.get('site')??undefined} initialSection={agencySearch.get('tab')==='applications'?'applications':'roster'} enrollmentEnabled={uses('worker')} applicationQueue={applications} provisioningEnabled={publicAgency&&uses('workerProvisioning')} productionsEnabled={agencyProfile?.productions===true} factoryHoursEnabled={uses('factoryTimecards')} timecardsEnabled={uses('timecards')} absencesEnabled={uses('team')} estimatesEnabled={publicAgency&&uses('estimates')} namesEnabled={uses('names')} lifecycleEnabled={uses('account')}/>}
