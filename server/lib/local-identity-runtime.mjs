@@ -63,9 +63,24 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
   sessions.set(id,{...identity,credential,expiresAt:now()+ttl*1000});keepWorkerProof();return {id,maxAge:ttl};
  }
  let ops;
+ const workerPasswordEligible=async identity=>!!ops?.workerPassword&&await onboardingStore.get(identity)===null&&await ops.workerPassword(identity)===true;
+ const workerReauth={
+  async actor(request){
+   const actor=await resolve(request);
+   return actor.state==='verified'&&await workerPasswordEligible(actor)&&await actor.isActive()?actor:null;
+  },
+  async save(request,credential,id){
+   const actor=await this.actor(request);
+   if(!actor||idFrom(request,name)!==id||actor.subject!==credential.subject||actor.email!==credential.email||request.signal.aborted)return false;
+   const prior=workerProofs.get(id);
+   if(prior?.busy||!prior&&workerProofs.size>=1000)return false;
+   workerProofs.set(id,{credential,expiresAt:now()+workerPasswordProofMs,busy:false,used:false});
+   return true;
+  }
+ };
  const auth=createPublicEmailRoutes({origin,provider,otpLength,tagKey:randomBytes(32),localLoopback,now,admitSend,
   retainPasswordSetup:onboardingStore!==null,retainWorkerPassword:()=>Boolean(ops?.workerPassword),maxSessionAge:sessionStore?SESSION_TTL_SECONDS:ttl,
-  allowNewWorkerIdentity:email=>ops?.provisioning?.hasPending(email)??false,issueIdentitySession,readSessionId:request=>idFrom(request,name)
+  allowNewWorkerIdentity:email=>ops?.provisioning?.hasPending(email)??false,workerReauth,issueIdentitySession,readSessionId:request=>idFrom(request,name)
  });
  const onboarding=onboardingStore&&createAgencyOnboardingRoutes({origin,now,provider,store:onboardingStore,
   readSession:async request=>{purge();const id=idFrom(request,name);return sessions.get(id)??await sessionStore?.get(id)},
@@ -82,7 +97,7 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
  const productions=onboarding&&agencyProductionsFactory?.(resolve);
  ops=onboarding&&agencyOperationsFactory?.(resolve);
  const workerPassword=ops?.workerPassword&&createWorkerPasswordHandler({origin,now,provider,resolveSession:resolve,
-  eligible:async identity=>await onboardingStore.get(identity)===null&&await ops.workerPassword(identity)===true,
+  eligible:workerPasswordEligible,
   getProof:request=>workerProofs.get(idFrom(request,name))});
  const admin=accountAdminFactory?.(subject=>{
   removedSubjects.set(subject,now()+ttl*1000);

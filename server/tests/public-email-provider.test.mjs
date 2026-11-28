@@ -10,7 +10,7 @@ const syntheticToken=['mockHeader',Buffer.from(JSON.stringify({iss:ISSUER,sub:su
  role:'authenticated',is_anonymous:false,aal:'aal1'})).toString('base64url'),'mockSignature'].join('.');
 const confirmed={id:subject,email,email_confirmed_at:new Date(at-1000).toISOString(),
  aud:'authenticated',role:'authenticated',is_anonymous:false};
-function fixture(user=confirmed,{otpStatus=200}={}){
+function fixture(user=confirmed,{otpStatus=200,passwordStatus=200}={}){
  const requests=[];
  const provider=createPublicEmailProvider({publishableKey:'sb_publishable_'+'a'.repeat(40),otpLength:8},{
   now:()=>at,async fetchImpl(url,init){
@@ -18,6 +18,7 @@ function fixture(user=confirmed,{otpStatus=200}={}){
    assert.equal(init.credentials,'omit');assert.equal(init.redirect,'error');assert.ok(init.signal);
    assert.ok(url.startsWith(ISSUER+'/'));
    const response=url.endsWith('/otp')?new Response(null,{status:otpStatus}):
+    url.endsWith('/token?grant_type=password')&&passwordStatus!==200?Response.json({error_code:'invalid_credentials'},{status:passwordStatus}):
     (url.endsWith('/verify')||url.endsWith('/token?grant_type=password'))?Response.json({access_token:syntheticToken,refresh_token:'not-for-the-client'}):
     Response.json(user);
    Object.defineProperty(response,'url',{value:url});
@@ -66,4 +67,18 @@ test('password update can use only the internally retained verified enrollment s
  assert.equal(update[0].url,ISSUER+'/user');
  assert.equal(update[0].init.headers.authorization,'Bearer '+syntheticToken);
  assert.deepEqual(await provider.passwordLogin(email,'example-long-password'),normal);
+});
+
+test('a worker password change only reports success after a matching provider login',async()=>{
+ for(const status of [200,400]){
+  const {provider,requests}=fixture(confirmed,{passwordStatus:status});
+  const actor=await provider.verifyCode(email,'12345678',{forPasswordSetup:true});
+  assert.equal(await provider.setPassword(actor,'example-long-password',{verifyLogin:true}),status===200);
+  assert.deepEqual(requests.filter(r=>r.init.method==='PUT'||r.url.includes('grant_type=password')).map(r=>r.init.method),['PUT','POST']);
+ }
+});
+
+test('password login separates invalid credentials from an unavailable provider',async()=>{
+ assert.equal(await fixture(confirmed,{passwordStatus:400}).provider.passwordLogin(email,'fixture-password'),null);
+ await assert.rejects(fixture(confirmed,{passwordStatus:503}).provider.passwordLogin(email,'fixture-password'),/unavailable/);
 });

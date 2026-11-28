@@ -21,7 +21,8 @@ function fixture(){
   async verifyCode(email,_otp,opts){
    const actor=identity(email);if(opts?.forPasswordSetup)credentials.add(actor);return actor;
   },
-  async setPassword(actor,password){
+  async setPassword(actor,password,options){
+   assert.deepEqual(options,{verifyLogin:true});
    assert.ok(credentials.has(actor));assert.equal(actor.subject,U);
    credentials.delete(actor);writes.push([actor.email,password]);return true;
   },
@@ -74,3 +75,21 @@ test('worker password setup is denied to agencies, unjoined workers, stale proof
  assert.deepEqual(f.writes,[]);
 });
 
+test('fresh password code is bound to the current worker session and does not log out or rotate it',async()=>{
+ const f=fixture(),h=f.start(),session=await login(h,email),other=await login(h,owner);
+ f.advance(300001);
+ const begin={email:'',flow:'worker-password'};
+ assert.equal((await h(request('start',begin))).status,401);
+ assert.equal((await h(request('start',begin,other))).status,401);
+ assert.equal((await h(request('start',{...begin,email:owner},session))).status,400);
+ const code=await h(request('start',begin,session));assert.equal(code.status,202);
+ const challenge=cookie(code);
+ assert.equal((await h(request('verify',{code:'12345678'},other+'; '+challenge))).status,401);
+ const ok=await h(request('verify',{code:'12345678'},session+'; '+challenge));
+ assert.equal(ok.status,200);assert.ok(!ok.headers.getSetCookie().some(c=>c.startsWith('__Host-timeax-email-identity=')));
+ assert.equal((await (await h(request('worker-password',null,session))).json()).state,'ready');
+ assert.equal((await h(request('worker-password',{password},session))).status,200);
+ assert.equal((await (await h(request('worker-password',null,session))).json()).state,'saved');
+ assert.equal((await h(request('logout',{},session))).status,204);
+ assert.equal((await h(request('password',{email,password}))).status,200);
+});

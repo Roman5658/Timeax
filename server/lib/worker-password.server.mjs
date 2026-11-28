@@ -26,7 +26,7 @@ export function createWorkerPasswordHandler({origin,provider,resolveSession,elig
    const fresh=()=>proof?.expiresAt>now()&&proof?.credential?.issuer===session.issuer&&
     proof.credential.subject===session.subject&&proof.credential.email===session.email&&
     proof.credential.emailConfirmed===true&&proof.credential.isAnonymous===false&&getProof(request,session)===proof;
-   if(!write)return reply(200,{state:fresh()?(proof.busy?'saving':proof.used?'reauthentication-required':'ready'):'reauthentication-required'});
+   if(!write)return reply(200,{state:fresh()?(proof.busy?'saving':proof.saved?'saved':proof.used?'reauthentication-required':'ready'):'reauthentication-required'});
    if(!fresh()||proof.used||proof.busy)return reply(409,{error:'reauthentication-required'});
    let body;
    try{body=JSON.parse(await readBody(request,2048))}catch{return reply(400,{error:'invalid-request'})}
@@ -37,7 +37,8 @@ export function createWorkerPasswordHandler({origin,provider,resolveSession,elig
    try{
     // This proof has exactly one provider write attempt, even if the provider times out.
     proof.used=true;
-    if(await provider.setPassword(proof.credential,body.password)!==true)return reply(409,{error:'password-not-set'});
+    if(await provider.setPassword(proof.credential,body.password,{verifyLogin:true})!==true)return reply(409,{error:'password-not-set'});
+    proof.saved=true;
     return reply(200,{state:'saved'});
    }finally{proof.busy=false}
   }catch{return reply(503,{error:'service-unavailable'})}

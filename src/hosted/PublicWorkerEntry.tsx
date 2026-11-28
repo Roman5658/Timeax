@@ -148,7 +148,7 @@ function WorkerAgencyConnection({initialInvite,onSessionExpired,provisioning,aut
    return <article className="notice-box" key={a.id}><strong>{a.name}</strong><p>{a.status==='pending'?copy.pending:current?copy.approved:copy.accessEnded}</p></article>;
   })}
   {workers.map(m=><p key={m.membershipId}><Link className="button button--primary" to={'/workspace/'+m.organizationId}
-    state={value?.applications.some(a=>a.organizationId===m.organizationId&&a.status==='approved')?{offerWorkerPassword:true}:undefined}>{copy.workspace}: {m.name}</Link></p>)}
+   >{copy.workspace}: {m.name}</Link></p>)}
   {value?.applications.some(a=>a.status==='pending')&&<button className="button button--outline" type="button" disabled={busy} onClick={()=>{E('');R(n=>n+1)}}>{copy.checkApplication}</button>}
   <div className="form-actions">
    <button className={'button '+(method==='nip'?'button--primary':'button--outline')} type="button" aria-pressed={method==='nip'} disabled={busy} onClick={()=>{M('nip');E('');T('')}}>{copy.nipMethod}</button>

@@ -72,10 +72,18 @@ export function createPublicEmailProvider({publishableKey,otpLength,signupIntent
   async passwordLogin(rawEmail,password){
    const email=normalizePublicEmail(rawEmail);
    if(!email||!validPasswordInput(password))return null;
-   try{return await validateIdentity(await authRequest('/token?grant_type=password',{email,password}),email)}
-   catch{return null}
+   const response=await authRequest('/token?grant_type=password',{email,password});
+   if(response.status===400||response.status===401){
+    const failure=await readJson(response);
+    if(failure?.error_code==='invalid_credentials'||failure?.error_code==='email_not_confirmed')return null;
+    throw Error('Password provider denied');
+   }
+   if(response.status!==200){void response.body?.cancel().catch(()=>{});throw Error('Password provider unavailable');}
+   const identity=await validateIdentity(response,email);
+   if(!identity)throw Error('Password identity not confirmed');
+   return identity;
   },
-  async setPassword(identity,password){
+  async setPassword(identity,password,{verifyLogin=false}={}){
    const session=secrets.get(identity);
    if(!session||session.busy||!validNewPassword(password))return false;
    session.busy=true;
@@ -84,8 +92,11 @@ export function createPublicEmailProvider({publishableKey,otpLength,signupIntent
     if(res.status!==200){void res.body?.cancel().catch(()=>{});return false}
     const user=await readJson(res);
     const ok=user?.id===identity.subject&&user?.is_anonymous!==true;
-    if(ok)secrets.delete(identity);
-    return ok;
+    if(!ok)return false;
+    secrets.delete(identity);
+    if(!verifyLogin)return true;
+    const signed=await validateIdentity(await authRequest('/token?grant_type=password',{email:identity.email,password}),identity.email);
+    return signed?.subject===identity.subject;
    }catch{return false}
    finally{session.busy=false}
   },

@@ -164,11 +164,11 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
    {(stage==='password'||needsPassword)&&<div className="field-label">
     <label htmlFor="agency-password">{t('selfService.password')}</label>
     <div className="public-password-field">
-     <input id="agency-password" type={stage==='details'&&showPassword?'text':'password'} autoComplete={stage==='password'?'current-password':'new-password'} minLength={stage==='details'?12:undefined} maxLength={72} value={password} onChange={e=>setPassword(e.target.value)} disabled={busy} required/>
-     {stage==='details'&&<button type="button" className="icon-button public-password-toggle" aria-controls="agency-password"
+     <input id="agency-password" type={showPassword?'text':'password'} autoComplete={stage==='password'?'current-password':'new-password'} minLength={stage==='details'?12:undefined} maxLength={72} value={password} onChange={e=>setPassword(e.target.value)} disabled={busy} required/>
+     <button type="button" className="icon-button public-password-toggle" aria-controls="agency-password"
       aria-label={t(showPassword?'publicSignup.hidePassword':'publicSignup.showPassword')} disabled={busy} onClick={()=>setShowPassword(v=>!v)}>
       {showPassword?<EyeOff size={18} aria-hidden="true"/>:<Eye size={18} aria-hidden="true"/>}
-     </button>}
+     </button>
     </div>
    </div>}
    {stage==='details'&&<>

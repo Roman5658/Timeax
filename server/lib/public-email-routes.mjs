@@ -27,7 +27,7 @@ export const isPublicEmailRoute=path=>path===START||path===VERIFY;
 
 // Single-process challenge lane. A deployment must supply an independent send
 // admission/abuse check and its own identity-only session issuer before enabling.
-export function createPublicEmailRoutes({origin,provider,admitSend,issueIdentitySession,tagKey,otpLength,localLoopback=false,now=Date.now,retainPasswordSetup=false,retainWorkerPassword=()=>false,maxSessionAge=900,allowNewWorkerIdentity=null,readSessionId=()=>null}){
+export function createPublicEmailRoutes({origin,provider,admitSend,issueIdentitySession,tagKey,otpLength,localLoopback=false,now=Date.now,retainPasswordSetup=false,retainWorkerPassword=()=>false,maxSessionAge=900,allowNewWorkerIdentity=null,readSessionId=()=>null,workerReauth=null}){
  if(!(localLoopback?/^http:\/\/127\.0\.0\.1:[1-9][0-9]{3,4}$/.test(origin):['https://timeax.pl','https://www.timeax.pl'].includes(origin))||![6,8].includes(otpLength)
   ||typeof provider?.requestCode!=='function'||typeof provider?.verifyCode!=='function'
   ||typeof admitSend!=='function'||typeof issueIdentitySession!=='function'
@@ -56,25 +56,29 @@ export function createPublicEmailRoutes({origin,provider,admitSend,issueIdentity
     return respond(400,{error:'invalid-request'});
    const at=now();clean(at);
    if(url.pathname===START){
-    const email=normalizePublicEmail(body.email),flow=body.flow;
-    if(!email||!['login','registration'].includes(flow))return respond(400,{error:'invalid-request'});
+    const flow=body.flow,reauth=flow==='worker-password';
+    if(reauth&&(body.email!==''||!workerReauth))return respond(400,{error:'invalid-request'});
+    const actor=reauth?await workerReauth.actor(request):null;
+    if(reauth&&!actor)return respond(401,{error:'valid-session-required'});
+    const email=normalizePublicEmail(reauth?actor.email:body.email);
+    if(!email||!['login','registration','worker-password'].includes(flow))return respond(400,{error:'invalid-request'});
     const previous=getChallenge(request,challengeName),previousChallenge=challenges.get(previous);
     const key=tag(email);
-    if(lastSend.has(key))return respond(202,{status:'accepted'});
+    if(lastSend.has(key))return respond(reauth?429:202,reauth?{error:'try-later'}:{status:'accepted'});
     if(challenges.size>=MAX_RECORDS||sendTimes.length>=GLOBAL_MINUTE_LIMIT)return respond(429,{error:'try-later'});
     if(await admitSend({request,flow,emailTag:key,email})!==true)return respond(429,{error:'try-later'});
     // Recheck after awaiting admission so parallel sends cannot share one slot.
     const startedAt=now();clean(startedAt);
     if(request.signal.aborted)return respond(400,{error:'invalid-request'});
-    if(lastSend.has(key))return respond(202,{status:'accepted'});
+    if(lastSend.has(key))return respond(reauth?429:202,reauth?{error:'try-later'}:{status:'accepted'});
     if(challenges.size>=MAX_RECORDS||sendTimes.length>=GLOBAL_MINUTE_LIMIT)return respond(429,{error:'try-later'});
     if(previousChallenge&&!previousChallenge.busy)challenges.delete(previous);
     const id=randomBytes(32).toString('base64url');
-    const challenge={email,flow,expires:startedAt+TTL,attempts:0,busy:false,acknowledged:false};
+    const challenge={email,flow,...(reauth?{sessionId:readSessionId(request),subject:actor.subject}:{}),expires:startedAt+TTL,attempts:0,busy:false,acknowledged:false};
     challenges.set(id,challenge);lastSend.set(key,startedAt);sendTimes.push(startedAt);
     // Return the same external status for provider accept/deny; never claim delivery.
     try{
-     let providerFlow=flow;
+     let providerFlow=reauth?'login':flow;
      if(flow==='login'&&allowNewWorkerIdentity){
       const isPrepared=await Promise.resolve().then(()=>allowNewWorkerIdentity(email)).catch(()=>false);
       if(isPrepared===true)providerFlow='registration';
@@ -89,13 +93,22 @@ export function createPublicEmailRoutes({origin,provider,admitSend,issueIdentity
    if(!challenge||challenge.busy||!challenge.acknowledged||challenge.attempts>=MAX_ATTEMPTS)return denied();
    challenge.attempts++;challenge.busy=true;
    try{
+    const reauth=challenge.flow==='worker-password';
+    if(reauth){
+     const actor=await workerReauth?.actor(request);
+     if(!actor||actor.subject!==challenge.subject||actor.email!==challenge.email||readSessionId(request)!==challenge.sessionId)return denied();
+    }
     const setup=retainPasswordSetup&&challenge.flow==='registration';
-    const workerSetup=challenge.flow==='login'&&retainWorkerPassword()===true;
+    const workerSetup=reauth||challenge.flow==='login'&&retainWorkerPassword()===true;
     const identity=await provider.verifyCode(challenge.email,body.code,...(setup||workerSetup?[{forPasswordSetup:true}]:[]));
     if(!identity||identity.issuer!==ISSUER||typeof identity.subject!=='string'||!uuid.test(identity.subject)
      ||identity.subject==='00000000-0000-0000-0000-000000000000'||identity.emailConfirmed!==true||identity.isAnonymous!==false
      ||challenges.get(id)!==challenge||challenge.expires<=now()||request.signal.aborted)return denied();
     challenges.delete(id);
+    if(reauth){
+     if(identity.subject!==challenge.subject||!await workerReauth.save(request,identity,challenge.sessionId))return denied();
+     return respond(200,{status:'email-verified'},[issueCookie(challengeName)]);
+    }
     const session=await issueIdentitySession({issuer:identity.issuer,subject:identity.subject,
      email:challenge.email,emailConfirmed:true,isAnonymous:false,flow:challenge.flow},setup||workerSetup?identity:null,readSessionId(request));
     if(!token.test(session?.id??'')||!Number.isInteger(session?.maxAge)||session.maxAge<1||session.maxAge>maxSessionAge)
@@ -105,5 +118,5 @@ export function createPublicEmailRoutes({origin,provider,admitSend,issueIdentity
   }catch{return respond(503,{error:'service-unavailable'})}
  };
  return Object.assign(handler,{hasChallenge(request){clean(now());return challenges.has(getChallenge(request,challengeName))},
-  challengeFlow(request){clean(now());return challenges.get(getChallenge(request,challengeName))?.flow}});
+  challengeFlow(request){clean(now());const flow=challenges.get(getChallenge(request,challengeName))?.flow;return flow==='worker-password'?undefined:flow}});
 }
