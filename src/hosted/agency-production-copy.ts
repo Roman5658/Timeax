@@ -54,8 +54,8 @@ const settingsCopy = {
  "ru": {
   "agencyDetails": "Данные агентства",
   "agencyAddress": "Адрес агентства",
-  "contactEmail": "Контактная почта",
-  "contactHint": "Эти данные не меняют почту для входа, NIP или реквизиты оплаты.",
+  "invoiceEmail": "Почта для фактур за подписку",
+  "invoiceEmailHint": "Укажи рабочий адрес, например почту бухгалтерии. Когда оплата подписки будет доступна, на этот адрес будут приходить фактуры за подписку Timeax. Для входа он не используется.",
   "settingsSaved": "Настройки сохранены.",
   "settingsError": "Не удалось загрузить или сохранить настройки.",
   "internalAlias": "Название для вашего агентства",
@@ -65,8 +65,8 @@ const settingsCopy = {
  "pl": {
   "agencyDetails": "Dane agencji",
   "agencyAddress": "Adres agencji",
-  "contactEmail": "E-mail kontaktowy",
-  "contactHint": "Te dane nie zmieniają e-maila do logowania, NIP-u ani danych rozliczeniowych.",
+  "invoiceEmail": "E-mail do faktur za subskrypcję",
+  "invoiceEmailHint": "Podaj adres firmowy, np. e-mail księgowości. Gdy płatności za subskrypcję będą dostępne, na ten adres będą trafiać faktury za subskrypcję Timeax. Ten adres nie służy do logowania.",
   "settingsSaved": "Ustawienia zapisane.",
   "settingsError": "Nie udało sie wczytać lub zapisać ustawień.",
   "internalAlias": "Nazwa dla Twojej agencji",
@@ -76,8 +76,8 @@ const settingsCopy = {
  "uk": {
   "agencyDetails": "Дані агентства",
   "agencyAddress": "Адреса агентства",
-  "contactEmail": "Контактна пошта",
-  "contactHint": "Ці дані не змінюють пошту для входу, NIP чи платіжні реквізити.",
+  "invoiceEmail": "Пошта для рахунків за підписку",
+  "invoiceEmailHint": "Вкажи робочу адресу, наприклад пошту бухгалтерії. Коли оплата підписки стане доступною, на цю адресу надходитимуть рахунки за підписку Timeax. Ця адреса не використовується для входу.",
   "settingsSaved": "Налаштування збережено.",
   "settingsError": "Не вдалося завантажити або зберегти налаштування.",
   "internalAlias": "Назва для вашого агентства",
@@ -87,8 +87,8 @@ const settingsCopy = {
  "en": {
   "agencyDetails": "Agency details",
   "agencyAddress": "Agency address",
-  "contactEmail": "Contact email",
-  "contactHint": "These details do not change the sign-in email, NIP, or billing details.",
+  "invoiceEmail": "Subscription invoice email",
+  "invoiceEmailHint": "Enter a work address, such as your accounting inbox. When subscription payments become available, Timeax subscription invoices will be sent here. This is not your sign-in email.",
   "settingsSaved": "Settings saved.",
   "settingsError": "Could not load or save settings.",
   "internalAlias": "Name for your agency",

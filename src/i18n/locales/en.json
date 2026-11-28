@@ -61,7 +61,7 @@
     "resendAgencyCode": "Resend code",
     "showPassword": "Show password",
     "hidePassword": "Hide password",
-    "agencyEmailUse": "We’ll send a verification code to this address. If we issue invoices, we’ll send them to the same address.",
+    "agencyEmailUse": "We’ll send a verification code to this address. You can set a separate subscription invoice email in agency settings.",
     "retry": "Try again",
     "saved": "Agency details were saved. An agency account has not been created yet.",
     "emailUse": "We use your email to send a code and verify your account, not to send marketing.",

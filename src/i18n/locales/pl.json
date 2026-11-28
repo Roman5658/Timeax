@@ -61,7 +61,7 @@
     "resendAgencyCode": "Wyślij kod ponownie",
     "showPassword": "Pokaż hasło",
     "hidePassword": "Ukryj hasło",
-    "agencyEmailUse": "Na ten adres wyślemy kod potwierdzający. Jeśli wystawimy faktury, wyślemy je na ten sam adres.",
+    "agencyEmailUse": "Na ten adres wyślemy kod potwierdzający. E-mail do faktur za subskrypcję możesz podać osobno w ustawieniach agencji.",
     "retry": "Spróbuj ponownie",
     "saved": "Dane agencji zapisano. Konto agencji nie zostało jeszcze utworzone.",
     "emailUse": "Na ten adres wyślemy kod. Adres służy do potwierdzenia konta, nie do wysyłania reklam.",

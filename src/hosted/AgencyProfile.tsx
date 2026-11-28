@@ -40,8 +40,8 @@ export function AgencyProfile({organizationId,onSaved}:{organizationId:string;on
    {profile&&<form className="auth-form" onSubmit={e=>{e.preventDefault();void save()}}>
     <label className="field-label">{tx('name')}<input autoComplete="organization" required minLength={2} maxLength={120} value={draft.name} onChange={e=>set('name',e.target.value)} disabled={busy}/></label>
     <label className="field-label">{copy.agencyAddress}<input autoComplete="street-address" maxLength={240} value={draft.address} onChange={e=>set('address',e.target.value)} disabled={busy}/></label>
-    <label className="field-label">{copy.contactEmail}<input type="email" autoComplete="email" maxLength={254} value={draft.contactEmail} onChange={e=>set('contactEmail',e.target.value)} disabled={busy}/></label>
-    <p className="muted-copy">{copy.contactHint}</p>
+    <label className="field-label">{copy.invoiceEmail}<input type="email" autoComplete="section-billing email" aria-describedby="agency-invoice-email-hint" maxLength={254} value={draft.contactEmail} onChange={e=>set('contactEmail',e.target.value)} disabled={busy}/></label>
+    <p id="agency-invoice-email-hint" className="muted-copy">{copy.invoiceEmailHint}</p>
     <dl><dt>NIP</dt><dd>{profile.nip??'-'} {profile.nip&&tx(profile.nipVerified?'nipVerified':'nipClaimed')}</dd>{profile.email&&<><dt>{tx('email')}</dt><dd>{profile.email}</dd></>}</dl>
     <button className="button button--primary" disabled={busy||draft.name.trim().length<2||!changed}>{tx('save')}</button>
    </form>}
