@@ -92,19 +92,20 @@ export function TeamPanel({organizationId,section,initialDay,compact=false,notif
  const [busy,B]=useState(false),[notice,N]=useState(''),[site,S]=useState(''),[selected,C]=useState<string[]>([]),[body,T]=useState(''),[opened,O]=useState<string[]>([]),[conversation,Conversation]=useState<string>();
  const [date,D]=useState(()=>absenceDay||warsawTeamDay()),[until,U]=useState(date),[start,A]=useState('08:00'),[end,Z]=useState('16:00');
  const [edit,E]=useState<TeamEntry>(),[template,ET]=useState<ShiftTemplate>(),[templateOpen,setTemplateOpen]=useState(false),[email,EM]=useState(''),[invite,I]=useState('');
+ const [absenceComment,setAbsenceComment]=useState('');
  const sending=useRef(false);
  const op=useRef(crypto.randomUUID());const dirty=()=>{op.current=crypto.randomUUID();N('')};
- useEffect(()=>{E(undefined);ET(undefined);setTemplateOpen(false);C([]);T('');O([]);Conversation(undefined);I('');N('');S('');ReplyTo(undefined);Subject('');Compose(false);Folder('inbox');setNoticeFolder('active');setNoticePage(0);dirty()},[organizationId,section]);
- useEffect(()=>{if(section==='absence'){const next=absenceDay||warsawTeamDay();D(next);U(next);E(undefined);dirty()}},[section,organizationId,absenceDay]);
+ useEffect(()=>{E(undefined);ET(undefined);setTemplateOpen(false);C([]);T('');O([]);Conversation(undefined);I('');N('');S('');ReplyTo(undefined);Subject('');Compose(false);setAbsenceComment('');Folder('inbox');setNoticeFolder('active');setNoticePage(0);dirty()},[organizationId,section]);
+ useEffect(()=>{if(section==='absence'){const next=absenceDay||warsawTeamDay();D(next);U(next);E(undefined);setAbsenceComment('');dirty()}},[section,organizationId,absenceDay]);
  async function run(action:string,data:Record<string,unknown>){if(sending.current)return;sending.current=true;B(true);N('');try{
   const r=await teamCall(organizationId,action,{...data,...(action==='read'?{}:{operationId:op.current})});
   if(action==='invite-accountant')I(location.origin+'/accountant/invitation#invite='+r.code);
   if(action==='read'){O(a=>[...a,String(data.id)]);if(folder==='unread')Folder('inbox');}
   if(action==='message'){Compose(false);ReplyTo(undefined);Subject('');C([]);if(!replyTo){Conversation(undefined);Folder('sent');}}
-  else {T('');E(undefined);N('saved');op.current=crypto.randomUUID()}
+  else {T('');E(undefined);if(action==='absence'||action==='update-plan'||action==='cancel')setAbsenceComment('');N('saved');op.current=crypto.randomUUID()}
   changed();
  }catch(e){N((e as Error).message);refresh()}finally{sending.current=false;B(false)}}
- function editPlan(e:TeamEntry){E(e);S(e.siteId??'');C(e.recipients??[]);D(String(e.payload.localDate??e.payload.dateFrom));U(String(e.payload.dateTo??e.payload.localDate));A(String(e.payload.startTime??'08:00'));Z(String(e.payload.endTime??'16:00'));dirty()}
+ function editPlan(e:TeamEntry){if(e.kind==='absence')setAbsenceComment(typeof e.payload.comment==='string'?e.payload.comment:'');E(e);S(e.siteId??'');C(e.recipients??[]);D(String(e.payload.localDate??e.payload.dateFrom));U(String(e.payload.dateTo??e.payload.localDate));A(String(e.payload.startTime??'08:00'));Z(String(e.payload.endTime??'16:00'));dirty()}
  const siteInput=(required=false)=><label className="field-label">{t('timecards.site')}<select value={site} required={required} disabled={busy||!!edit} onChange={e=>{S(e.target.value);if(section==='schedule')C([]);dirty()}}><option value="">{tx('choose')}</option>{value?.sites.filter(w=>section!=='schedule'||w.canPlan).map(w=><option key={w.id} value={w.id}>{w.name}</option>)}</select></label>;
  const person=(id:string)=>{const r=value?.recipients.find(x=>x.id===id);return r?.role==='worker'?label(id):r?t('workspaceRead.'+r.role)+' · '+r.organizationName:tx('sender')};
  const workerFactoryRecipient=value?.factoryChat===true&&value.recipients.some(r=>r.role==='factory_admin'&&r.worksiteIds.length);
@@ -277,8 +278,8 @@ export function TeamPanel({organizationId,section,initialDay,compact=false,notif
  })()}
  </section>}
  {section==='absence'&&value.role==='worker'&&!value.sites.length&&<p className="notice-box">{workerCopy.noSite} <Link to={'/workspace/'+organizationId+'/messages'}>{tx('messages')}</Link></p>}
- {section==='absence'&&value.role==='worker'&&!!value.sites.length&&<form className="auth-form dashboard-panel" onSubmit={e=>{e.preventDefault();void run(edit?'update-plan':'absence',{...(edit?{id:edit.id,revision:edit.revision}:{siteId:site}),payload:{dateFrom:date,dateTo:until}})}}>
- {!compact&&<h2>{tx('absence')}</h2>}<p>{tx('absenceHint')}</p>{siteInput(true)}{dates}<button className="button button--primary" disabled={busy||!site}>{tx(edit?'save':'send')}</button></form>}
+ {section==='absence'&&value.role==='worker'&&!!value.sites.length&&<form className="auth-form dashboard-panel" onSubmit={e=>{e.preventDefault();void run(edit?'update-plan':'absence',{...(edit?{id:edit.id,revision:edit.revision}:{siteId:site}),payload:{dateFrom:date,dateTo:until,...(value.absenceComments&&absenceComment.trim()?{comment:absenceComment.trim()}:{})}})}}>
+ {!compact&&<h2>{tx('absence')}</h2>}<p>{tx('absenceHint')}</p>{siteInput(true)}{dates}{value.absenceComments&&<label className='field-label'>{tx('absenceComment')}<textarea rows={3} maxLength={500} value={absenceComment} disabled={busy} onChange={e=>{setAbsenceComment(e.target.value);dirty()}}/><small>{tx('absenceCommentHint')}</small></label>}<button className="button button--primary" disabled={busy||!site}>{tx(edit?'save':'send')}</button></form>}
  {section==='schedule'&&value.role==='agency_admin'&&<AgencySchedule key={organizationId} context={value} workerLabel={label}/>}
  {workerSchedule&&<WorkerSchedule entries={visibleEntries}/>}
  {section==='schedule'&&value.role==='team_leader'&&<><p className="notice-box">{tx('plannedOnly')}</p><form className="auth-form dashboard-panel" onSubmit={e=>{e.preventDefault();void run(edit?'update-plan':'schedule',{...(edit?{id:edit.id,revision:edit.revision}:{siteId:site,recipients:selected}),payload:{localDate:date,startTime:start,endTime:end}})}}>
@@ -295,7 +296,7 @@ export function TeamPanel({organizationId,section,initialDay,compact=false,notif
  {section==='accountants'&&value.role==='agency_admin'&&<><p>{tx('accountantHint')}</p><form className="auth-form dashboard-panel" onSubmit={e=>{e.preventDefault();void run('invite-accountant',{email})}}><label className="field-label">{tx('email')}<input type="email" required maxLength={254} value={email} onChange={e=>{EM(e.target.value);I('');dirty()}}/></label><button className="button button--primary" disabled={busy}>{tx('invite')}</button></form>
  {invite&&<div className="notice-box"><label className="field-label">{tx('inviteLink')}<input readOnly value={invite} onFocus={e=>e.target.select()}/></label><p>{tx('noMail')}</p><button className="button button--outline" onClick={()=>{void navigator.clipboard.writeText(invite).then(()=>N('copied')).catch(()=>N('copyManually'))}}>{tx('copy')}</button></div>}
  {value.invitations.map(v=><article className="notice-box" key={v.id}><strong>{v.email}</strong><p>{tx(v.state)} · {new Date(v.expiresAt).toLocaleString()}</p>{!['revoked','expired'].includes(v.state)&&<button className="button button--outline" disabled={busy} onClick={()=>{if(window.confirm(tx('revokeConfirm'))){dirty();void run('revoke-accountant',{id:v.id})}}}>{tx('revoke')}</button>}</article>)}</>}
- {edit&&<button className="button button--outline" onClick={()=>{E(undefined);dirty()}}>{tx('stopEditing')}</button>}
+ {edit&&<button className="button button--outline" onClick={()=>{E(undefined);setAbsenceComment('');dirty()}}>{tx('stopEditing')}</button>}
  {['messages','schedule','absence'].includes(section)&&!(section==='schedule'&&(value.role==='agency_admin'||workerSchedule))&&<>{section!=='messages'&&!compact&&<h2>{tx('history')}</h2>}
 
  {section==='messages'?<section className="dashboard-panel team-work-notices" aria-label={tx('workNotifications')}>
@@ -321,7 +322,7 @@ export function TeamPanel({organizationId,section,initialDay,compact=false,notif
  <strong>{tx(v.state)}</strong>{v.outgoing&&<p>{tx('delivered')}: {v.recipientCount}</p>}
  {!v.outgoing&&!v.read&&!opened.includes(v.id)&&<button className="button button--outline" disabled={busy} onClick={()=>void run('read',{id:v.id})}>{t('workflow.notifications.markRead')}</button>}
  {
- v.kind==='absence'?<p>{String(v.payload.dateFrom)} - {String(v.payload.dateTo)}</p>:<p>{String(v.payload.localDate)} · {String(v.payload.startTime)}-{String(v.payload.endTime)} · Europe/Warsaw · {tx('planned')}</p>}
+ v.kind==='absence'?<><p>{String(v.payload.dateFrom)} - {String(v.payload.dateTo)}</p>{typeof v.payload.comment==='string'&&v.payload.comment&&<p className='team-body'>{v.payload.comment}</p>}</>:<p>{String(v.payload.localDate)} · {String(v.payload.startTime)}-{String(v.payload.endTime)} · Europe/Warsaw · {tx('planned')}</p>}
  {value?.role!=='agency_admin'&&v.outgoing&&v.state==='active'&&<div className="form-actions"><Link to={'/workspace/'+organizationId+'/'+(v.kind==='absence'?'absence':'schedule')}>{tx('section')}</Link>{section!=='messages'&&<button className="button button--outline" disabled={busy} onClick={()=>editPlan(v)}>{tx('edit')}</button>}<button className="button button--outline" disabled={busy} onClick={()=>{dirty();void run('cancel',{id:v.id,revision:v.revision})}}>{tx('cancelPlan')}</button></div>}
  </>;
  return embedded?contents:<article className="notice-box" key={v.id} id={'team-notice-'+v.id} tabIndex={-1}>{contents}</article>}

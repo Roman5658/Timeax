@@ -3050,6 +3050,8 @@
     "noSensitive": "Do not include medical details, passwords or document scans.",
     "send": "Send",
     "absenceHint": "Only dates are required. Your agency and permitted assigned leader receive the notice. No medical details are requested.",
+    "absenceComment": "Comment (optional)",
+    "absenceCommentHint": "Do not include diagnoses or medical details.",
     "plannedOnly": "Planned work. This does not create actual hours, a timesheet or a payslip.",
     "save": "Save",
     "plan": "Save schedule",

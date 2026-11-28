@@ -56,7 +56,10 @@ export function createTeamHandler({origin,resolveSession,store=null,inviteKey,no
    if(action==='message'&&(!validTeamMessagePayload(b.payload)
     ||Object.hasOwn(b.payload,'replyTo')&&b.recipients?.length!==1))return reply(400,{error:'invalid'});
    if(action==='absence'||action==='update-plan'&&Object.hasOwn(b.payload??{},'dateFrom')){
-    if(!exact(b.payload,['dateFrom','dateTo'])||action==='absence'&&!id(b.siteId))return reply(400,{error:'invalid'});
+    const keys=['dateFrom','dateTo'],withComment=Object.hasOwn(b.payload??{},'comment');
+    if(!exact(b.payload,withComment?[...keys,'comment']:keys)||action==='absence'&&!id(b.siteId)
+     ||withComment&&!text(b.payload.comment,500))return reply(400,{error:'invalid'});
+    if(withComment)b.payload.comment=b.payload.comment.trim();
     const days=(parseDay(b.payload.dateTo)-parseDay(b.payload.dateFrom))/86_400_000;
     if(!Number.isInteger(days)||days<0||days>90)return reply(400,{error:'invalid'});
    }

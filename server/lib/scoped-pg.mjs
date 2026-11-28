@@ -97,6 +97,15 @@ export function isApprovedRpcOwner(signature,owner){
   :(signature===TEAM_FUNCTION.signature&&owner===TEAM_FUNCTION.owner)||(signature===OWNER_FUNCTION.signature&&owner===OWNER_FUNCTION.owner)||INTEGRATED_FUNCTIONS.some(f=>f.signature===signature&&f.owner===owner)||(signature===PAY_NOTICE_SIGNATURE||signature===PAY_ESTIMATE_SIGNATURE||signature===INBOX_SIGNATURE||signature===PUSH_SIGNATURE||signature===WORKER_PROVISIONING_SIGNATURE||signature===WORKER_TERMS_SIGNATURE||signature===SESSION_RPC||signature===AGENCY_PROFILE_SIGNATURE||signature===ACCOUNT_ADMIN_SIGNATURE||signature===ACCOUNT_SUPPORT_SIGNATURE||PENDING_FUNCTIONS.has(signature)||WORKSPACE_READ_FUNCTIONS.has(signature))&&owner==='postgres';
 }
 
+/* One reviewed Team definition transition, so old records remain available
+ * while the additive comment migration is activated after the app deploy. */
+function rpcFingerprintMatches(expected,definition){
+ if(typeof definition!=='string')return false;
+ const digest=createHash('sha256').update(definition).digest('hex');
+ return digest===expected.sha256||expected.signature==='timeax_api.team_workflow(text,text,text,jsonb,jsonb)'
+  &&expected.sha256==='bc946a1d445103b82b39512e08afaf73545fe3d29b7b30ad671bc418a54f9fa2'
+  &&digest==='c8d09a03067adccecffc7bfd1ff41eb10d1a80553ec2a637ca831664b053d721';
+}
 export function createScopedPgLane({host,role,password,ca,namespace,functions,statements,Client=pg.Client,Pool=pg.Pool}){
  if(!HOST.test(host)||!/^timeax_[a-z0-9_]+_login$/.test(role)||typeof password!=='string'||password.length<24
   ||password.length>256||/[\u0000-\u001f]/.test(password)||!['timeax_enrollment_rpc','timeax_api'].includes(namespace)
@@ -123,7 +132,7 @@ export function createScopedPgLane({host,role,password,ca,namespace,functions,st
     const row=result.rows.find(x=>x.signature===expected.signature);
     if(!row||row.owner!==expected.owner||row.prosecdef!==true||row.allowed!==true||row.grantable!==false
      ||JSON.stringify(row.proconfig)!==JSON.stringify(['search_path=pg_catalog, pg_temp'])
-     ||typeof row.definition!=='string'||createHash('sha256').update(row.definition).digest('hex')!==expected.sha256)throw Error('RPC fingerprint preflight denied');
+     ||!rpcFingerprintMatches(expected,row.definition))throw Error('RPC fingerprint preflight denied');
    }
    return operation(client);
  }

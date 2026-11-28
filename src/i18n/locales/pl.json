@@ -3050,6 +3050,8 @@
     "noSensitive": "Nie podawaj szczegółów medycznych, haseł ani skanów dokumentów.",
     "send": "Wyślij",
     "absenceHint": "Podaj tylko daty. Powiadomienie otrzyma Twoja agencja i uprawniony przypisany lider. Szczegóły medyczne nie są wymagane.",
+    "absenceComment": "Komentarz (opcjonalnie)",
+    "absenceCommentHint": "Nie wpisuj diagnoz ani danych medycznych.",
     "plannedOnly": "Praca planowana. Zapis nie tworzy faktycznych godzin, ewidencji ani rozliczenia.",
     "save": "Zapisz",
     "plan": "Zapisz grafik",
