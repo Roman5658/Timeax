@@ -13,7 +13,7 @@ const root='/api/team/'+org+'/';
 const absence={operationId:op,siteId:site,payload:{dateFrom:'2026-11-27',dateTo:'2026-11-27'}};
 const template={operationId:op,id:null,revision:null,name:'Morning',data:{startTime:'06:00',endTime:'14:00',breakMinutes:15,breakTreatment:'unpaid'}};
 function req(path,body,from=origin){return new Request(origin+path,{method:body?'POST':'GET',headers:{origin:from,cookie:'identity=fixture',...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});}
-async function setup({accepted=true,role='worker',kind='agency',misproject=false,manualEntry=true,worksites=[{id:site,name:'Site'}]}={}){
+async function setup({accepted=true,role='worker',kind='agency',misproject=false,manualEntry=true,worksites=[{id:site,name:'Site'}],enrollmentRoles=[role]}={}){
  const calls=[];
  const configs=Object.fromEntries(INTEGRATED_LANES.filter(l=>['worker','timecards','factoryTimecards','names','payroll'].includes(l.id)).map((v,i)=>[v.id,{
   password:String(i).repeat(43),hashes:Object.fromEntries(v.functions.map(fn=>[fn.signature,'a'.repeat(64)]))
@@ -21,9 +21,11 @@ async function setup({accepted=true,role='worker',kind='agency',misproject=false
  const config={origin,selfService:true,workspaceReadPassword:'w'.repeat(43),agencyOperations:{...configs,
   team:{password:'t'.repeat(43),hashes:{'timeax_api.team_workflow(text,text,text,jsonb,jsonb)':'a'.repeat(64)},inviteKey:'i'.repeat(43)},
   workerTerms:{password:'z'.repeat(43),sha:'a'.repeat(64)}}};
- const bind=await assembleAgencyOperations(config,({role:dbRole})=>({async preflight(){},async query(_sql,args){
+ const bind=await assembleAgencyOperations(config,({role:dbRole})=>({async preflight(){},async query(sql,args){
   if(dbRole==='timeax_workspace_read_login')return {rows:args[2]===org?[{membership_id:member,organization_id:org,organization_kind:kind,role,worksites}]:[]};
   if(dbRole===WORKER_TERMS_ROLE)return {rows:[{value:{accepted,version:WORKER_TERMS_VERSION,documentSha256:WORKER_TERMS_SHA256,acceptedAt:accepted?'2026-11-27T12:00:00Z':null}}]};
+  if(sql.startsWith('SELECT timeax_api.worker_enrollment_context('))
+   return {rows:[{value:{memberships:enrollmentRoles.map(role=>({role})),applications:[]}}]};
   const action=args[2],input=JSON.parse(args[3]);calls.push({dbRole,actor:args.slice(0,2),action,input});
   if(dbRole==='timeax_timecards_login'&&action==='context')return {rows:[{value:{organizationId:org,membershipId:member,role,worksites:[{id:site,manualEntry}]}}]};
   if(dbRole==='timeax_timecards_login'&&action==='create')return {rows:[{value:{id,revision:1,saved:true}}]};
@@ -49,6 +51,13 @@ async function setup({accepted=true,role='worker',kind='agency',misproject=false
  const ops=bind(async()=>({state:'verified',issuer:ISSUER,subject,email,emailConfirmed:true,isAnonymous:false,expiresAt:100,isActive:async()=>true}));
  return {calls,ops,dispatch:async(path,body,from)=>ops.find(path)(req(path,body,from))};
 }
+test('only current worker memberships with accepted terms qualify for durable signup-session promotion',async()=>{
+ const actor={issuer:ISSUER,subject};
+ assert.equal(await (await setup({worksites:[]})).ops.workerSession(actor),true);
+ for(const options of [{enrollmentRoles:[]},{accepted:false},{role:'agency_admin'},{enrollmentRoles:['worker','agency_admin']}]){
+  assert.equal(await (await setup(options)).ops.workerSession(actor),false);
+ }
+});
 test('canonical worker team routes read own, persist valid actions, and validate date/identity boundaries',async()=>{
  const {calls,dispatch}=await setup();
  const result=await dispatch(root+'context');
