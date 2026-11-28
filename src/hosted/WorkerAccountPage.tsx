@@ -5,6 +5,7 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import {Link,useLocation,useNavigate} from 'react-router-dom';import {useTranslation} from 'react-i18next';
 import {RegistrationFrame} from '../components/PublicExperience';import {PrivateAccess} from './PrivateAccess';
 import {WorkerPasswordPanel} from './WorkerPasswordPanel';
+import {PASSWORD_RESET_PATH,passwordResetHeading} from './PasswordResetForm';
 import {hasCurrentWorkerWorkspace,shouldOfferAgencyJoin,workerWorkspaceHint,workerWorkspaceReturn} from './worker-account-navigation';
 import {useWorkerConnections} from './use-worker-connections';
 import {loadWorkspaceAccess} from './workspace-access';
@@ -74,7 +75,7 @@ export function WorkerAccountPage(){
  return <RegistrationFrame title={tx(recovery?'recoveryTitle':reauth?'reauthTitle':'title')} lead={publicRecovery?'':tx(recovery?'recoveryLead':'lead')} back={back} backLabel={backLabel}>
  <div className="personal-account" aria-busy={busy}>
  {!recovery&&!reauth&&!closed&&status!=='login'&&<WorkerPasswordPanel/>}
- {publicRecovery?<><p>{copy.recovery}</p><Link className="button button--outline" to="/login?method=code">{tx('loginAction')}</Link></>:
+ {publicRecovery?<><p>{copy.recovery}</p><div className="form-actions"><Link className="button button--primary" to={PASSWORD_RESET_PATH}>{passwordResetHeading(i18n.resolvedLanguage??'en')}</Link><Link className="button button--outline" to="/login?method=code">{tx('loginAction')}</Link></div></>:
  recovery?<><p className="notice-box">{tx('proofBoundary')}</p>{requestId?<div role="status"><h2>{tx('requestSaved')}</h2><p>{tx('requestPending')}</p><code>{requestId}</code></div>:<form className="auth-form" onSubmit={e=>{e.preventDefault();void run(async()=>{const r=await accountCall('recovery-request',{contactEmail:email,reference}) as {status:string;requestId:string;accessChanged:boolean;mailSent:boolean};if(r.status!=='received-awaiting-independent-proof'||r.accessChanged||r.mailSent)throw Error();setRequestId(r.requestId);setEmail('');setReference('')})}}>
  <label className="field-label" htmlFor="recovery-email">{tx('contactEmail')}<input id="recovery-email" type="email" required maxLength={254} value={email} onChange={e=>setEmail(e.target.value)}/></label>
  <label className="field-label" htmlFor="recovery-reference">{tx('reference')}<textarea id="recovery-reference" required minLength={2} maxLength={200} rows={3} value={reference} onChange={e=>setReference(e.target.value)}/></label>

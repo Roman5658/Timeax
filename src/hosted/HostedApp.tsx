@@ -1,4 +1,5 @@
 import {SelfServiceAgencyStep} from './SelfServiceAgencyStep';
+import {PASSWORD_RESET_PATH,PasswordResetForm,passwordResetHeading} from './PasswordResetForm';
 import {workerRegistrationCopy} from './worker-registration-copy';
 const publicWorkerPaths=['/register/worker','/worker/join','/worker/register'];
 import type {TeamSection} from './TeamWorkflow';
@@ -71,7 +72,8 @@ function AgencyStep({existing}:{existing:boolean}){
     {existing&&state.state==="none"&&<Link to="/register/agency">{t("existingSession.registrationLink")}</Link>}
    </div>}
   {((receipt&&!publicSignup)||state.state==="uncertain")&&<button data-testid="hosted-refresh" className="button button--outline button--full" disabled={busy} onClick={refresh}>{t("agencyRegistration.recheck")}</button>}
-  {existing&&<><Suspense fallback={null}><EnrollmentDestinations revision={revision}/></Suspense><OwnerQaLink revision={revision}/><Link to="/account/recovery">{t("workerAccount.recoveryTitle")}</Link></>}
+  {existing&&<><Suspense fallback={null}><EnrollmentDestinations revision={revision}/></Suspense><OwnerQaLink revision={revision}/>
+   <Link to={publicAuth?PASSWORD_RESET_PATH:"/account/recovery"}>{publicAuth?passwordResetHeading(i18n.resolvedLanguage??"en"):t("workerAccount.recoveryTitle")}</Link></>}
   {!publicAuth&&<details className="enrollment-disclosure"><summary>{t("publicExperience.statusDetails")}</summary><p>{tx("scope")}</p><p>{tx("noModules")}</p></details>}
   <p className="muted-copy"><Link to={existing?"/register/agency":"/login"}>{publicAuth?t(existing?"publicExperience.create":"common.login"):tx(existing?"registerTitle":"loginTitle")}</Link></p>
  </>;
@@ -98,7 +100,7 @@ function CanonicalAgencyStep({existing}:{existing:boolean}){
 }
 function PublicAuthPanel({pathname,closing,onClosed}:{pathname:string;closing:boolean;onClosed:()=>void}){
  const dialog=useRef<HTMLDialogElement>(null), previous=useRef<HTMLElement|null>(null);
- const {t}=useTranslation(),navigate=useNavigate();
+ const {t,i18n}=useTranslation(),navigate=useNavigate();
  const [legal,setLegal]=useState<{kind:LegalDocument;opener:HTMLAnchorElement}|null>(null);
  const openLegal=useCallback((kind:LegalDocument,opener:HTMLAnchorElement)=>setLegal({kind,opener}),[]);
  const closeLegal=useCallback(()=>setLegal(null),[]);
@@ -133,7 +135,8 @@ function PublicAuthPanel({pathname,closing,onClosed}:{pathname:string;closing:bo
   onClick={e=>{if(e.target===e.currentTarget){const r=e.currentTarget.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)close()}}}>
   <button type="button" className="icon-button auth-book-close" aria-label={t("common.backHome")} aria-disabled={closing} onClick={close}><X size={20}/></button>
   <div inert={closing}><AuthPanelContext.Provider value><LegalSheetContext.Provider value={openLegal}>
-   {pathname==="/register"?<RegistrationChoices/>:publicWorkerPaths.includes(pathname)?<Suspense fallback={<p role="status">{t('workspaceRead.checking')}</p>}><PublicWorkerEntry key={pathname}/></Suspense>:<RegistrationFrame back={existing?"/":"/register"}
+   {pathname===PASSWORD_RESET_PATH?<RegistrationFrame back="/login" title={passwordResetHeading(i18n.resolvedLanguage??"en",true)} lead=""><PasswordResetForm/></RegistrationFrame>
+    :pathname==="/register"?<RegistrationChoices/>:publicWorkerPaths.includes(pathname)?<Suspense fallback={<p role="status">{t('workspaceRead.checking')}</p>}><PublicWorkerEntry key={pathname}/></Suspense>:<RegistrationFrame back={existing?"/":"/register"}
      title={t(existing?"common.login":"closedHosted.registerTitle")} lead="">
      <CanonicalAgencyStep key={pathname} existing={existing}/>
    </RegistrationFrame>}
@@ -182,7 +185,7 @@ function HostedRoutes(){
  if(loc.pathname==="/super-admin/qa")return <OwnerQaPage/>;
  if(loc.pathname==="/terms"||loc.pathname==="/terms/2026-11-27")return <HostedTermsPage/>;
  if(loc.pathname==="/privacy"||loc.pathname==="/privacy/")return <HostedPrivacyPage/>;
- if(["/","/register","/register/agency","/login"].includes(loc.pathname)||isEmailIdentityOrigin(location.origin)&&publicWorkerPaths.includes(loc.pathname))return <PublicLanding pathname={loc.pathname}/>;
+ if(["/","/register","/register/agency","/login"].includes(loc.pathname)||isEmailIdentityOrigin(location.origin)&&(publicWorkerPaths.includes(loc.pathname)||loc.pathname===PASSWORD_RESET_PATH))return <PublicLanding pathname={loc.pathname}/>;
  const role=loc.pathname==="/register/worker"||loc.pathname==="/worker/join"||loc.pathname==="/worker/register"?"worker":loc.pathname==="/register/factory"||loc.pathname==="/factory/register"?"factory":null;
  const admin=loc.pathname.match(/^\/workspace\/([0-9a-f-]+)\/workers$/);
  if(admin)return <HostedCabinetRoute key={admin[1]} organizationId={admin[1]} section="workers" fallback={canonical?<RegistrationFrame title={t('common.login')} lead={workerCopy.loginGate} back="/">

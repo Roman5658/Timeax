@@ -7,6 +7,7 @@ import {useTranslation} from 'react-i18next';
 import {LegalLink,RegistrationProgress} from '../components/PublicExperience';
 import {StagingSessionPanel} from '../modules/auth/pages/StagingSessionPanel';
 import {createWorkingRegistrationClient,validEmail} from '../modules/auth/registration/contract/registration-client';
+import {PASSWORD_RESET_PATH,passwordResetHeading} from './PasswordResetForm';
 
 const organizationId=(v:unknown):v is string=>typeof v==='string'&&/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(v)&&v!=='00000000-0000-0000-0000-000000000000';
 const setup='/api/timeax/agency/setup';
@@ -184,6 +185,7 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
    <button className="button button--primary button--full" disabled={busy}>{t(stage==='password'?'common.login':'selfService.open')}</button>
   </form>}
   {error&&<p role="alert" className="registration-error">{t('selfService.'+(errors.includes(error)?error:'service-unavailable'))}</p>}
+  {existing&&(stage==='password'||stage==='code')&&<Link to={PASSWORD_RESET_PATH} state={email.trim()?{email:email.trim()}:undefined}>{passwordResetHeading(i18n.resolvedLanguage??'en')}</Link>}
   {existing&&stage==='password'&&<button type="button" className="button button--outline" disabled={busy} onClick={()=>void switchToCode()}>{copy.otpLogin}</button>}
   {existing&&stage==='code'&&<button type="button" className="button button--outline" onClick={()=>{setStage('password');setError('')}}>{copy.passwordLogin}</button>}
   {existing&&stage!=='destinations'&&<p><Link to="/register">{t('publicExperience.create')}</Link></p>}
