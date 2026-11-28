@@ -4,7 +4,7 @@ const registrationPath="/api/agency-registration";
 const logoutPath="/api/timeax/auth/logout";
 type Capabilities={login:boolean;verify:boolean;agencyRegistration:boolean;logout:boolean};
 export type AccessContext =({state:"anonymous"|"verification-required";capabilities:Capabilities}
-  |{state:"verified";capabilities:Capabilities;session:SessionProjection}) & {otpLength?:6|8;emailChallengeFlow?:'login'|'registration';workerSelfService?:boolean;workerProvisioning?:boolean};
+  |{state:"verified";capabilities:Capabilities;session:SessionProjection}) & {otpLength?:6|8;emailChallengeFlow?:'login'|'registration';selfService?:boolean;workerSelfService?:boolean;workerProvisioning?:boolean};
 export type PendingRegistration={requestId:string;status:"pending";requestedAt:string};
 export type RegistrationOutcome={state:"none"|"session"|"unavailable"}|{state:"pending";registration:PendingRegistration};
 export type ActionState="accepted"|"verified"|"invalid"|"unavailable";
@@ -32,13 +32,13 @@ export function parseAccessContext(raw:unknown):AccessContext|undefined{
   const workerProvisioning=Array.isArray(value.agencyOperations)&&value.agencyOperations.includes('workerProvisioning');
   if(value.state==="verified"){
     const session=projection(value);
-    return session?{state:"verified",capabilities,session,...(workerSelfService?{workerSelfService}:{}),...(workerProvisioning?{workerProvisioning}:{})}:undefined;
+    return session?{state:"verified",capabilities,session,...(value.selfService===true?{selfService:true as const}:{}),...(workerSelfService?{workerSelfService}:{}),...(workerProvisioning?{workerProvisioning}:{})}:undefined;
   }
   if(value.state==="anonymous"||value.state==="verification-required"){
     if(capabilities.agencyRegistration||capabilities.logout)return undefined;
     const flow=value.emailChallengeFlow;
     const emailChallengeFlow=flow==='login'||flow==='registration'?flow:undefined;
-    return {state:value.state,capabilities,...(value.otpLength===8?{otpLength:8 as const}:{}),...(emailChallengeFlow?{emailChallengeFlow}:{}),...(workerSelfService?{workerSelfService}:{}),...(workerProvisioning?{workerProvisioning}:{})};
+    return {state:value.state,capabilities,...(value.otpLength===8?{otpLength:8 as const}:{}),...(emailChallengeFlow?{emailChallengeFlow}:{}),...(value.selfService===true?{selfService:true as const}:{}),...(workerSelfService?{workerSelfService}:{}),...(workerProvisioning?{workerProvisioning}:{})};
   }
   return undefined;
 }

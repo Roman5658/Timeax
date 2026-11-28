@@ -55,3 +55,35 @@ test('expired, malformed, untrusted, unavailable, or aborted checks never resume
  const signal=AbortSignal.abort();
  assert.deepEqual(await checkInstalledLaunch(origin,()=>{throw Error('should not fetch')},signal,'app'),{state:'unavailable'});
 });
+
+test('installed worker resumes directly after parallel fresh workspace and invite checks',async()=>{
+ const setup='/api/timeax/agency/setup',team='/api/worker-enrollment/context',invites='/api/worker-enrollment/email-invitations';
+ const agency={status:403,value:{error:'registration-required'}};
+ const worker={organizationId:'11111111-1111-4111-8111-111111111111',membershipId:'22222222-2222-4222-8222-222222222222',kind:'agency',role:'worker'};
+ function run({desk=agency,rows=[worker],pending=[],inviteStatus=200}={}){
+  const seen=[];
+  const paths={
+   '/v1/session/timeax-email':{status:200,value:{...granted,selfService:true,workerSelfService:true,agencyOperations:['workerProvisioning']}},
+   [setup]:desk,[team]:{status:200,value:{state:'verified',memberships:rows}},[invites]:{status:inviteStatus,value:{invitations:pending}},
+  };
+  return checkInstalledLaunch(origin,async(url,init)=>{
+   const path=new URL(url).pathname;seen.push(path);
+   assert.equal(new URL(url).origin,origin);assert.equal(init.method,'GET');assert.equal(init.credentials,'same-origin');
+   if(path===setup){await Promise.resolve();assert.ok(seen.includes(team)&&seen.includes(invites));}
+   return transportForPath(url,paths[path]);
+  },new AbortController().signal,'app');
+ }
+ function transportForPath(url,{value,status}){
+  const r=Response.json(value,{status,headers:{'Cache-Control':'private, no-store'}});
+  Object.defineProperty(r,'url',{value:url});return r;
+ }
+ const direct={state:'workspace',path:'/workspace/'+worker.organizationId},fallback={state:'login',path:'/login'};
+ assert.deepEqual(await run(),direct);
+ assert.deepEqual(await run({pending:[{}]}),fallback);
+ assert.deepEqual(await run({inviteStatus:503}),fallback);
+ assert.deepEqual(await run({rows:[worker,{...worker,kind:'factory',role:'team_leader'}]}),fallback);
+ assert.deepEqual(await run({rows:[{...worker,organizationId:'https://bad.example'}]}),fallback);
+ assert.deepEqual(await run({desk:{status:503,value:{} }}),fallback);
+ const organizationId='33333333-3333-4333-8333-333333333333';
+ assert.deepEqual(await run({desk:{status:200,value:{state:'ready',organizationId}},inviteStatus:503}),{state:'workspace',path:'/workspace/'+organizationId});
+});

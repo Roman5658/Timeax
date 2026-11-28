@@ -26,7 +26,10 @@ export function InstalledAppResume({children}:{children:ReactNode}){
    window.clearTimeout(timer);
    if(result.state==="unavailable"){setUnavailable(true);return;}
    setFromHomeIcon(false);
-   if(result.state==="login"){
+   if(result.state==="workspace"){
+    // The workspace still verifies current access before showing any private data.
+    navigate(result.path,{replace:true});
+   }else if(result.state==="login"){
     // This existing route checks the session again and resolves an allowed workspace.
     navigate(result.path,{replace:true});
    }else if(launch==="app")navigate("/",{replace:true});
