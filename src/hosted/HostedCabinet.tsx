@@ -13,6 +13,8 @@ import {AgencyBackdatedShifts,agencyShiftPreviews,useBackdatedShifts} from './Ag
 import {agencyJoinPreviews,useAgencyJoinCards,useAgencyJoinNotifications} from './AgencyJoinNotifications';
 import type {FactoryRoleSection} from './FactoryRolePanel';
 import {TeamBell,TeamPanel,type TeamSection} from './TeamWorkflow';
+import {TeamContextProvider} from './team-workflow';
+import {readWithRetry,TemporaryReadError} from './retry-read.ts';
 
 import { Building2, CalendarDays, ClipboardList, LayoutDashboard, Menu, MessageCircle, Settings2, UsersRound, X } from 'lucide-react';
 import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -71,17 +73,39 @@ const leaderMenu=[item('home','nav.leaderHome','workspace',LayoutDashboard),item
  item('factory-timecards','nav.reviews','operations',ClipboardList),item('schedule','nav.schedule','operations',CalendarDays),
  item('messages','nav.messages','operations',MessageCircle),item('timesheets','nav.monthlyTimesheets','reports',ClipboardList)];
 const hasProductionRole=(access:WorkspaceAccess)=>access.organization.kind==='factory'&&['factory_admin','team_leader'].includes(access.membership.role);
+type CabinetFeatures={public:boolean;productions:boolean;ops:string[];logout:boolean};
 export function HostedCabinetRoute({organizationId, section, fallback}:{organizationId:string; section:Section; fallback:ReactNode}){
- const navigate=useNavigate();
- const [status,setStatus]=useState<WorkspaceResult>();
+ const navigate=useNavigate(),{t}=useTranslation();
+ const canonical=/^https:\/\/(?:www\.)?timeax\.pl$/.test(location.origin);
+ const [status,setStatus]=useState<WorkspaceResult>(),[profile,setProfile]=useState<CabinetFeatures|null>(),[revision,retry]=useState(0);
  useEffect(()=>{
   const controller=new AbortController();
-  void loadWorkspaceAccess(organizationId,location.origin,window.fetch.bind(window),controller.signal).then(result=>{
+  setStatus(undefined);
+  void readWithRetry(async signal=>{
+   const result=await loadWorkspaceAccess(organizationId,location.origin,window.fetch.bind(window),signal);
+   if(result.state==='unavailable')throw new TemporaryReadError();
+   return result;
+  },controller.signal,1).then(result=>{
    if(!controller.signal.aborted)setStatus(result);
-  });
+  },()=>{if(!controller.signal.aborted)setStatus({state:'unavailable'})});
   return()=>controller.abort();
- },[organizationId]);
+ },[organizationId,revision]);
+ useEffect(()=>{
+  const controller=new AbortController();
+  if(!canonical)return;
+  setProfile(undefined);
+  void readWithRetry(async signal=>{
+   const r=await fetch('/v1/session/timeax-email',{credentials:'same-origin',cache:'no-store',signal});
+   if(r.status>=500)throw new TemporaryReadError();
+   if(!r.ok)throw Error();
+   const v=await r.json();
+   if(v?.state!=='verified')return null;
+   return {public:v.selfService===true,productions:v.agencyProductions===true,ops:Array.isArray(v.agencyOperations)?v.agencyOperations:[],logout:v.capabilities?.logout===true};
+  },controller.signal,1).then(v=>{if(!controller.signal.aborted)setProfile(v)},()=>{if(!controller.signal.aborted)setProfile(null)});
+  return()=>controller.abort();
+ },[canonical,organizationId,revision]);
  if(!status)return <HostedLoading/>;
+ if(status.state==='unavailable'&&canonical)return <section className="notice-box" role="status"><p>{t('team.unavailable')}</p><button className="button button--outline" onClick={()=>retry(n=>n+1)}>{t('team.refresh')}</button></section>;
  if(status.state!=='ready')return fallback;
  const value=status.value,role=value.membership.role;
  if(!hasProductionRole(value)&&role!=='worker'&&!(value.organization.kind==='agency'&&role==='agency_admin'))return fallback;
@@ -89,12 +113,12 @@ export function HostedCabinetRoute({organizationId, section, fallback}:{organiza
  if(role==='worker'&&value.organization.kind==='agency'&&section==='factory-timecards')return <Navigate replace to={'/workspace/'+organizationId+'/timecards'}/>;
  const menu=role==='agency_admin'?agencyMenu:role==='factory_admin'?factoryMenu:role==='team_leader'?leaderMenu:value.organization.kind==='factory'?factoryWorkerMenu:workerMenu;
  if(!menu.some(entry=>entry.section===section)&&!(role==='worker'&&value.organization.kind==='agency'&&['templates','absence'].includes(section)))return fallback;
- const cabinet=<HostedCabinet access={status.value} section={section} menu={menu}/>;
- return status.value.membership.role==='worker'&&/^https:\/\/(?:www\.)?timeax\.pl$/.test(location.origin)
+ const cabinet=<HostedCabinet key={status.value.membership.id} access={status.value} section={section} menu={menu} agencyProfile={profile} canonical={canonical} retryProfile={()=>retry(n=>n+1)}/>;
+ return status.value.membership.role==='worker'&&canonical
   ?<WorkerTermsGate onSessionExpired={()=>navigate('/login',{replace:true})}>{cabinet}</WorkerTermsGate>:cabinet;
 }
 
-function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Section; menu:Item[]}){
+function HostedCabinet({access,section,menu,agencyProfile,canonical,retryProfile}:{access:WorkspaceAccess;section:Section;menu:Item[];agencyProfile:CabinetFeatures|null|undefined;canonical:boolean;retryProfile:()=>void}){
  const {t}=useTranslation();
  const where=useLocation(),navigate=useNavigate();
  const [menuOpen,setMenuOpen]=useState(false);
@@ -109,14 +133,6 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
  },[worker,access.membership.id]);
  const otherWorkerConnections=useWorkerConnections(worker&&!agencyWorker);
  const canJoinAgency=worker&&!agencyWorker&&shouldOfferAgencyJoin(otherWorkerConnections);
- const [agencyProfile,setAgencyProfile]=useState<{public:boolean;productions:boolean;ops:string[]}>();
- useEffect(()=>{
-  const c=new AbortController();
-  void fetch('/v1/session/timeax-email',{credentials:'same-origin',cache:'no-store',signal:c.signal}).then(async r=>r.ok?await r.json():null).then(v=>{
-   if(!c.signal.aborted)setAgencyProfile({public:v?.selfService===true,productions:v?.agencyProductions===true,ops:Array.isArray(v?.agencyOperations)?v.agencyOperations:[]});
-  }).catch(()=>{if(!c.signal.aborted)setAgencyProfile({public:true,productions:false,ops:[]})});
-  return()=>c.abort();
- },[agency,access.organization.id]);
  const [agencyName,setAgencyName]=useState('');
  const publicAgency=agency&&agencyProfile?.public===true;
  const loadModules=!agency||agencyProfile?.public===false;
@@ -141,12 +157,13 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
  },[openedPay,payEnabled,org,access.membership.id,markPayslipRead]);
  const pc=payNoticeCopy(i18n.resolvedLanguage);
  const payBell=pay.rows.map(n=>({anchor:'payslip-'+n.id,title:pc.title,summary:pc.summary,at:n.at,unread:!n.read}));
- const inbox={...teamInbox,busy:teamInbox.busy||pay.busy,failure:teamInbox.failure||pay.error,
+ const inbox={...teamInbox,enabled:teamInbox.enabled||canonical&&!agencyProfile,busy:teamInbox.busy||pay.busy,failure:teamInbox.failure||pay.error,
   refresh:()=>{teamInbox.refresh();pay.refresh()},
   set:(anchor:string,state:Parameters<typeof teamInbox.set>[1])=>anchor.startsWith('payslip-')?pay.setState(anchor.slice(8),state):teamInbox.set(anchor,state),
   state:(anchor:string)=>anchor.startsWith('payslip-')?pay.rows.find(n=>'payslip-'+n.id===anchor)?.state??'active':teamInbox.state(anchor)};
- const joins=useAgencyJoinNotifications(publicAgency&&uses('workerProvisioning')?org:undefined,!inbox.data);
- const backdated=useBackdatedShifts(publicAgency&&uses('timecards')&&uses('team')?org:undefined,!inbox.data);
+ const needsLegacyFeeds=!teamInbox.enabled||teamInbox.loadFailed&&!teamInbox.data;
+ const joins=useAgencyJoinNotifications(publicAgency&&uses('workerProvisioning')?org:undefined,needsLegacyFeeds);
+ const backdated=useBackdatedShifts(publicAgency&&uses('timecards')&&uses('team')?org:undefined,needsLegacyFeeds);
  const joinEntries=inbox.data?.joins??joins.value?.entries??[];
  const shiftEntries=inbox.data?.backdated??backdated.feed?.notices??[];
  const joinCards=useAgencyJoinCards(async id=>{await joins.mark(id);inbox.refresh()});
@@ -181,7 +198,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
   window.addEventListener('keydown',dismiss);
   return()=>window.removeEventListener('keydown',dismiss);
  },[menuOpen]);
- return <div className={'portal-layout hosted-cabinet portal-layout--'+(agency?'agency':production?(access.membership.role==='factory_admin'?'factory':'leader'):'worker')}>
+ return <TeamContextProvider org={org} membershipId={access.membership.id} enabled={uses('team')}><div className={'portal-layout hosted-cabinet portal-layout--'+(agency?'agency':production?(access.membership.role==='factory_admin'?'factory':'leader'):'worker')}>
   {menuOpen&&<button className="portal-sidebar-backdrop" type="button" aria-label={t('common.closeMenu')} onClick={()=>setMenuOpen(false)}/>}
   <aside id="hosted-cabinet-menu" className={'portal-sidebar'+(menuOpen?' is-open':'')}>
    <BrandMark/>
@@ -195,7 +212,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
     {worker&&<><div className="portal-nav-group-label">{t('nav.groups.account')}</div><Link className="portal-nav-link" to="/account" state={{workspaceReturn:root}}><Settings2 size={17} aria-hidden="true"/><span>{t('nav.profile')}</span></Link>{canJoinAgency&&<Link className="portal-nav-link" to="/register/worker" state={{workspaceReturn:root}}><Building2 size={17} aria-hidden="true"/><span>{t('workerEnrollment.join')}</span></Link>}</>}
    </nav>
    <div className="sidebar-spacer"/>
-   <div className="hosted-cabinet-sign-out"><CabinetSignOut/></div>
+   <div className="hosted-cabinet-sign-out"><CabinetSignOut allowedByCabinet={canonical?agencyProfile?.logout??false:undefined}/></div>
    <div className="sidebar-user"><span className="sidebar-avatar"><UsersRound size={16} aria-hidden="true"/></span><span><strong>{t('workspaceRead.'+access.membership.role)}</strong>{worker&&<small>{label(access.membership.id)}</small>}</span></div>
   </aside>
   <div className="portal-main-column">
@@ -209,12 +226,14 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
    </header>
    <main className="portal-content">
     <PageHeading eyebrow={worker?organizationLabel(access.membership.id):undefined} title={t(unifiedHours?'nav.timekeeping':heading)} />
+    {canonical&&!agencyProfile&&(agency||section==='messages')&&(agencyProfile===undefined?<HostedLoading compact/>:
+     <section className="notice-box" role="status"><p>{t('team.unavailable')}</p><button className="button button--outline" onClick={retryProfile}>{t('team.refresh')}</button></section>)}
     <Suspense fallback={<HostedLoading compact/>}>
     {production&&section!=='messages'&&(section!=='schedule'||factoryAdmin)&&!(factoryAdmin&&['factory-timecards','timesheets'].includes(section))&&<FactoryRolePanel key={org+section} access={access} section={section as FactoryRoleSection}/>}
     {factoryAdmin&&(section==='factory-timecards'||section==='timesheets')&&<FactoryTimecardsPanel key={org+section} organizationId={org} expectedRole='factory_admin' expectedMembershipId={access.membership.id} archiveOnly={section==='timesheets'} leaderSection={section==='timesheets'?'timesheets':'hours'}/>}
     {publicAgency&&section!=='home'&&section!=='setup'&&!directory&&!unifiedHours&&!sectionReady&&<p className="notice-box" role="status">{t('agencyProductions.moduleNotEnabled')}</p>}
 
-    {uses('team')&&!(factoryAdmin&&section==='schedule')&&(['messages','schedule','templates','absence','accountants'] as string[]).includes(section)&&<TeamPanel organizationId={org} section={section as TeamSection} inboxState={inbox} externalNotices={externalNotices}
+    {uses('team')&&(!canonical||!!agencyProfile||section!=='messages')&&!(factoryAdmin&&section==='schedule')&&(['messages','schedule','templates','absence','accountants'] as string[]).includes(section)&&<TeamPanel organizationId={org} section={section as TeamSection} inboxState={inbox} externalNotices={externalNotices}
      notificationExtras={section==='messages'?<>{joinCards.error&&<p role="alert">{joinCards.error}</p>}{shiftCards.failure&&<p role="alert">{t('team.closed')}</p>}</>:undefined}/>}
     {/* Both panels are siblings: distinguish their keys even within the same agency. */}
     {showAgencyProfile&&<AgencyProfile key={'profile:'+org} organizationId={org} onSaved={setAgencyName}/>}
@@ -241,23 +260,24 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
    </main>
   </div>
 
- </div>;
+ </div></TeamContextProvider>;
 }
 
 
-function CabinetSignOut(){
+function CabinetSignOut({allowedByCabinet}:{allowedByCabinet?:boolean}){
  const {t}=useTranslation(),navigate=useNavigate();
  const client=useMemo(()=>createWorkingRegistrationClient(window.location.origin,window.fetch.bind(window),'existing'),[]);
  const [allowed,setAllowed]=useState(false),[busy,setBusy]=useState(false),[failed,setFailed]=useState(false);
  const pending=useRef<AbortController|null>(null);
  useEffect(()=>{
+  if(allowedByCabinet!==undefined)return()=>pending.current?.abort();
   const controller=new AbortController();
   void client.context(controller.signal).then(scope=>{
    if(!controller.signal.aborted)setAllowed(scope?.state==='verified'&&scope.capabilities.logout);
   });
   return()=>{controller.abort();pending.current?.abort()};
- },[client]);
- if(!allowed)return null;
+ },[client,allowedByCabinet]);
+ if(!(allowedByCabinet??allowed))return null;
  async function signOut(){
   if(pending.current)return;
   const controller=new AbortController();pending.current=controller;setBusy(true);setFailed(false);

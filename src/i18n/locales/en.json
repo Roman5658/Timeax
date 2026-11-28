@@ -3036,6 +3036,8 @@
     "storageBody": "The service uses session mechanisms to operate and secure sign-in. Your chosen language or theme may be remembered in this browser."
   },
   "team": {
+    "unavailable": "Could not load this section. Try refreshing.",
+    "refreshUnavailable": "Could not refresh. Showing the last loaded data.",
     "workNotifications": "Work notifications",
     "messages": "Messages",
     "schedule": "Schedule",

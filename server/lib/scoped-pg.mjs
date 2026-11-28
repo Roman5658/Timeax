@@ -5,7 +5,7 @@ import {AGENCY_PROFILE_SIGNATURE} from './agency-profile.mjs';
 import {PUSH_SIGNATURE} from './web-push.server.mjs';
 import {PAY_NOTICE_SIGNATURE} from './pay-notices.server.mjs';
 import {PAY_ESTIMATE_SIGNATURE} from './pay-estimates.server.mjs';
-import {INBOX_SIGNATURE} from './inbox.server.mjs';
+import {INBOX_ROLE,INBOX_SIGNATURE} from './inbox.server.mjs';
 import {TEAM_FUNCTION} from './team-workflow.server.mjs';
 import {ACCOUNT_ADMIN_SIGNATURE,ACCOUNT_SUPPORT_SIGNATURE} from './account-admin.mjs';
 import {OWNER_FUNCTION} from './owner-qa-store.mjs';
@@ -153,8 +153,10 @@ export function createScopedPgLane({host,role,password,ca,namespace,functions,st
  class ScopedSessionClient extends Client{
   constructor(){let instance;super(options(()=>verified.add(instance)));instance=this;}
  }
- const maxPool=role===SESSION_ROLE?4:role===WORKSPACE_ROLE?1:0;
- const pool=maxPool?new Pool({...options(()=>{}),Client:ScopedSessionClient,max:maxPool,idleTimeoutMillis:5000,maxLifetimeSeconds:60,allowExitOnIdle:true}):null;
+ const inboxLane=role===INBOX_ROLE,teamLane=role==='timeax_team_login';
+ // Team role cap is 3 and inbox role cap is 6. Leave room for an overlapping deploy.
+ const maxPool=role===SESSION_ROLE?4:role===WORKSPACE_ROLE||teamLane?1:inboxLane?2:0;
+ const pool=maxPool?new Pool({...options(()=>{}),Client:ScopedSessionClient,max:maxPool,idleTimeoutMillis:teamLane||inboxLane?30000:5000,maxLifetimeSeconds:60,allowExitOnIdle:true}):null;
  pool?.on('error',()=>{});
  async function connectAndRun(operation){
   if(pool){

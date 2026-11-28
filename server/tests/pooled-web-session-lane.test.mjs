@@ -60,3 +60,32 @@ test('workspace resolution has one verified pooled connection per hosted instanc
  await db.query(WORKSPACE_SQL,[]);await db.query(WORKSPACE_SQL,[]);
  assert.deepEqual(calls,[ROLE_CHECK_SQL,FUNCTION_CHECK_SQL,WORKSPACE_SQL,ROLE_CHECK_SQL,FUNCTION_CHECK_SQL,WORKSPACE_SQL]);
 });
+
+for(const [role,fn,statement,max] of [
+ ['timeax_team_login',(await import('../lib/team-workflow.server.mjs')).TEAM_FUNCTION,(await import('../lib/team-workflow.server.mjs')).TEAM_SQL,1],
+ [(await import('../lib/inbox.server.mjs')).INBOX_ROLE,{signature:(await import('../lib/inbox.server.mjs')).INBOX_SIGNATURE,owner:'postgres'},(await import('../lib/inbox.server.mjs')).INBOX_SQL,2],
+])test(role+' pools within its role limit and still checks fresh RPC authority',async()=>{
+ let opened=0,rpcCalls=0,checks=0,allowed=true;
+ class FixtureClient{
+  constructor(options){this.options=options}
+  async query(sql){
+   if(sql===ROLE_CHECK_SQL){checks++;return {rows:[{ok:allowed}]}}
+   if(sql===FUNCTION_CHECK_SQL){checks++;return {rows:[{...fn,prosecdef:true,allowed:true,grantable:false,proconfig:['search_path=pg_catalog, pg_temp'],definition:original}]}}
+   assert.equal(sql,statement);rpcCalls++;return {rows:[]};
+  }
+ }
+ class FixturePool{
+  constructor(options){
+   assert.equal(options.max,max);assert.equal(options.idleTimeoutMillis,30000);opened++;
+   this.client=new options.Client();this.client.release=()=>{};
+   assert.equal(this.client.options.ssl.checkServerIdentity(host,{subjectaltname:'DNS:'+host}),undefined);
+  }
+  on(){}
+  async connect(){return this.client}
+ }
+ const db=createScopedPgLane({host,role,password:'a'.repeat(48),ca,namespace:'timeax_api',
+  functions:[{...fn,sha256:createHash('sha256').update(original).digest('hex')}],statements:[statement],Client:FixtureClient,Pool:FixturePool});
+ await db.preflight();await db.query(statement,[]);await db.query(statement,[]);
+ allowed=false;await assert.rejects(db.query(statement,[]),/role preflight/);
+ assert.deepEqual({opened,rpcCalls,checks},{opened:1,rpcCalls:2,checks:7});
+});

@@ -3036,6 +3036,8 @@
     "storageBody": "Serwis używa mechanizmów sesji do obsługi i ochrony logowania. Wybrany przez Ciebie język lub motyw może zostać zapamiętany w tej przeglądarce."
   },
   "team": {
+    "unavailable": "Nie udało się wczytać tej sekcji. Spróbuj odświeżyć.",
+    "refreshUnavailable": "Nie udało się odświeżyć. Pokazujemy ostatnio wczytane dane.",
     "workNotifications": "Powiadomienia służbowe",
     "messages": "Wiadomości",
     "schedule": "Grafik",

@@ -169,7 +169,7 @@ function HostedRoutes(){
  const {t,i18n}=useTranslation(),loc=useLocation(),tx=(k:string)=>t("closedHosted."+k);
  const workerCopy=workerRegistrationCopy(i18n.resolvedLanguage),canonical=isCanonicalEmailOrigin(location.origin);
  const teamRoute=loc.pathname.match(/^\/workspace\/([0-9a-f-]+)\/(messages|schedule|templates|absence|accountants)$/);
- if(teamRoute)return <HostedCabinetRoute organizationId={teamRoute[1]} section={teamRoute[2] as TeamSection} fallback={<TeamStandalone organizationId={teamRoute[1]} section={teamRoute[2] as TeamSection}/>}/>;
+ if(teamRoute)return <HostedCabinetRoute key={teamRoute[1]} organizationId={teamRoute[1]} section={teamRoute[2] as TeamSection} fallback={<TeamStandalone organizationId={teamRoute[1]} section={teamRoute[2] as TeamSection}/>}/>;
  if(loc.pathname==='/accountant/invitation')return <AccountantInvitePage/>;
  const workspace=loc.pathname.match(/^\/workspace\/([0-9a-f-]+)$/);
  const productionRoute=loc.pathname.match(/^\/workspace\/([0-9a-f-]+)\/(teams|timesheets)$/);

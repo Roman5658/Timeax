@@ -4,7 +4,7 @@ import {useTranslation} from 'react-i18next';
 import {Bell,Plus,Send,X} from 'lucide-react';
 import {RegistrationFrame} from '../components/PublicExperience';
 import {useMemberNames} from './MemberNames';
-import {teamCall,useTeam,changed,type ShiftTemplate,type TeamEntry} from './team-workflow';
+import {teamCall,useTeam,changed,TeamContextProvider,type ShiftTemplate,type TeamEntry} from './team-workflow';
 import {AgencyBookDrawer} from './AgencyBookDrawer';
 import {cleanTeamDay,eligibleTeamRecipients,warsawTeamDay,type TeamAudience} from './team-communication';
 import {groupInboxConversations,indexMessageThreads,unreadInboxMessageIds} from './team-message-threads';
@@ -25,7 +25,7 @@ const workerHelp={
 };
 const localized=(language:string|undefined)=>workerHelp[(language??'en').split('-')[0] as keyof typeof workerHelp]??workerHelp.en;
 export function TeamBell({organizationId,additionalUnread=0,additional=[],inboxState}:{organizationId:string;additionalUnread?:number;additional?:BellPreview[];inboxState?:Inbox}){
- const {t,i18n}=useTranslation(),{value,refresh}=useTeam(organizationId),route=useLocation();
+ const {t,i18n}=useTranslation(),{value,error,refresh}=useTeam(organizationId),route=useLocation();
  const [expanded,setExpanded]=useState(false),wrap=useRef<HTMLDivElement>(null),trigger=useRef<HTMLButtonElement>(null),panelId=useId();
  const {label}=useMemberNames(expanded?organizationId:undefined);
  const [page,setPage]=useState(0),root='/workspace/'+organizationId+'/',inbox=root+'messages';
@@ -59,7 +59,7 @@ export function TeamBell({organizationId,additionalUnread=0,additional=[],inboxS
    to={root+noticeDestination(p.anchor)+'#'+p.anchor} onClick={()=>setExpanded(false)}>
    <strong>{p.title}</strong>{p.summary&&<span>{previewText(p.summary)}</span>}
    <time dateTime={p.at}>{new Date(p.at).toLocaleString(i18n.resolvedLanguage)}</time>
-  </Link></li>)}</ul>:<p role="status">{t(value?'workflow.notifications.empty':'team.loading')}</p>}
+  </Link></li>)}</ul>:<p role="status">{t(!value&&error==='unavailable'||inboxLoading&&inboxState?.failure?'team.unavailable':!value||inboxLoading?'team.loading':'workflow.notifications.empty')}</p>}
   <InboxPagination page={currentPage.page} pages={currentPage.pages} onPage={setPage}/>
   <Link to={inbox} onClick={()=>setExpanded(false)}>{t('team.messages')}</Link>
  </section>}</div>;
@@ -77,7 +77,7 @@ export function TemplatePicker({organizationId,onApply,disabled}:{organizationId
  </div>;
 }
 export function TeamStandalone({organizationId,section}:{organizationId:string;section:TeamSection}){
- const {t}=useTranslation();return <RegistrationFrame title={t('team.'+section)} lead={t('team.scope')}><TeamBell organizationId={organizationId}/><TeamPanel organizationId={organizationId} section={section}/><Link to={'/workspace/'+organizationId}>{t('team.back')}</Link></RegistrationFrame>;
+ const {t}=useTranslation();return <RegistrationFrame title={t('team.'+section)} lead={t('team.scope')}><TeamContextProvider key={organizationId} org={organizationId}><TeamBell organizationId={organizationId}/><TeamPanel organizationId={organizationId} section={section}/></TeamContextProvider><Link to={'/workspace/'+organizationId}>{t('team.back')}</Link></RegistrationFrame>;
 }
 type ExternalNotice={anchor:string;at:string;card:()=>ReactNode};
 export function TeamPanel({organizationId,section,initialDay,compact=false,notificationExtras,externalNotices=[],inboxState}:{organizationId:string;section:TeamSection;initialDay?:string;compact?:boolean;notificationExtras?:ReactNode;externalNotices?:ExternalNotice[];inboxState?:Inbox}){
@@ -202,7 +202,8 @@ export function TeamPanel({organizationId,section,initialDay,compact=false,notif
  const dates=<div className="timecards-pair"><label className="field-label">{tx('from')}<input type="date" required value={date} onChange={e=>{D(e.target.value);if(e.target.value>until)U(e.target.value);dirty()}}/></label><label className="field-label">{tx('to')}<input type="date" required min={date} value={until} onChange={e=>{U(e.target.value);dirty()}}/></label></div>;
  const times=<div className="timecards-pair"><label className="field-label">{t('timecards.start')}<input type="time" required value={start} onChange={e=>{A(e.target.value);dirty()}}/></label><label className="field-label">{t('timecards.end')}<input type="time" required value={end} onChange={e=>{Z(e.target.value);dirty()}}/></label></div>;
  return <section className="worker-enrollment team-panel" aria-busy={busy}>
- {!value?<p role="status">{tx(error||'closed')}</p>:<>
+ {!value?<p role="status">{tx(error||'unavailable')}</p>:<>
+ {error==='unavailable'&&<p role="status">{tx('refreshUnavailable')}</p>}
  {section==='messages'&&<section className="dashboard-panel team-conversations" aria-label={tx('messages')}>
  <h2>{tx('messages')}</h2>
  <div className="form-actions team-message-tools">
@@ -246,7 +247,7 @@ export function TeamPanel({organizationId,section,initialDay,compact=false,notif
   const read=(v:TeamEntry)=>v.outgoing||v.read||opened.includes(v.id);
   const listed=visibleConversations.filter(group=>folder==='archived'?true:folder==='sent'?group.messages.some(v=>v.outgoing):
    folder==='unread'?group.id===openConversation?.id||group.messages.some(v=>!read(v)):group.messages.some(v=>!v.outgoing));
-  return <>{!listed.length&&<p className="muted-copy">{inboxLoading?t(inboxState?.failure?'team.closed':'team.loading'):copy.empty}</p>}
+  return <>{!listed.length&&<p className="muted-copy">{inboxLoading?t(inboxState?.failure?'team.unavailable':'team.loading'):copy.empty}</p>}
    {!!listed.length&&<ul className="team-inbox">{listed.map(group=>{
     const incoming=group.messages.filter(v=>!v.outgoing).at(-1);
     const outgoing=group.messages.filter(v=>v.outgoing).at(-1);
@@ -313,7 +314,7 @@ export function TeamPanel({organizationId,section,initialDay,compact=false,notif
  <InboxPagination page={noticeSlice.page} pages={noticeSlice.pages} onPage={setNoticePage}/>
  </section>:visibleEntries.map(v=>noticeCard(v))}</>}
  </>}
- {notice&&!compose&&<p role={['saved','copied'].includes(notice)?'status':'alert'}>{tx(notice)}</p>}<button className="button button--outline" disabled={busy} onClick={refresh}>{tx('refresh')}</button>
+ {notice&&!compose&&<p role={['saved','copied'].includes(notice)?'status':'alert'}>{tx(notice)}</p>}<button className="button button--outline" disabled={busy} onClick={()=>{refresh();inboxState?.refresh()}}>{tx('refresh')}</button>
  </section>;
  function noticeCard(v:TeamEntry,embedded=false){
  const contents=<>
