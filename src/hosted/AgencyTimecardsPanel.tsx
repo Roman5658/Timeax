@@ -4,6 +4,7 @@ import {Link} from 'react-router-dom';
 import {useTranslation} from 'react-i18next';
 import {useMemberNames} from './MemberNames';
 import {agencyPeriodToday,agencyPeriodBounds,agencyPeriodOverlaps,agencyShiftGroups,weekdays,type AgencyPeriodKind} from './agency-hours-scope';
+import {AgencyBookDrawer} from './AgencyBookDrawer';
 import {TimecardReportDrawer} from './TimecardReportDrawer';
 import {agencyTimecardsCopy} from './agency-timecards-copy';
 import {timecardCall,parseTimecards,parseSnapshot,minutesLabel,type TimecardContext,type ShiftData,type TimecardShift} from './timecards';
@@ -20,6 +21,7 @@ import '../styles/agency-hours.css';
 
 type Source='internal'|'factory';
 type Copy=ReturnType<typeof agencyTimecardsCopy>;
+type CloseTarget={worksiteId:string;name:string;dateFrom:string;dateTo:string};
 type DocumentRow={id:string;name:string;worksiteId:string;dateFrom:string;dateTo:string;paidMinutes:number;factoryName?:string;factoryId?:string};
 const uuid=(v:unknown):v is string=>typeof v==='string'&&/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(v);
 export function AgencyTimecardsPanel({organizationId,internalEnabled,factoryEnabled,initialSource='internal',reviewPanel,estimatesEnabled=false}:{
@@ -49,7 +51,7 @@ function AgencySource({organizationId,source,c,reviewPanel,estimatesEnabled}:{or
   const [site,setSite]=useState(''),[worker,setWorker]=useState(''),[period,setPeriod]=useState(()=>agencyPeriodToday());
   const [search,setSearch]=useState(''),[days,setDays]=useState<readonly number[]>(weekdays),[detail,setDetail]=useState<string>();
   const dayName=new Intl.DateTimeFormat(i18n.language,{weekday:'long',timeZone:'UTC'});
-  const [confirmed,setConfirmed]=useState(false),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[snapshot,setSnapshot]=useState<TimecardReport>(),[excelError,setExcelError]=useState(false),[exporting,setExporting]=useState(false);
+  const [closeTarget,setCloseTarget]=useState<CloseTarget>(),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[snapshot,setSnapshot]=useState<TimecardReport>(),[excelError,setExcelError]=useState(false),[exporting,setExporting]=useState(false);
   const pending=useRef<AbortController|null>(null);
   const [history,setHistory]=useState<{id:string;revisions:{revision:number;data:ShiftData;reason:string}[]}>();
   const {label,context:names}=useMemberNames(source==='internal'?organizationId:undefined,revision);
@@ -110,8 +112,8 @@ function AgencySource({organizationId,source,c,reviewPanel,estimatesEnabled}:{or
   const archiveBounds=bounds&&period.kind!=='year'?{from:bounds.from,to:[bounds.to,agencyPeriodToday().date].sort()[0]}:null;
   const archiveScope=!!archiveBounds&&archiveBounds.from<=archiveBounds.to&&days.length===weekdays.length&&!search.trim()&&!worker;
   const archiveSite=site||(internal?.worksites.length===1?internal.worksites[0].id:'');
-  const inferredSite=!site&&archiveSite?internal?.worksites.find(w=>w.id===archiveSite):undefined;
-  const canArchive=source==='internal'&&archiveScope&&!!archiveSite&&internal?.worksites.some(w=>w.id===archiveSite)===true&&
+  const closingSite=internal?.worksites.find(w=>w.id===archiveSite);
+  const canArchive=source==='internal'&&archiveScope&&!!closingSite&&
    workers.some(g=>g.rows.some(row=>row.worksiteId===archiveSite&&row.state==='recorded'&&row.data.localDate<=archiveBounds!.to));
 
   async function readDocument(id:string,controller:AbortController,expected?:DocumentRow):Promise<AgencyTimecardSnapshot>{
@@ -135,25 +137,29 @@ function AgencySource({organizationId,source,c,reviewPanel,estimatesEnabled}:{or
     finally{if(pending.current===controller)pending.current=null;if(!controller.signal.aborted){setBusy(false);setExporting(false);setExportWages(false)}}
   }
   async function act(id:string|null){
-    if(pending.current)return;
+    if(pending.current||(!id&&(!closeTarget||!canArchive||!archiveBounds||notice==='uncertain'||
+       closeTarget.worksiteId!==archiveSite||closeTarget.dateFrom!==archiveBounds.from||closeTarget.dateTo!==archiveBounds.to)))return;
     const controller=new AbortController();
     pending.current=controller;
     setBusy(true);setNotice('');setSnapshot(undefined);
+    let closed=false;
     try{
       let documentId=id;
       if(!documentId){
-        if(!confirmed||!canArchive||!archiveBounds)return;
-        const result=await timecardCall(organizationId,'archive',{worksiteId:archiveSite,dateFrom:archiveBounds.from,dateTo:archiveBounds.to,confirmed:true},controller.signal) as {id?:unknown};
+        if(!closeTarget)return;
+        const {worksiteId,dateFrom,dateTo}=closeTarget;
+        const result=await timecardCall(organizationId,'archive',{worksiteId,dateFrom,dateTo,confirmed:true},controller.signal) as {id?:unknown};
         if(!uuid(result.id))throw Error('uncertain');
         documentId=result.id;
-        if(!controller.signal.aborted){setConfirmed(false);setNotice('archivedNotice');setRevision(n=>n+1)}
+        closed=true;
+        if(!controller.signal.aborted){setCloseTarget(undefined);setNotice('closedNotice');setRevision(n=>n+1)}
       }
       const expected=id?documents.find(d=>d.id===id):undefined;
       if(id&&!expected)throw Error('denied');
       const saved=await readDocument(documentId,controller,expected);
       if(!controller.signal.aborted)setSnapshot(saved);
     }catch(error){
-      if(!controller.signal.aborted){
+      if(!controller.signal.aborted&&!closed){
         const key=(error as Error).message;
         setNotice(['invalid','conflict','period-closed','login','denied'].includes(key)?key:'uncertain');
       }
@@ -178,7 +184,7 @@ function AgencySource({organizationId,source,c,reviewPanel,estimatesEnabled}:{or
       if(!controller.signal.aborted)setBusy(false);
     }
   }
-  const updateFilters=()=>{setConfirmed(false);setWorker('');setHistory(undefined);setDetail(undefined);setNotice('');setExcelError(false);setExportWages(false)};
+  const updateFilters=()=>{setCloseTarget(undefined);setWorker('');setHistory(undefined);setDetail(undefined);setNotice('');setExcelError(false);setExportWages(false)};
   function shiftRow(row:TimecardShift){return <article className="notice-box timecards-row" key={row.id}>
     <strong>{row.worksiteName}</strong>
     <p>{row.data.localDate} &middot; {row.data.startTime}-{row.data.endTime} &middot; {tt('counted')}: <strong>{minutesLabel(row.data.paidMinutes)}</strong> &middot; {tt(row.state)}</p>
@@ -230,11 +236,19 @@ function AgencySource({organizationId,source,c,reviewPanel,estimatesEnabled}:{or
         <p>{report?c.liveNotice:c.exportUnavailable}</p>
         {!archiveSite&&workers.length>0&&<p>{c.siteRequired}</p>}
         {site&&!archiveScope&&internal?.shifts.some(s=>s.worksiteId===site&&s.state==='recorded')&&<p>{c.archiveFilters}</p>}
-        {canArchive&&archiveBounds&&<form className="notice-box auth-form" onSubmit={e=>{e.preventDefault();void act(null)}}>
-          <h3>{tt('archiveTitle')}</h3><p>{tt('sealHint')}</p><p>{inferredSite&&<strong>{inferredSite.name}: </strong>}{archiveBounds.from} - {archiveBounds.to}</p>
-          <label className="timecards-check"><input type="checkbox" checked={confirmed} disabled={busy} onChange={e=>setConfirmed(e.target.checked)}/>{tt('sealConfirm')}</label>
-          <button className="button button--outline" disabled={busy||!confirmed}>{tt('archiveAction')}</button>
-        </form>}
+        {canArchive&&archiveBounds&&closingSite&&<button type="button" className="button button--outline" disabled={busy}
+          onClick={()=>{setNotice('');setCloseTarget({worksiteId:closingSite.id,name:closingSite.name,dateFrom:archiveBounds.from,dateTo:archiveBounds.to})}}>{tt('closePeriodAction')}</button>}
+        {closeTarget&&<AgencyBookDrawer centered title={tt('closePeriodTitle')} closeLabel={tt('close')} busy={busy}
+          onClose={()=>{setCloseTarget(undefined);setNotice('')}}>
+          <p><strong>{c.site}:</strong> {closeTarget.name}</p>
+          <p><strong>{t('workflow.timekeeping.period')}:</strong> <time dateTime={closeTarget.dateFrom}>{closeTarget.dateFrom}</time> &ndash; <time dateTime={closeTarget.dateTo}>{closeTarget.dateTo}</time></p>
+          <p>{tt('closePeriodHint')}</p>
+          {notice&&<p role="alert">{tt(notice)}</p>}
+          <div className="form-actions">
+            <button type="button" className="button button--outline" disabled={busy} onClick={()=>{setCloseTarget(undefined);setNotice('')}}>{t('common.cancel')}</button>
+            <button type="button" className="button button--primary" disabled={busy||notice==='uncertain'} onClick={()=>void act(null)}>{tt(busy?'closingPeriod':'closePeriodAction')}</button>
+          </div>
+        </AgencyBookDrawer>}
        </>}
        <p className="muted-copy">{c.shareNotice}</p>
        {excelError&&<p role="alert">{c.exportError}</p>}
@@ -269,7 +283,7 @@ function AgencySource({organizationId,source,c,reviewPanel,estimatesEnabled}:{or
       </article>)}</div>
       {snapshot&&<TimecardReportDrawer key={snapshot.source+snapshot.worksiteId+snapshot.dateFrom+snapshot.dateTo} snapshot={snapshot} estimates={snapshot.source==='internal-live'?wageEstimates:undefined} onClose={()=>setSnapshot(undefined)}/>}
     </>}
-    {notice&&<p role={notice==='archivedNotice'?'status':'alert'}>{tt(notice)}</p>}
+    {notice&&!closeTarget&&<p role={notice==='closedNotice'?'status':'alert'}>{tt(notice)}</p>}
     <button type="button" className="button button--outline" disabled={busy||status==='checking'} onClick={()=>{setNotice('');setSnapshot(undefined);setHistory(undefined);setRevision(n=>n+1)}}>{tt('refresh')}</button>
   </section>;
 }
