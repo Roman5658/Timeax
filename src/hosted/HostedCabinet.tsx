@@ -120,6 +120,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
  const home=t(menu[0].label);
  const heading=menu.find(entry=>entry.section===section)?.label??(section==='templates'?'team.templates':section==='absence'?'team.absence':menu[0].label);
  const org=access.organization.id;
+ const showAgencyProfile=agency&&section==='settings'&&agencyProfile?.ops.includes('profile')===true;
  const {i18n}=useTranslation();
  const teamInbox=useInbox(org,access.membership.id,agencyProfile?.ops.includes('inbox')===true);
  const payEnabled=agencyWorker&&agencyProfile?.ops.includes('payNotices')===true;
@@ -185,7 +186,7 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
      <div className="portal-breadcrumb"><span className="breadcrumb-dot"/>{agencyName||home}</div>
     </div>
     <div className="portal-top-actions">{uses('team')&&<div className='hosted-notification-controls'><TeamBell organizationId={org} inboxState={inbox} additionalUnread={extraUnread} additional={[...payBell,...bellEntries]}/>{section==='home'&&<PhonePushSettings key={org+access.membership.id}/>}</div>}
-    <LanguageSwitcher compact/><ThemeToggle/></div>
+    {!showAgencyProfile&&<><LanguageSwitcher compact/><ThemeToggle/></>}</div>
    </header>
    <main className="portal-content">
     <PageHeading eyebrow={worker?organizationLabel(access.membership.id):undefined} title={t(unifiedHours?'nav.timekeeping':heading)} />
@@ -196,8 +197,9 @@ function HostedCabinet({access,section,menu}:{access:WorkspaceAccess; section:Se
 
     {uses('team')&&!(factoryAdmin&&section==='schedule')&&(['messages','schedule','templates','absence','accountants'] as string[]).includes(section)&&<TeamPanel organizationId={org} section={section as TeamSection} inboxState={inbox} externalNotices={externalNotices}
      notificationExtras={section==='messages'?<>{joinCards.error&&<p role="alert">{joinCards.error}</p>}{shiftCards.failure&&<p role="alert">{t('team.closed')}</p>}</>:undefined}/>}
-    {section==='settings'&&agencyProfile?.ops.includes('profile')&&<AgencyProfile key={org} organizationId={org} onSaved={setAgencyName}/>}
-    {section==='settings'&&publicAgency&&uses('workerProvisioning')&&<AgencyNipVisibility key={org} organizationId={org}/>}
+    {/* Both panels are siblings: distinguish their keys even within the same agency. */}
+    {showAgencyProfile&&<AgencyProfile key={'profile:'+org} organizationId={org} onSaved={setAgencyName}/>}
+    {section==='settings'&&publicAgency&&uses('workerProvisioning')&&<AgencyNipVisibility key={'directory:'+org} organizationId={org}/>}
     {!production&&section==='home'&&<>
      {worker&&where.state?.offerWorkerPassword===true&&<WorkerPasswordPanel onDismiss={()=>navigate(where.pathname+where.search,{replace:true,state:null})}/>}
      {agencyWorker&&<WorkerCalendar key={org+access.membership.id} organizationId={org} membershipId={access.membership.id}/>}

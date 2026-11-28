@@ -52,6 +52,7 @@
     "signOut": "Sign out"
   },
   "publicSignup": {
+    "agencyNameAfterCode": "You’ll enter your agency name after confirming your email.",
     "unfinishedAgency": "Your email is verified, but your agency workspace hasn’t been created yet. You can continue or start over with email verification.",
     "continueAgency": "Continue registration",
     "restartAgency": "Start over",

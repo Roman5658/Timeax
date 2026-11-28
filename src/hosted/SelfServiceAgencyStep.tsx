@@ -34,6 +34,10 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
  const [productionDestinations,setProductionDestinations]=useState<Membership[]>([]);
  const [termsAccepted,setTermsAccepted]=useState(false),[showPassword,setShowPassword]=useState(false);
  const controller=useRef<AbortController|null>(null);
+ const detailsHeading=useRef<HTMLHeadingElement>(null);
+ useEffect(()=>{
+  if(stage==='details')detailsHeading.current?.focus();
+ },[stage]);
  const accept=useCallback((v:{state?:unknown;organizationId?:unknown;passwordRequired?:unknown},reopening=false)=>{
   if(v?.state==='ready'&&organizationId(v.organizationId)){
    const home='/workspace/'+v.organizationId;
@@ -152,7 +156,10 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
    <button type="button" className="button button--primary button--full" disabled={busy} onClick={()=>{setError('');setStage('details')}}>{t('publicSignup.continueAgency')}</button>
    <button type="button" className="button button--outline button--full" disabled={busy} onClick={()=>void restartRegistration()}>{t('publicSignup.restartAgency')}</button>
   </div>}
-  {stage==='code'&&<StagingSessionPanel guided simple signup={!existing} termsHref={existing?undefined:termsHref} purpose={existing?'existing':'enrollment'} onChanged={()=>void refresh()}/>}
+  {stage==='code'&&<>
+   {!existing&&<p className="muted-copy">{t('publicSignup.agencyNameAfterCode')}</p>}
+   <StagingSessionPanel guided simple signup={!existing} termsHref={existing?undefined:termsHref} purpose={existing?'existing':'enrollment'} onChanged={()=>void refresh()}/>
+  </>}
    {existing&&stage==='destinations'&&<div className="auth-form">{productionDestinations.length>0?productionDestinations.map(m=><Link key={m.membershipId} to={'/workspace/'+m.organizationId}>{m.name} · {t('workspaceRead.'+m.role)}</Link>):<><p role="status">{copy.noWorkspace}</p>
     {workerReady&&<Link to="/register/worker">{copy.workerRoute}</Link>}
     <Link to="/register/agency">{copy.agencyRoute}</Link>
@@ -162,6 +169,12 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
    <button type="button" className="button button--outline" onClick={()=>void refresh(true)}>{t('publicSignup.retry')}</button>)}
   {(stage==='password'||stage==='details')&&<form className="auth-form" onSubmit={submit} aria-busy={busy}>
    {stage==='password'&&<label className="field-label">{t('stagingSession.email')}<input type="email" autoComplete="username" value={email} onChange={e=>setEmail(e.target.value)} disabled={busy} required maxLength={254}/></label>}
+   {stage==='details'&&<>
+    <h2 ref={detailsHeading} tabIndex={-1} className="enrollment-subtitle">{t('publicExperience.detailsTitle')}</h2>
+    <label className="field-label" htmlFor="agency-name">{t('agencyRegistration.nameLabel')}<input id="agency-name" autoComplete="organization" value={name} onChange={e=>setName(e.target.value)} disabled={busy} required minLength={2} maxLength={120}/></label>
+    <label className="field-label">{t('publicSignup.requiredNip')}<input inputMode="numeric" value={nip} onChange={e=>setNip(e.target.value)} disabled={busy} maxLength={24} required aria-describedby="agency-nip-lookup"/></label>
+    <p id="agency-nip-lookup" className="muted-copy">{t('publicSignup.agencyNipLookup')}</p>
+   </>}
    {(stage==='password'||needsPassword)&&<div className="field-label">
     <label htmlFor="agency-password">{t('selfService.password')}</label>
     <div className="public-password-field">
@@ -173,9 +186,6 @@ export function SelfServiceAgencyStep({existing}:{existing:boolean}){
     </div>
    </div>}
    {stage==='details'&&<>
-    <label className="field-label">{t('agencyRegistration.nameLabel')}<input autoComplete="organization" value={name} onChange={e=>setName(e.target.value)} disabled={busy} required minLength={2} maxLength={120}/></label>
-    <label className="field-label">{t('publicSignup.requiredNip')}<input inputMode="numeric" value={nip} onChange={e=>setNip(e.target.value)} disabled={busy} maxLength={24} required aria-describedby="agency-nip-lookup"/></label>
-    <p id="agency-nip-lookup" className="muted-copy">{t('publicSignup.agencyNipLookup')}</p>
     <div className="public-legal-links">
      <LegalLink kind="terms" to={termsHref}/>
      <LegalLink kind="privacy" to="/privacy#privacy-access"/>

@@ -52,6 +52,7 @@
     "signOut": "Wyloguj"
   },
   "publicSignup": {
+    "agencyNameAfterCode": "Po potwierdzeniu adresu e-mail podasz nazwę agencji.",
     "unfinishedAgency": "Adres e-mail jest potwierdzony, ale panel agencji nie został jeszcze utworzony. Możesz kontynuować lub zacząć od potwierdzenia adresu.",
     "continueAgency": "Kontynuuj rejestrację",
     "restartAgency": "Zacznij od nowa",
