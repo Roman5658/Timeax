@@ -24,7 +24,7 @@ import { BrandMark } from '../components/BrandMark';
 import { LanguageSwitcher } from '../components/LanguageSwitcher';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { createWorkingRegistrationClient } from '../modules/auth/registration/contract/registration-client';
-import { useMemberNames } from './MemberNames';
+import { MemberNamesProvider,useMemberNames } from './MemberNames';
 import { PageHeading } from '../components/PageHeading';
 import { AgencyWorkerPanel } from './WorkerEnrollmentPage';
 import { loadWorkspaceAccess, type WorkspaceAccess, type WorkspaceResult } from './workspace-access';
@@ -113,7 +113,8 @@ export function HostedCabinetRoute({organizationId, section, fallback}:{organiza
  if(role==='worker'&&value.organization.kind==='agency'&&section==='factory-timecards')return <Navigate replace to={'/workspace/'+organizationId+'/timecards'}/>;
  const menu=role==='agency_admin'?agencyMenu:role==='factory_admin'?factoryMenu:role==='team_leader'?leaderMenu:value.organization.kind==='factory'?factoryWorkerMenu:workerMenu;
  if(!menu.some(entry=>entry.section===section)&&!(role==='worker'&&value.organization.kind==='agency'&&['templates','absence'].includes(section)))return fallback;
- const cabinet=<HostedCabinet key={status.value.membership.id} access={status.value} section={section} menu={menu} agencyProfile={profile} canonical={canonical} retryProfile={()=>retry(n=>n+1)}/>;
+ const cabinet=<MemberNamesProvider key={status.value.membership.id} org={organizationId} enabled={!canonical||profile?.ops.includes('names')===true}
+  prefetch={section==='workers'||role==='worker'}><HostedCabinet access={status.value} section={section} menu={menu} agencyProfile={profile} canonical={canonical} retryProfile={()=>retry(n=>n+1)}/></MemberNamesProvider>;
  return status.value.membership.role==='worker'&&canonical
   ?<WorkerTermsGate onSessionExpired={()=>navigate('/login',{replace:true})}>{cabinet}</WorkerTermsGate>:cabinet;
 }

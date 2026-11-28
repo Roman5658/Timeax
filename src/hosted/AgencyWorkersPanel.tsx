@@ -127,6 +127,7 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,application
  const groups=[...new Set(roster.map(w=>w.group))];
  const id=drawer?.type==='worker'?drawer.id:undefined;
  const activityId=drawer?.type==='activity'?drawer.id:undefined;
+ const displayName=(personId:string)=>scopedNames?.workers.some(w=>w.membershipId===personId&&w.organizationId===organizationId&&w.name)?label(personId):approvedWorkers[personId]||label(personId);
  const current=id?scopedNames?.workers.find(w=>w.membershipId===id&&w.organizationId===organizationId&&w.state==='active'):undefined;
  const moves= id?workAssignments(id).filter(a=>internalSites.some(s=>s.id===a.worksiteId)&&currentAt(a,startInstant)):[];
  const originAssignment=moves.find(a=>a.worksiteId===source)??(moves.length===1?moves[0]:undefined);
@@ -218,8 +219,8 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,application
   </section>}
   </div>
   {!drawer&&status}
-  {activityId&&<AgencyBookDrawer key={'activity/'+activityId} centered title={roster.find(worker=>worker.id===activityId)?.display??label(activityId)} closeLabel={copy('close')} onClose={dismiss}>
-   {active.has(activityId)?<AgencyWorkerActivity scope={{organizationId,membershipId:activityId,siteId}} timecardsEnabled={timecardsEnabled} factoryHoursEnabled={factoryHoursEnabled} absencesEnabled={absencesEnabled} estimatesEnabled={estimatesEnabled}/>
+  {activityId&&<AgencyBookDrawer key={'activity/'+activityId} centered title={displayName(activityId)} closeLabel={copy('close')} onClose={dismiss}>
+   {active.has(activityId)?<AgencyWorkerActivity scope={{organizationId,membershipId:activityId,siteId}} timecardsEnabled={timecardsEnabled} factoryHoursEnabled={factoryHoursEnabled} factoryContext={scopedFactory} factoryLoading={!scopedFactory&&!rosterFailures.includes('factory')} absencesEnabled={absencesEnabled} estimatesEnabled={estimatesEnabled}/>
     :<p role="status">{copy('rosterUnavailable')}</p>}
   </AgencyBookDrawer>}
   {drawer&&drawer.type!=='activity'&&<AgencyBookDrawer title={drawer.type==='email'?provision.createAccount:drawer.type==='invite'?copy('add'):copy('settings')} closeLabel={copy('close')} busy={busy||estimateBusy} onClose={dismiss}>
@@ -236,7 +237,7 @@ export function AgencyWorkersPanel({organizationId,enrollmentEnabled,application
       <a className="button button--primary" href={'mailto:?subject='+encodeURIComponent(copy('emailSubject'))+'&body='+encodeURIComponent(copy('emailBody')+'\n\n'+invite.link+'\n\n'+t('workerEnrollment.inviteCode')+': '+invite.code)}>{copy('emailInvite')}</a>
      {navigator.clipboard&&<button type="button" className="button button--outline" disabled={busy} onClick={()=>void run(()=>navigator.clipboard.writeText(invite.link),'copied')}>{copy('copy')}</button>}</div><p className="muted-copy">{copy('emailDraft')}</p></div>}
    </>:id&&<>
-    <p className="agency-worker-person">{roster.find(w=>w.id===id)?.display??label(id)}</p>
+    <p className="agency-worker-person">{displayName(id)}</p>
     {id&&workAssignments(id).length>0&&<ul className="agency-worker-placement-list">{workAssignments(id).map(a=>{
      const site=sites.find(s=>s.id===a.worksiteId);return site?<li key={a.worksiteId}>{site.name}{Date.parse(a.startsAt)>dateNow?' · '+copy('planned').replace('{{date}}',dates.format(new Date(a.startsAt))):''}</li>:null;
     })}</ul>}

@@ -5,6 +5,7 @@ import {rootCertificates} from 'node:tls';
 import {ROLE_CHECK_SQL,FUNCTION_CHECK_SQL,createScopedPgLane} from '../lib/scoped-pg.mjs';
 import {SESSION_ROLE,SESSION_RPC,SESSION_SQL} from '../lib/web-session-store.mjs';
 import {WORKSPACE_ROLE,WORKSPACE_FUNCTIONS} from '../lib/workspace-read.contract.mjs';
+import {INTEGRATED_LANES} from '../lib/integrated.contract.mjs';
 import {WORKSPACE_SQL} from '../lib/workspace-read.server.mjs';
 
 const host='aws-1-eu-central-1.pooler.supabase.com';
@@ -61,9 +62,10 @@ test('workspace resolution has one verified pooled connection per hosted instanc
  assert.deepEqual(calls,[ROLE_CHECK_SQL,FUNCTION_CHECK_SQL,WORKSPACE_SQL,ROLE_CHECK_SQL,FUNCTION_CHECK_SQL,WORKSPACE_SQL]);
 });
 
-for(const [role,fn,statement,max] of [
+for(const [role,fn,statement,max,idle=30000] of [
  ['timeax_team_login',(await import('../lib/team-workflow.server.mjs')).TEAM_FUNCTION,(await import('../lib/team-workflow.server.mjs')).TEAM_SQL,1],
  [(await import('../lib/inbox.server.mjs')).INBOX_ROLE,{signature:(await import('../lib/inbox.server.mjs')).INBOX_SIGNATURE,owner:'postgres'},(await import('../lib/inbox.server.mjs')).INBOX_SQL,2],
+ ...INTEGRATED_LANES.filter(lane=>['names','timecards','factoryTimecards'].includes(lane.id)).map(lane=>[lane.role,lane.functions[0],lane.statements[0],2,15000]),
 ])test(role+' pools within its role limit and still checks fresh RPC authority',async()=>{
  let opened=0,rpcCalls=0,checks=0,allowed=true;
  class FixtureClient{
@@ -76,7 +78,7 @@ for(const [role,fn,statement,max] of [
  }
  class FixturePool{
   constructor(options){
-   assert.equal(options.max,max);assert.equal(options.idleTimeoutMillis,30000);opened++;
+   assert.equal(options.max,max);assert.equal(options.idleTimeoutMillis,idle);opened++;
    this.client=new options.Client();this.client.release=()=>{};
    assert.equal(this.client.options.ssl.checkServerIdentity(host,{subjectaltname:'DNS:'+host}),undefined);
   }

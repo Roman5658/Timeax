@@ -1,5 +1,5 @@
 import {WORKER_PROVISIONING_SIGNATURE} from './worker-provisioning.mjs';
-import {WORKER_TERMS_SIGNATURE} from './worker-terms.mjs';
+import {WORKER_TERMS_ROLE,WORKER_TERMS_SIGNATURE} from './worker-terms.mjs';
 import {SESSION_ROLE,SESSION_RPC} from './web-session-store.mjs';
 import {AGENCY_PROFILE_SIGNATURE} from './agency-profile.mjs';
 import {PUSH_SIGNATURE} from './web-push.server.mjs';
@@ -155,25 +155,39 @@ export function createScopedPgLane({host,role,password,ca,namespace,functions,st
  }
  const inboxLane=role===INBOX_ROLE,teamLane=role==='timeax_team_login';
  // Team role cap is 3 and inbox role cap is 6. Leave room for an overlapping deploy.
- const maxPool=role===SESSION_ROLE?4:role===WORKSPACE_ROLE||teamLane?1:inboxLane?2:0;
- const pool=maxPool?new Pool({...options(()=>{}),Client:ScopedSessionClient,max:maxPool,idleTimeoutMillis:teamLane||inboxLane?30000:5000,maxLifetimeSeconds:60,allowExitOnIdle:true}):null;
+ const interactiveLane=['timeax_member_names_login','timeax_timecards_login','timeax_factory_timecards_login',WORKER_TERMS_ROLE].includes(role);
+ const maxPool=role===SESSION_ROLE?4:role===WORKSPACE_ROLE||teamLane?1:inboxLane||interactiveLane?2:0;
+ const pool=maxPool?new Pool({...options(()=>{}),Client:ScopedSessionClient,max:maxPool,idleTimeoutMillis:teamLane||inboxLane?30000:interactiveLane?15000:5000,maxLifetimeSeconds:60,allowExitOnIdle:true}):null;
  pool?.on('error',()=>{});
+ let lastSlowLog=-Infinity;
  async function connectAndRun(operation){
-  if(pool){
-   const client=await pool.connect();
-   let failure;
-   try{
-    if(!verified.has(client))throw Error('DB TLS identity not verified');
-    return await guardedOperation(client,operation);
-   }catch(error){failure=error;throw error;}finally{client.release(failure);}
-  }
-  let tlsVerified=false;
-  const client=new Client(options(()=>{tlsVerified=true}));
-  client.on('error',()=>{});
+  const start=performance.now();
+  let acquired=start,completed=false,stage='connect';
   try{
-   await client.connect();if(!tlsVerified)throw Error('DB TLS identity not verified');
-   return await guardedOperation(client,operation);
-  }finally{await client.end().catch(()=>{})}
+   if(pool){
+    const client=await pool.connect();acquired=performance.now();stage='verify-and-run';
+    let failure;
+    try{
+     if(!verified.has(client))throw Error('DB TLS identity not verified');
+     const value=await guardedOperation(client,operation);completed=true;return value;
+    }catch(error){failure=error;throw error;}finally{client.release(failure);}
+   }
+   let tlsVerified=false;
+   const client=new Client(options(()=>{tlsVerified=true}));
+   client.on('error',()=>{});
+   try{
+    await client.connect();if(!tlsVerified)throw Error('DB TLS identity not verified');
+    acquired=performance.now();stage='verify-and-run';
+    const value=await guardedOperation(client,operation);completed=true;return value;
+   }finally{await client.end().catch(()=>{})}
+  }finally{
+   const end=performance.now();
+   if(pool&&end-start>=900&&end-lastSlowLog>=15000){
+    lastSlowLog=end;
+    // Lane names are fixed by configuration; never log arguments, SQL, users or errors.
+    console.warn('[timeax-db-latency]',JSON.stringify({lane:role,stage,completed,ms:Math.round(end-start),connectMs:Math.round((stage==='connect'?end:acquired)-start)}));
+   }
+  }
  }
  return Object.freeze({
   preflight:()=>connectAndRun(async()=>true),

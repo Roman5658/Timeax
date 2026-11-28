@@ -1,44 +1,60 @@
-import {useEffect,useState} from 'react';import {useTranslation} from 'react-i18next';import {isWorkerLocal} from './worker-enrollment';import {workerLabelText} from './member-label';
+import {createContext,useCallback,useContext,useEffect,useMemo,useRef,useState,type ReactNode} from 'react';import {useTranslation} from 'react-i18next';import {isWorkerLocal} from './worker-enrollment';import {workerLabelText} from './member-label';
+import {readWithRetry,retryableStatus,TemporaryReadError} from './retry-read.ts';
 export type MemberName={membershipId:string;organizationId:string;organizationName:string;reference:string;name:string|null;revision:number;state:string;checkedAt:string|null};
 type Context={organizationId:string;canEdit:boolean;workers:MemberName[]};
 const uuid=(v:unknown)=>typeof v==='string'&&/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(v);
 export async function memberNamesCall(org:string,body?:unknown,signal?:AbortSignal):Promise<unknown>{
  if(!uuid(org)||location.protocol!=='https:'&&!isWorkerLocal())throw Error('unavailable');
  const r=await fetch('/api/member-names/'+org+'/'+(body===undefined?'context':'set'),{method:body===undefined?'GET':'POST',credentials:'same-origin',cache:'no-store',redirect:'error',signal,headers:body===undefined?{Accept:'application/json'}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
+ if(body===undefined&&retryableStatus(r.status))throw new TemporaryReadError();
  if(!r.ok)throw Error(r.status===401?'login':r.status===403?'denied':r.status===409?'conflict':'unavailable');if(r.headers.get('content-type')?.split(';')[0]!=='application/json')throw Error('unavailable');return r.json();
 }
 export function parseMemberNames(v:unknown,org:string):Context{
  const c=v as Context;if(!c||c.organizationId!==org||typeof c.canEdit!=='boolean'||!Array.isArray(c.workers)||c.workers.some(w=>!uuid(w.membershipId)||!uuid(w.organizationId)||!/^[1-9][0-9]*$/.test(w.reference)||w.name!==null&&(typeof w.name!=='string'||[...w.name].length>120)||!Number.isSafeInteger(w.revision)))throw Error('unavailable');return c;
 }
+const sharedRead=createContext<{org:string;context?:Context;state:string;ensure:()=>void;refresh:()=>void}|undefined>(undefined);
+function useMemberNamesRead(org:string|undefined){
+ const [snapshot,C]=useState<{org:string;context?:Context;state:string}>();
+ const running=useRef<AbortController|null>(null),lastStarted=useRef(-Infinity),trailing=useRef(false);
+ const load=useCallback((force:boolean)=>{
+  if(!org)return;
+  if(running.current){if(force)trailing.current=true;return}
+  if(!force&&Date.now()-lastStarted.current<20000)return;
+  lastStarted.current=Date.now();
+  const controller=new AbortController();running.current=controller;
+  C(v=>({org,context:v?.org===org?v.context:undefined,state:'checking'}));
+  void readWithRetry(async signal=>parseMemberNames(await memberNamesCall(org,undefined,signal),org),controller.signal,1)
+   .then(context=>{if(!controller.signal.aborted)C({org,context,state:'ready'})},error=>{
+    if(!controller.signal.aborted)C(v=>({org,context:v?.org===org&&!['login','denied'].includes(error?.message)?v.context:undefined,state:'unavailable'}));
+   }).finally(()=>{
+    if(running.current!==controller)return;
+    running.current=null;
+    if(trailing.current){trailing.current=false;load(true)}
+   });
+ },[org]);
+ useEffect(()=>()=>{running.current?.abort();running.current=null;lastStarted.current=-Infinity;trailing.current=false},[org]);
+ const ensure=useCallback(()=>load(false),[load]),refresh=useCallback(()=>load(true),[load]);
+ return {context:org&&snapshot?.org===org?snapshot.context:undefined,state:org&&snapshot?.org===org?snapshot.state:'checking',ensure,refresh};
+}
+export function MemberNamesProvider({org,enabled,prefetch,children}:{org:string;enabled:boolean;prefetch:boolean;children:ReactNode}){
+ const value=useMemberNamesRead(enabled?org:undefined);
+ const {ensure}=value;
+ useEffect(()=>{if(prefetch)ensure()},[prefetch,ensure]);
+ return <sharedRead.Provider value={{org,...value}}>{children}</sharedRead.Provider>;
+}
 export function useMemberNames(org:string|undefined,revision=0){
- const {t}=useTranslation();
- const [snapshot,C]=useState<{org:string;context:Context}>();
- const [status,S]=useState<{org:string;state:string}>();
- const context=org&&snapshot?.org===org?snapshot.context:undefined;
- const state=org&&status?.org===org?status.state:'checking';
+ const {t}=useTranslation(),source=useContext(sharedRead);
+ const local=useMemberNamesRead(source?.org===org?undefined:org);
+ const {context,state,ensure,refresh}=source?.org===org?source??local:local;
+ const previous=useRef({org,revision});
  useEffect(()=>{
-  if(!org){C(undefined);S(undefined);return}
-  const c=new AbortController();
-  const deadline=window.setTimeout(()=>{c.abort();S({org,state:'unavailable'})},8000);
-  S({org,state:'checking'});
-  void (async()=>{
-   for(let attempt=0;attempt<2;attempt++){
-    try{
-     const next=parseMemberNames(await memberNamesCall(org,undefined,c.signal),org);
-     if(!c.signal.aborted){C({org,context:next});S({org,state:'ready'})}
-     return;
-    }catch(e){
-     if(c.signal.aborted)return;
-     if(attempt===0&&e instanceof Error&&e.message==='unavailable'){
-      await new Promise(resolve=>setTimeout(resolve,300));if(c.signal.aborted)return;
-     }else{S({org,state:'unavailable'});return}
-    }
-   }
-  })().finally(()=>window.clearTimeout(deadline));
-  return()=>{window.clearTimeout(deadline);c.abort()};
- },[org,revision]);
- const label=(id:string)=>{const w=context?.workers.find(w=>w.membershipId===id);return workerLabelText(w?{...w,source:'current'}:undefined,t('memberNames.missing'),t('memberNames.reference'))};
- const organizationLabel=(id:string)=>context?.workers.find(w=>w.membershipId===id)?.organizationName??'';
+  const before=previous.current;previous.current={org,revision};
+  if(!org)return;
+  if(before.org===org&&before.revision!==revision)refresh();else ensure();
+ },[org,revision,ensure,refresh]);
+ const byId=useMemo(()=>new Map(context?.workers.map(w=>[w.membershipId,w])),[context]);
+ const label=(id:string)=>{const w=byId.get(id);return workerLabelText(w?{...w,source:'current'}:undefined,t('memberNames.missing'),t('memberNames.reference'))};
+ const organizationLabel=(id:string)=>byId.get(id)?.organizationName??'';
  return {context,state,label,organizationLabel};
 }
 export function MemberNamesPanel({organizationId,revision=0,onChanged}:{organizationId:string;revision?:number;onChanged?:()=>void}){

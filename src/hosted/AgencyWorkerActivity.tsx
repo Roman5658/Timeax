@@ -1,7 +1,7 @@
-import {useCallback,useEffect,useState,type ReactNode} from 'react';
+import {useCallback,useEffect,useMemo,useState,type ReactNode} from 'react';
 import {useTranslation} from 'react-i18next';
-import {factoryHoursCall} from './factory-timecards';
-import {teamCall} from './team-workflow';
+import {factoryHoursCall,type FactoryHoursContext} from './factory-timecards';
+import {useTeam} from './team-workflow';
 import {minutesLabel,timecardCall} from './timecards';
 import {selectInternalWorkerShifts,selectReceivedWorkerShifts,selectWorkerAbsences,type ActivityShift,type WorkerActivityScope} from './agency-worker-activity';
 import {loadPayEstimateSettings} from './pay-estimate-settings';
@@ -23,8 +23,6 @@ const internal:Load<ReturnType<typeof selectInternalWorkerShifts>>=async(scope,s
  selectInternalWorkerShifts(await timecardCall(scope.organizationId,'context',undefined,signal),scope);
 const factory:Load<ReturnType<typeof selectReceivedWorkerShifts>>=async(scope,signal)=>
  selectReceivedWorkerShifts(await factoryHoursCall(scope.organizationId,'context',undefined,signal),scope);
-const absences:Load<ReturnType<typeof selectWorkerAbsences>>=async(scope,signal)=>
- selectWorkerAbsences(await teamCall(scope.organizationId,'context',undefined,signal),scope);
 
 function useActivity<T>({organizationId,membershipId,siteId}:WorkerActivityScope,enabled:boolean,load:Load<T>){
  const [attempt,refresh]=useState(0);
@@ -99,13 +97,28 @@ function Hours({rows,labels,format}:{rows:ActivityShift[];labels:Words;format:(d
   {rows.length>limit&&<button className="button button--outline button--small" type="button" onClick={()=>setLimit(n=>n+12)}>{labels.more}</button>}
  </>;
 }
-export function AgencyWorkerActivity({scope,timecardsEnabled,factoryHoursEnabled,absencesEnabled,estimatesEnabled=false}:{
- scope:WorkerActivityScope;timecardsEnabled:boolean;factoryHoursEnabled:boolean;absencesEnabled:boolean;estimatesEnabled?:boolean;
+export function AgencyWorkerActivity({scope,timecardsEnabled,factoryHoursEnabled,factoryContext,factoryLoading,absencesEnabled,estimatesEnabled=false}:{
+ scope:WorkerActivityScope;timecardsEnabled:boolean;factoryHoursEnabled:boolean;factoryContext?:FactoryHoursContext;factoryLoading:boolean;absencesEnabled:boolean;estimatesEnabled?:boolean;
 }){
  const {i18n}=useTranslation(),lang=(i18n.resolvedLanguage??'en').split('-')[0] as keyof typeof copy,labels=copy[lang]??copy.en;
  const displayDate=new Intl.DateTimeFormat(lang,{timeZone:'UTC',dateStyle:'medium'});
  const format=(day:string)=>displayDate.format(new Date(day+'T00:00:00Z'));
- const shifts=useActivity(scope,timecardsEnabled,internal),received=useActivity(scope,factoryHoursEnabled,factory),reports=useActivity(scope,absencesEnabled,absences);
+ const {organizationId,membershipId,siteId}=scope;
+ const team=useTeam(organizationId);
+ const shifts=useActivity(scope,timecardsEnabled,internal);
+ const [reloadFactory,setReloadFactory]=useState(false);
+ const factoryFallback=useActivity(scope,factoryHoursEnabled&&(reloadFactory||!factoryContext&&!factoryLoading),factory);
+ const receivedData=useMemo<LoadState<ActivityShift[]>|undefined>(()=>{
+  if(!factoryContext)return undefined;
+  try{return {state:'ready',value:selectReceivedWorkerShifts(factoryContext,{organizationId,membershipId,siteId})}}
+  catch{return {state:'failed'}}
+ },[factoryContext,organizationId,membershipId,siteId]);
+ const received={result:reloadFactory?factoryFallback.result:receivedData??factoryFallback.result,retry:()=>{setReloadFactory(true);factoryFallback.retry()}};
+ const reports={retry:team.refresh,result:useMemo<LoadState<ReturnType<typeof selectWorkerAbsences>>>(()=>{
+  if(!team.value)return {state:team.error==='loading'?'loading':'failed'};
+  try{return {state:'ready',value:selectWorkerAbsences(team.value,{organizationId,membershipId,siteId})}}
+  catch{return {state:'failed'}}
+ },[team.value,team.error,organizationId,membershipId,siteId])};
  const pay=useActivity(scope,estimatesEnabled,estimates);
  const {retry:refreshPay}=pay;
  useEffect(()=>{if(!estimatesEnabled)return;window.addEventListener('timeax-pay-estimate-settings-changed',refreshPay);

@@ -4,7 +4,7 @@ import {Link} from 'react-router-dom';
 import {AlertCircle,CalendarDays,ChevronDown,ChevronUp,Clock3,MessageCircleWarning,Plus,Zap} from 'lucide-react';
 import {timecardCall,parseTimecards,minutesLabel,type TimecardContext} from './timecards';
 import {factoryHoursCall,parseFactoryHours,type FactoryHoursContext} from './factory-timecards';
-import {teamCall,type TeamContext} from './team-workflow';
+import {useTeam} from './team-workflow';
 import {workerCalendarCopy} from './worker-calendar-copy';
 import {calendarDayRecords,workerCalendarRecords} from './worker-calendar-data';
 import {resolveWorkerShiftAssignment} from './worker-shift-assignment';
@@ -25,7 +25,9 @@ export function WorkerCalendar({organizationId,membershipId,enableInternal=true,
  const lang=(i18n.resolvedLanguage??'en').split('-')[0];
  const planLabel=lang==='ru'?'Смена по графику':lang==='pl'?'Zmiana w grafiku':lang==='uk'?'Запланована зміна':'Scheduled shift';
  const [selected,setSelected]=useState(wardate),[month,setMonth]=useState(()=>monthOf(wardate()));
- const [internal,setInternal]=useState<TimecardContext>(),[factory,setFactory]=useState<FactoryHoursContext>(),[team,setTeam]=useState<TeamContext>();
+ const [internal,setInternal]=useState<TimecardContext>(),[factory,setFactory]=useState<FactoryHoursContext>();
+ const {value:teamValue,error:teamError,refresh:refreshTeam}=useTeam(organizationId);
+ const team=enableTeam&&teamValue?.role==='worker'&&teamValue.membershipId===membershipId?teamValue:undefined;
  const [revision,refresh]=useState(0),[loading,setLoading]=useState(true),[partial,setPartial]=useState(false);
  const heading=useId(),detail=useId(),[templateOpen,setTemplateOpen]=useState(false);
  const absenceHeading=useId(),[absenceDay,setAbsenceDay]=useState<string>();
@@ -36,25 +38,19 @@ export function WorkerCalendar({organizationId,membershipId,enableInternal=true,
    if(v.membershipId!==membershipId||v.role!=='worker'||v.organizationId!==organizationId)throw Error('Unavailable');
    return v;
   };
-  setLoading(true);setPartial(false);setInternal(undefined);setFactory(undefined);setTeam(undefined);
-  Promise.allSettled([
-   enableInternal?timecardCall(organizationId,'context',undefined,ctl.signal).then(raw=>exact(parseTimecards(raw,organizationId))):Promise.resolve(undefined),
-   enableFactory?factoryHoursCall(organizationId,'context',undefined,ctl.signal).then(raw=>exact(parseFactoryHours(raw,organizationId))):Promise.resolve(undefined),
-   enableTeam?teamCall(organizationId,'context',undefined,ctl.signal).then((raw:TeamContext)=>{
-    const v=exact(raw);
-    if(!Array.isArray(v.entries)||!Array.isArray(v.sites)||!Array.isArray(v.templates))throw Error('Unavailable');
-    return v;
-   }):Promise.resolve(undefined),
-  ]).then(([a,b,d])=>{
-   if(ctl.signal.aborted)return;
-   if(a.status==='fulfilled')setInternal(a.value);
-   if(b.status==='fulfilled')setFactory(b.value);
-   if(d.status==='fulfilled')setTeam(d.value);
-   setPartial([a,b,d].some(r=>r.status==='rejected'));setLoading(false);
-  });
+  setLoading(true);setPartial(false);
+  const part=async <T,>(enabled:boolean,load:()=>Promise<T>,save:(data:T|undefined)=>void)=>{
+   if(!enabled){save(undefined);return}
+   try{const v=await load();if(!ctl.signal.aborted)save(v)}
+   catch{if(!ctl.signal.aborted){save(undefined);setPartial(true)}}
+  };
+  void Promise.all([
+   part(enableInternal,async()=>exact(parseTimecards(await timecardCall(organizationId,'context',undefined,ctl.signal),organizationId)),setInternal),
+   part(enableFactory,async()=>exact(parseFactoryHours(await factoryHoursCall(organizationId,'context',undefined,ctl.signal),organizationId)),setFactory),
+  ]).then(()=>{if(!ctl.signal.aborted)setLoading(false)});
   return()=>ctl.abort();
- },[organizationId,membershipId,revision,enableInternal,enableFactory,enableTeam]);
- useEffect(()=>{const update=()=>refresh(n=>n+1);window.addEventListener('timeax-team-changed',update);window.addEventListener('timeax-timecards-changed',update);return()=>{window.removeEventListener('timeax-team-changed',update);window.removeEventListener('timeax-timecards-changed',update)}},[]);
+ },[organizationId,membershipId,revision,enableInternal,enableFactory]);
+ useEffect(()=>{const update=()=>refresh(n=>n+1);window.addEventListener('timeax-timecards-changed',update);return()=>{window.removeEventListener('timeax-timecards-changed',update)}},[]);
  const records=useMemo(()=>workerCalendarRecords({organizationId,membershipId,internal,factory,team}),[organizationId,membershipId,internal,factory,team]);
  const detailRecords=calendarDayRecords(selected,records);
  const assignment=resolveWorkerShiftAssignment({organizationId,membershipId,internal,factory,internalKnown:!enableInternal||!!internal,factoryKnown:!enableFactory||!!factory});
@@ -124,14 +120,14 @@ export function WorkerCalendar({organizationId,membershipId,enableInternal=true,
    {!loading&&assignment.state!=='ready'&&<p className="muted-copy">{shiftCopy[assignment.state]}</p>}
    {saved&&<p role="status">{t('timecards.saved')}</p>}
    {reviewPending===selected&&<p role="status">{shiftCopy.requestSent}</p>}
-   {!loading&&!detailRecords.shifts.length&&!detailRecords.absences.length&&!detailRecords.plans.length&&(!partial||internal||factory||team)&&<p>{c.empty}</p>}
+   {!loading&&!detailRecords.shifts.length&&!detailRecords.absences.length&&!detailRecords.plans.length&&(!partial||internal||factory)&&(!enableTeam||!!team||teamError!=='loading')&&<p>{c.empty}</p>}
    <WorkerShiftRows groups={detailRecords.shifts.length?[{day:selected,shifts:detailRecords.shifts}]:[]}/>
    {detailRecords.absences.map(a=><p key={a.id}>{c.absence}{a.site?' · '+a.site:''}{a.to!==a.from?' · '+a.from+' – '+a.to:''}</p>)}
    {detailRecords.plans.map(p=><p key={p.id}>{planLabel} · {p.start} - {p.end}{p.site?' · '+p.site:''}</p>)}
   </div>
   {loading&&<p role="status">{t('timecards.checking')}</p>}
-  {partial&&<p role="status">{c.partial}</p>}
-  <button type="button" className="button button--outline" disabled={loading} onClick={()=>refresh(n=>n+1)}>{t('timecards.refresh')}</button>
+  {(partial||enableTeam&&!team&&teamError!=='loading')&&<p role="status">{c.partial}</p>}
+  <button type="button" className="button button--outline" disabled={loading} onClick={()=>{refresh(n=>n+1);if(enableTeam)refreshTeam()}}>{t('timecards.refresh')}</button>
  </section>
  {templateOpen&&<WorkerTemplateDrawer organizationId={organizationId} onClose={()=>setTemplateOpen(false)}/>}
  {entry&&<WorkerQuickShift organizationId={organizationId} {...entry} onClose={()=>setEntry(undefined)} onSaved={(day,pending)=>{setSelected(day);setMonth(monthOf(day));setSaved(!pending);setReviewPending(pending?day:undefined);setEntry(undefined)}}/>}
