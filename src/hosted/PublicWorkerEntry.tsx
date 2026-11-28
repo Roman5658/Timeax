@@ -134,7 +134,7 @@ function WorkerAgencyConnection({initialInvite,onSessionExpired,provisioning,aut
    const result=await workerCall(kind,{...body,firstName:firstName.trim(),lastName:lastName.trim()}) as {application?:{application_id?:string;status?:string}};
    if(!membershipId(result?.application?.application_id))throw Error('unavailable');
    if(result.application?.status==='pending'){
-    navigate('/account',{replace:true,state:{offerWorkerPassword:true}});return;
+    navigate('/account',{replace:true,state:{pendingWorkerApplication:result.application.application_id}});return;
    }
    A(undefined);if(kind==='claim')I('');T(result.application?.status==='approved'?copy.approved:copy.applied);R(n=>n+1);
   });

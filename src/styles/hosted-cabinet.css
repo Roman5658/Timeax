@@ -13,6 +13,12 @@
 .agency-site-list .button { width:100%; justify-content:space-between; gap:1rem; text-align:start; }
 .agency-site-list .button span { font-size:.85em; font-weight:400; }
 .agency-site-panel details > summary { cursor:pointer; }
+.agency-production-actions { display:flex; flex-wrap:nowrap; gap:.5rem; align-items:stretch; }
+.agency-production-actions > .button { min-width:0; white-space:normal; text-align:center; }
+.agency-production-workers { min-inline-size:0; border:0; padding:0; margin:0; }
+.agency-production-workers legend { font-weight:600; }
+.agency-production-worker-list { display:grid; gap:.25rem; max-block-size:16rem; overflow:auto; margin:.5rem 0 1rem; }
+.agency-production-worker-list label { min-block-size:2.5rem; overflow-wrap:anywhere; }
 
 .agency-site-list li { display:grid; grid-template-columns:minmax(0,1fr) max-content; gap:.5rem; align-items:stretch; }
 .agency-site-list .agency-site-open { overflow-wrap:anywhere; min-width:0; }

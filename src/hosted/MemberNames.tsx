@@ -8,7 +8,7 @@ export async function memberNamesCall(org:string,body?:unknown,signal?:AbortSign
  if(!r.ok)throw Error(r.status===401?'login':r.status===403?'denied':r.status===409?'conflict':'unavailable');if(r.headers.get('content-type')?.split(';')[0]!=='application/json')throw Error('unavailable');return r.json();
 }
 export function parseMemberNames(v:unknown,org:string):Context{
- const c=v as Context;if(!c||c.organizationId!==org||typeof c.canEdit!=='boolean'||!Array.isArray(c.workers)||c.workers.some(w=>!uuid(w.membershipId)||!uuid(w.organizationId)||!/^[1-9][0-9]*$/.test(w.reference)||w.name!==null&&(typeof w.name!=='string'||w.name.length>120)||!Number.isSafeInteger(w.revision)))throw Error('unavailable');return c;
+ const c=v as Context;if(!c||c.organizationId!==org||typeof c.canEdit!=='boolean'||!Array.isArray(c.workers)||c.workers.some(w=>!uuid(w.membershipId)||!uuid(w.organizationId)||!/^[1-9][0-9]*$/.test(w.reference)||w.name!==null&&(typeof w.name!=='string'||[...w.name].length>120)||!Number.isSafeInteger(w.revision)))throw Error('unavailable');return c;
 }
 export function useMemberNames(org:string|undefined,revision=0){
  const {t}=useTranslation(),[context,C]=useState<Context>(),[state,S]=useState('checking');

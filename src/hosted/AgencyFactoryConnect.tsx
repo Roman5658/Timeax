@@ -6,7 +6,7 @@ import {independenceCall,parseFactoryLookup,parseFactoryInvitation} from './fact
 const normalize=(value:string)=>value.replace(/[\s-]/g,'');
 const validNip=(value:string)=>/^\d{10}$/.test(value)&&[6,5,7,2,3,4,5,6,7].reduce((sum,weight,i)=>sum+Number(value[i])*weight,0)%11===Number(value[9]);
 
-export function AgencyFactoryConnect({organizationId,onIssued}:{organizationId:string;onIssued:()=>void}){
+export function AgencyFactoryConnect({organizationId,onIssued,disabled=false}:{organizationId:string;onIssued:()=>void;disabled?:boolean}){
  const {t,i18n}=useTranslation(),tx=(key:string)=>t('agencyFactoryConnect.'+key);
  const [open,setOpen]=useState(false),[nip,setNip]=useState(''),[name,setName]=useState(''),[address,setAddress]=useState('');
  const [found,setFound]=useState<ReturnType<typeof parseFactoryLookup>>(),[invite,setInvite]=useState<ReturnType<typeof parseFactoryInvitation>>();
@@ -30,8 +30,8 @@ export function AgencyFactoryConnect({organizationId,onIssued}:{organizationId:s
   }catch{setNotice('failed')}finally{pending.current=false;setBusy(false)}
  }
  return <>
-  <button type="button" className="button button--primary" onClick={()=>setOpen(true)}>{tx('title')}</button>
-  {open&&<AgencyBookDrawer title={tx('title')} closeLabel={t('common.close')} busy={busy} onClose={()=>setOpen(false)}>
+  <button type="button" className="button button--outline" disabled={disabled} onClick={()=>setOpen(true)}>{tx('title')}</button>
+  {open&&<AgencyBookDrawer title={tx('title')} closeLabel={t('common.close')} centered busy={busy} onClose={()=>setOpen(false)}>
    {!invite?<form className="auth-form" onSubmit={event=>{event.preventDefault();void submit()}}>
     <label className="field-label">NIP<input required autoComplete="off" inputMode="numeric" maxLength={20} value={nip} disabled={busy} onChange={event=>{setNip(event.currentTarget.value);reset()}}/></label>
     {found&&<>

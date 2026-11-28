@@ -33,6 +33,20 @@ export function WorkerAccountPage(){
  const connections=enrollment?.memberships;
  const pending=enrollment?.applications.filter(a=>a.status==='pending')??[];
  const waiting=pending.length>0&&!connections?.some(c=>c.role==='worker');
+ const observedPending=useRef(new Set<string>());
+ const submittedApplication=loc.state?.pendingWorkerApplication;
+ useEffect(()=>{
+  if(loc.pathname!=='/account'||!enrollment)return;
+  for(const application of enrollment.applications){
+   if(application.status==='pending')observedPending.current.add(application.id);
+   if(application.status==='approved'&&(observedPending.current.has(application.id)||submittedApplication===application.id)&&
+    enrollment.memberships.some(m=>m.role==='worker'&&m.organizationId===application.organizationId)){
+    observedPending.current.clear();
+    navigate('/workspace/'+application.organizationId,{replace:true,state:null});
+    return;
+   }
+  }
+ },[enrollment,loc.pathname,navigate,submittedApplication]);
  const workerCopy=workerRegistrationCopy(i18n.resolvedLanguage);
  const canJoin=shouldOfferAgencyJoin(connections);
  const [opening,setOpening]=useState(''),[workspaceProblem,setWorkspaceProblem]=useState<{id:string;status:'workspaceEnded'|'workspaceUnavailable'|'workspaceLogin'}>();
@@ -87,7 +101,7 @@ export function WorkerAccountPage(){
   {waiting&&<p>{workerCopy.pendingHours}</p>}
   <button className="button button--outline" type="button" disabled={busy} onClick={reload}>{workerCopy.checkApplication}</button>
  </section>}
- {!recovery&&!reauth&&!closed&&status!=='login'&&<WorkerPasswordPanel/>}
+
  {publicRecovery?<><p>{copy.recovery}</p><div className="form-actions"><Link className="button button--primary" to={PASSWORD_RESET_PATH}>{passwordResetHeading(i18n.resolvedLanguage??'en')}</Link><Link className="button button--outline" to="/login?method=code">{tx('loginAction')}</Link></div></>:
  recovery?<><p className="notice-box">{tx('proofBoundary')}</p>{requestId?<div role="status"><h2>{tx('requestSaved')}</h2><p>{tx('requestPending')}</p><code>{requestId}</code></div>:<form className="auth-form" onSubmit={e=>{e.preventDefault();void run(async()=>{const r=await accountCall('recovery-request',{contactEmail:email,reference}) as {status:string;requestId:string;accessChanged:boolean;mailSent:boolean};if(r.status!=='received-awaiting-independent-proof'||r.accessChanged||r.mailSent)throw Error();setRequestId(r.requestId);setEmail('');setReference('')})}}>
  <label className="field-label" htmlFor="recovery-email">{tx('contactEmail')}<input id="recovery-email" type="email" required maxLength={254} value={email} onChange={e=>setEmail(e.target.value)}/></label>
@@ -109,6 +123,7 @@ export function WorkerAccountPage(){
  <><label className="personal-confirm"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/><span>{tx('confirmDelete')}</span></label><button className="button button--primary button--full" disabled={busy||!confirmed} onClick={()=>void run(async()=>{const r=await accountCall('delete',{operationId:crypto.randomUUID(),confirmed:true}) as {state:string};if(r.state!=='closed-provider-cleanup-pending')throw Error();setClosed(true);setValue(undefined);setConfirmed(false)})}>{tx('deleteAction')}</button></>}</section>}
  <button className="button button--outline button--full" disabled={busy} onClick={reload}>{tx('refresh')}</button></>:null}
  {!value&&!recovery&&!reauth&&!closed&&connections&&workspaces}
+ {!recovery&&!reauth&&!closed&&status!=='login'&&(waiting||settings)&&<WorkerPasswordPanel/>}
  {status&&(!waiting||!['denied','checking'].includes(status))&&<p className="notice-box" role="status">{!recovery&&!reauth&&status==='unavailable'?copy.archiveUnavailable:tx(status)}</p>}
  {!recovery&&!reauth&&!value&&!closed&&!waiting&&<button className="button button--outline button--full" disabled={busy} onClick={reload}>{tx('refresh')}</button>}
  {!recovery&&!reauth&&status==='login'&&!value&&!closed&&<div className="form-actions"><Link className="button button--primary" to="/login">{tx('loginAction')}</Link><Link to="/account/recovery" state={returnState}>{tx('recoveryTitle')}</Link></div>}

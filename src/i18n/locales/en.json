@@ -2957,7 +2957,7 @@
     "save": "Save checked name",
     "saved": "Name saved.",
     "snapshotHint": "New archived timecards keep this name. Previously saved timecards and issued payslips remain unchanged.",
-    "missing": "Name not yet checked",
+    "missing": "Name not provided",
     "historicalMissing": "Name not recorded in this document",
     "reference": "Staff no.",
     "checking": "Loading names…",

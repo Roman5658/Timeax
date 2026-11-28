@@ -2957,7 +2957,7 @@
     "save": "Zapisz sprawdzone dane",
     "saved": "Dane zapisane.",
     "snapshotHint": "Nowe archiwalne wykazy zachowają te dane. Zapisane wykazy i wydane rozliczenia pozostają bez zmian.",
-    "missing": "Dane jeszcze niesprawdzone",
+    "missing": "Nie podano imienia i nazwiska",
     "historicalMissing": "Brak imienia i nazwiska w zapisanym dokumencie",
     "reference": "Nr prac.",
     "checking": "Wczytywanie danych…",
