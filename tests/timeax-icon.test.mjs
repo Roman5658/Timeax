@@ -10,6 +10,9 @@ test('Timeax browser and installed app have a plain name and correctly sized bra
  assert.doesNotMatch(read('src/hosted/HostedApp.tsx').toString(),/document\.title/);
  const m=JSON.parse(read('public/timeax.webmanifest'));
  assert.equal(m.name,'Timeax');assert.equal(m.short_name,'Timeax');
+ assert.deepEqual(read('public/apple-touch-icon.png'),read('public/timeax-icon-mint-180.png'));
+ assert.deepEqual(read('public/apple-touch-icon-precomposed.png'),read('public/apple-touch-icon.png'));
+ assert.match(html,/<link rel="apple-touch-icon" sizes="180x180" href="\/apple-touch-icon\.png"\/>/);
  assert.equal(m.id,'/');assert.equal(m.start_url,'/app');
  assert.ok(m.icons.some(x=>x.purpose==='maskable'&&x.sizes==='512x512'));
  for(const [rel,size] of [['icon',48],['apple-touch-icon',180]]){
