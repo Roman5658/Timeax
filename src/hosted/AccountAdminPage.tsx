@@ -3,6 +3,8 @@ import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { RegistrationFrame } from "../components/PublicExperience";
 import { accountAdminCopy } from "./account-admin-copy";
+import { OwnerSupportPanel } from "./OwnerSupportPanel";
+import { ownerSupportCopy } from "./owner-support-copy";
 import "./account-admin.css";
 
 type WorkerTermsReceipt={version:string;acceptedAt:string;documentSha256:string;method:'worker-terms-checkbox'};
@@ -49,6 +51,7 @@ export function AccountAdminPage() {
   const [draftSearch, setDraftSearch] = useState("");
   const [search, setSearch] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
+  const [supportId,setSupportId]=useState<string>();
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [listBusy, setListBusy] = useState(false);
@@ -78,11 +81,13 @@ export function AccountAdminPage() {
     setCursor(null); setNext(null); setDraftSearch(""); setSearch(null);
     setPreview(null); setConfirm(""); setListBusy(false); setListError(""); setStatus("");
     clearOrganizationFilters();
+    setSupportId(undefined);
   }
 
   useEffect(() => {
     setPreview(null); setConfirm(""); setStatus("");
     setCursor(null); setSearch(null); setDraftSearch("");
+    setSupportId(undefined);
   }, [section]);
 
   useEffect(() => { if (preview) previewHeading.current?.focus(); }, [preview]);
@@ -139,6 +144,7 @@ export function AccountAdminPage() {
   }
 
   async function review(id: string) {
+    setSupportId(undefined);
     setPreview(null); setConfirm("");
     const result = await ownerCall<Preview>(key, { action: "preview", id });
     if (sectionRef.current === "users") setPreview(result);
@@ -154,6 +160,7 @@ export function AccountAdminPage() {
   }
 
   function goTo(after: string | null) {
+    setSupportId(undefined);
     setPreview(null); setConfirm(""); setStatus("");
     setCursor(after ? { section, after } : null);
   }
@@ -253,7 +260,12 @@ export function AccountAdminPage() {
                   <p>SHA-256: <code style={{overflowWrap:'anywhere'}}>{receipt.documentSha256}</code></p>
                 </details>)}
               </div>
-              <button type="button" className="button button--outline" disabled={controlsDisabled} onClick={() => void run(() => review(a.id))}>{tx("review")}</button>
+              <div className="form-actions">
+                <button type="button" className="button button--outline" disabled={controlsDisabled} aria-pressed={supportId===a.id} onClick={()=>{setPreview(null);setConfirm("");setSupportId(a.id)}}>
+                  {(ownerSupportCopy[lang]??ownerSupportCopy.en).open}
+                </button>
+                <button type="button" className="button button--outline" disabled={controlsDisabled} onClick={() => void run(() => review(a.id))}>{tx("review")}</button>
+              </div>
             </li>)}</ul>
           </section>}
         </>}
@@ -261,6 +273,12 @@ export function AccountAdminPage() {
           {after && <button type="button" className="button button--outline" disabled={controlsDisabled} onClick={() => goTo(null)}>{tx("first")}</button>}
           {next && <button type="button" className="button button--outline" disabled={controlsDisabled} onClick={() => goTo(next)}>{tx("next")}</button>}
         </div>}
+        {section==="users"&&supportId&&<OwnerSupportPanel key={supportId} accountId={supportId} lang={lang} call={async <T,>(body:object,signal?:AbortSignal)=>{
+         try{return await ownerCall<T>(key,body,signal)}catch(e){
+          if(!signal?.aborted&&e instanceof Error&&e.message==="denied"){lock();setStatus("denied")}
+          throw e;
+         }
+        }} onClose={()=>setSupportId(undefined)}/>}
         {section === "users" && preview && <section className="notice-box owner-panel__leaf" aria-labelledby="owner-preview-title">
           <h2 tabIndex={-1} ref={previewHeading} id="owner-preview-title">{tx("confirmTitle")}</h2>
           <p>{preview.email}</p><p>{tx(preview.scope)}</p>

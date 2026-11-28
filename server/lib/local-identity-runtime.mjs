@@ -99,8 +99,8 @@ export function createEmailIdentityRuntime({origin,provider,pendingStore,otpLeng
  const workerPassword=ops?.workerPassword&&createWorkerPasswordHandler({origin,now,provider,resolveSession:resolve,
   eligible:workerPasswordEligible,
   getProof:request=>workerProofs.get(idFrom(request,name))});
- const admin=accountAdminFactory?.(subject=>{
-  removedSubjects.set(subject,now()+ttl*1000);
+ const admin=accountAdminFactory?.((subject,operation)=>{
+  if(operation!=='sessions')removedSubjects.set(subject,now()+ttl*1000);
   for(const [id,proof] of workerProofs)if(proof.credential.subject===subject)workerProofs.delete(id);
   for(const [id,s] of sessions)if(s.issuer===ISSUER&&s.subject===subject)sessions.delete(id);
  });

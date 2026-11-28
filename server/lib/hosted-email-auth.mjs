@@ -1,6 +1,6 @@
 import {createPushSender,createPushService,PUSH_ROLE,PUSH_SIGNATURE,PUSH_SQL} from './web-push.server.mjs';
 import {assembleAgencyOperations} from './agency-operations.mjs';
-import {ACCOUNT_ADMIN_ROLE,ACCOUNT_ADMIN_SIGNATURE,ACCOUNT_ADMIN_SQL,createAccountAdminHandler} from './account-admin.mjs';
+import {ACCOUNT_ADMIN_ROLE,ACCOUNT_ADMIN_SIGNATURE,ACCOUNT_ADMIN_SQL,ACCOUNT_SUPPORT_ROLE,ACCOUNT_SUPPORT_SIGNATURE,ACCOUNT_SUPPORT_SQL,createAccountAdminHandler} from './account-admin.mjs';
 import {createFactorySetupHandler,createFactorySetupStore,FACTORY_SQL} from './factory-enrollment.server.mjs';
 import {SESSION_ROLE,SESSION_RPC,SESSION_SQL,createWebSessionStore} from './web-session-store.mjs';
 import {createScopedPgLane} from './scoped-pg.mjs';
@@ -52,7 +52,19 @@ export async function assembleHostedEmailAuth(config,{fetchImpl=globalThis.fetch
   const lane=scoped({host:config.host,ca:config.ca,role:ACCOUNT_ADMIN_ROLE,password,namespace:'timeax_api',
    functions:[{signature:ACCOUNT_ADMIN_SIGNATURE,owner:'postgres',sha256:functionSha}],statements:[ACCOUNT_ADMIN_SQL]});
   // A missing admin migration must never take normal login or registration down.
-  if(await lane.preflight().then(()=>true,()=>false))accountAdminFactory=revoked=>createAccountAdminHandler({origin:config.origin,keySha,lane,revoked,now});
+  if(await lane.preflight().then(()=>true,()=>false)){
+   let supportLane=null;
+   const support=config.accountAdmin.support;
+   if(support&&![password,config.password,config.agencyOnboardingPassword,config.workspaceReadPassword,config.webSessions?.password,config.agencyProductions?.password,
+    ...Object.values(config.agencyOperations??{}).map(v=>v?.password)].includes(support.password)){
+    try{
+     const candidate=scoped({host:config.host,ca:config.ca,role:ACCOUNT_SUPPORT_ROLE,password:support.password,namespace:'timeax_api',
+      functions:[{signature:ACCOUNT_SUPPORT_SIGNATURE,owner:'postgres',sha256:support.sha}],statements:[ACCOUNT_SUPPORT_SQL]});
+     await candidate.preflight();supportLane=candidate;
+    }catch{/* keep existing owner admin available if support is not configured */}
+   }
+   accountAdminFactory=revoked=>createAccountAdminHandler({origin:config.origin,keySha,lane,supportLane,revoked,now});
+  }
  }
  if(config.agencyProductions&&![config.password,config.agencyOnboardingPassword,config.workspaceReadPassword,config.accountAdmin?.password].includes(config.agencyProductions.password)){
   const {password,functionSha}=config.agencyProductions;

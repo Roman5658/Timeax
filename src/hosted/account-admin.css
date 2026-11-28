@@ -39,3 +39,9 @@
 .owner-panel__filters .field-label:first-child { flex-basis: 15rem; }
 .owner-panel__review-links { margin-top: 20px; }
 .owner-panel__review-links p { margin-block: 6px 0; }
+.owner-panel__support{margin-block:1.25rem;display:grid;gap:.75rem}
+.owner-panel__support-details{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:.45rem 1rem;margin:0}
+.owner-panel__support-details dd{margin:0;font-weight:600;overflow-wrap:anywhere}
+.owner-panel__support .owner-panel__accounts li>*{min-width:0;overflow-wrap:anywhere}
+.owner-panel__support textarea{resize:vertical}
+@media(max-width:500px){.owner-panel__support .owner-panel__accounts li,.owner-panel__support .owner-panel__heading{align-items:flex-start;flex-wrap:wrap}}
