@@ -1,0 +1,13 @@
+[data-bell-target="true"] {
+ outline: 2px solid var(--accent, #2d8068);
+ outline-offset: 3px;
+ box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent, #2d8068) 24%, transparent);
+ scroll-margin-block: 4rem;
+}
+@media (prefers-reduced-motion: no-preference) {
+ [data-bell-target="true"] { animation: timeax-notice-highlight 680ms ease-out; }
+ @keyframes timeax-notice-highlight {
+  from { box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent, #2d8068) 50%, transparent); }
+  to { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent, #2d8068) 24%, transparent); }
+ }
+}

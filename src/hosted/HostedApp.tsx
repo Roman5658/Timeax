@@ -1,3 +1,4 @@
+import '../styles/notification-target.css';
 import {loadHostedCabinetModule} from "./load-hosted-cabinet";
 import {HostedLoading} from "./HostedLoading";
 import {SelfServiceAgencyStep} from './SelfServiceAgencyStep';

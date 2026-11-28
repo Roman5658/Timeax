@@ -10,20 +10,27 @@ export function useBellAnchor(enabled:boolean){
  const {hash,key}=useLocation(),target=bellTarget(hash);
  useEffect(()=>{
   if(!enabled||!target)return;
-  let frame=0;
+  let frame=0,highlighted:HTMLElement|null=null;
+  const clear=()=>{highlighted?.removeAttribute('data-bell-target');highlighted=null};
   const focus=()=>{
-   const el=document.getElementById(target);
-   if(!el||!el.getClientRects().length)return false;
+   const element=document.getElementById(target);
+   const visible=element&&element.getClientRects().length>0?element:null;
+   if(visible===highlighted)return;
+   clear();
+   cancelAnimationFrame(frame);
+   if(!visible)return;
+   highlighted=visible;
+   visible.setAttribute('data-bell-target','true');
    frame=requestAnimationFrame(()=>{
-    el.focus({preventScroll:true});
-    el.scrollIntoView({block:'center',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+    if(!visible.isConnected||highlighted!==visible)return;
+    visible.focus({preventScroll:true});
+    visible.scrollIntoView({block:'center',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
    });
-   return true;
   };
-  const observer=new MutationObserver(()=>{if(focus())observer.disconnect()});
-  if(!focus())observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden']});
-  const timer=window.setTimeout(()=>observer.disconnect(),12000);
-  return()=>{observer.disconnect();window.clearTimeout(timer);cancelAnimationFrame(frame)};
+  const observer=new MutationObserver(focus);
+  observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden','open']});
+  focus();
+  return()=>{observer.disconnect();cancelAnimationFrame(frame);clear()};
  },[enabled,target,key]);
 }
 export const noticeDestination=(anchor:string)=>anchor.startsWith('agency-application-')?'workers?tab=applications':anchor.startsWith('earlier-shift-')?'timecards':anchor.startsWith('payslip-')?'payslips':'messages';
